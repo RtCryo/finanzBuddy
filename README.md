@@ -1,5 +1,8 @@
 # finanzBuddy
 
+[![API Gateway CI](https://github.com/RtCryo/finanzBuddy/actions/workflows/api-gateway.yml/badge.svg)](https://github.com/RtCryo/finanzBuddy/actions/workflows/api-gateway.yml)
+[![codecov](https://codecov.io/gh/RtCryo/finanzBuddy/branch/main/graph/badge.svg)](https://codecov.io/gh/RtCryo/finanzBuddy)
+
 finanzBuddy is a personal finance document processing platform. It provides an API Gateway that accepts financial documents (CSV, PDF, XML), stores them securely, and publishes events to downstream parsers via Kafka.
 
 ## Key capabilities

@@ -79,3 +79,12 @@ jobs:
           name: jacoco-report-${{ github.run_id }}
           path: api-gateway/target/site/jacoco/
           if-no-files-found: ignore
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: api-gateway/target/site/jacoco/jacoco.xml
+          flags: api-gateway
+          name: api-gateway-coverage
+          fail_ci_if_error: false
