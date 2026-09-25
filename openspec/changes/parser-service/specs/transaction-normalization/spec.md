@@ -13,9 +13,9 @@ The system SHALL store every extracted transaction with a common set of fields r
 - **WHEN** a CSV statement is parsed
 - **THEN** each row is saved as a `Transaction` with booking date, value date, amount, currency, counterparty, description, and category
 
-#### Scenario: PDF to transaction
-- **WHEN** a PDF statement is parsed
-- **THEN** each extracted payment is saved as a `Transaction` with the same normalized fields
+#### Scenario: Unsupported MVP formats
+- **WHEN** a PDF or XML statement is submitted to its parser strategy
+- **THEN** parsing fails with an explicit unsupported-operation error and no transactions are persisted
 
 ### Requirement: Transactions are linked to document and user
 The system SHALL associate every transaction with the originating `documentId` and `userId`.
