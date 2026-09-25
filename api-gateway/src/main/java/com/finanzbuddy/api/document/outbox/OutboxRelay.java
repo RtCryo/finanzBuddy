@@ -2,6 +2,7 @@ package com.finanzbuddy.api.document.outbox;
 
 import com.finanzbuddy.api.entity.OutboxEvent;
 import com.finanzbuddy.api.repository.OutboxEventRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
@@ -26,6 +27,8 @@ public class OutboxRelay {
     private final int batchSize;
     private final long sendTimeoutMs;
     private final int maxAttempts;
+    private final long retryBaseBackoffMs;
+    private final long retryMaxBackoffMs;
 
     public OutboxRelay(
             OutboxEventRepository outboxEventRepository,
@@ -34,7 +37,9 @@ public class OutboxRelay {
             OutboxMetrics outboxMetrics,
             @Value("${app.outbox.batch-size:100}") int batchSize,
             @Value("${app.outbox.send-timeout-ms:3000}") long sendTimeoutMs,
-            @Value("${app.outbox.max-attempts:10}") int maxAttempts) {
+            @Value("${app.outbox.max-attempts:10}") int maxAttempts,
+            @Value("${app.outbox.retry-base-backoff-ms:5000}") long retryBaseBackoffMs,
+            @Value("${app.outbox.retry-max-backoff-ms:300000}") long retryMaxBackoffMs) {
         this.outboxEventRepository = outboxEventRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.txTemplate = new TransactionTemplate(txManager);
@@ -42,16 +47,18 @@ public class OutboxRelay {
         this.batchSize = batchSize;
         this.sendTimeoutMs = sendTimeoutMs;
         this.maxAttempts = maxAttempts;
+        this.retryBaseBackoffMs = retryBaseBackoffMs;
+        this.retryMaxBackoffMs = retryMaxBackoffMs;
     }
 
     @Scheduled(fixedDelayString = "${app.outbox.poll-interval-ms:5000}")
     public void publishPending() {
+        Instant now = Instant.now();
         List<OutboxEvent> pending =
                 txTemplate.execute(
                         status ->
-                                outboxEventRepository
-                                        .findByPublishedAtIsNullAndDeadLetteredAtIsNullOrderByCreatedAtAsc(
-                                                PageRequest.of(0, batchSize)));
+                                outboxEventRepository.findPublishable(
+                                        now, PageRequest.of(0, batchSize)));
         if (pending == null) {
             return;
         }
@@ -67,10 +74,14 @@ public class OutboxRelay {
     private void publishOne(OutboxEvent event) {
         // Send the durably stored JSON payload verbatim (StringSerializer) so the bytes on the wire
         // are exactly the bytes committed to the outbox — no re-serialization and no Java-class type
-        // headers that would couple consumers to this module's package.
+        // headers that would couple consumers to this module's package. The aggregate id is the
+        // partition key so all events for one document keep their relative order.
         try {
             kafkaTemplate
-                    .send(event.getTopic(), event.getPayload())
+                    .send(
+                            event.getTopic(),
+                            String.valueOf(event.getAggregateId()),
+                            event.getPayload())
                     .get(sendTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (Exception e) {
             recordFailure(event, e);
@@ -97,6 +108,11 @@ public class OutboxRelay {
                             managed.recordFailedAttempt();
                             if (managed.getAttempts() >= maxAttempts) {
                                 managed.deadLetter();
+                            } else {
+                                // Exponential backoff so a brief broker outage does not burn
+                                // through every attempt in seconds and dead-letter the backlog.
+                                managed.scheduleRetryAt(
+                                        Instant.now().plusMillis(backoffMs(managed.getAttempts())));
                             }
                             return managed.getAttempts();
                         });
@@ -124,5 +140,11 @@ public class OutboxRelay {
     private void markPublished(Long id) {
         txTemplate.executeWithoutResult(
                 status -> outboxEventRepository.findById(id).ifPresent(OutboxEvent::markPublished));
+    }
+
+    private long backoffMs(int attempts) {
+        int shift = Math.min(attempts - 1, 20);
+        long backoff = retryBaseBackoffMs << shift;
+        return Math.min(backoff, retryMaxBackoffMs);
     }
 }

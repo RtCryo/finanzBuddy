@@ -9,5 +9,7 @@
     <include file="classpath:/db/changelog/changes/002-create-documents-table.xml"/>
     <include file="classpath:/db/changelog/changes/003-create-outbox-events-table.xml"/>
     <include file="classpath:/db/changelog/changes/004-add-outbox-dead-letter.xml"/>
+    <include file="classpath:/db/changelog/changes/005-add-outbox-next-attempt.xml"/>
+    <include file="classpath:/db/changelog/changes/006-add-document-version.xml"/>
 
 </databaseChangeLog>

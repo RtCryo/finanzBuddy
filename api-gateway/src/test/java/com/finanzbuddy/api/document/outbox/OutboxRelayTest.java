@@ -33,7 +33,7 @@ class OutboxRelayTest {
     private OutboxRelay relay(int maxAttempts) {
         return new OutboxRelay(
                 outboxEventRepository, kafkaTemplate, txManager, outboxMetrics, 100, 1000L,
-                maxAttempts);
+                maxAttempts, 5000L, 300000L);
     }
 
     private OutboxEvent event(long id, String topic, String payload) {
@@ -43,20 +43,18 @@ class OutboxRelayTest {
     }
 
     private void stubPending(OutboxEvent... events) {
-        when(outboxEventRepository.findByPublishedAtIsNullAndDeadLetteredAtIsNullOrderByCreatedAtAsc(
-                        any()))
-                .thenReturn(List.of(events));
+        when(outboxEventRepository.findPublishable(any(), any())).thenReturn(List.of(events));
     }
 
     private void stubSendSucceeds() {
         CompletableFuture<SendResult<Object, Object>> ok = CompletableFuture.completedFuture(null);
-        when(kafkaTemplate.send(any(), any())).thenReturn(ok);
+        when(kafkaTemplate.send(any(), any(), any())).thenReturn(ok);
     }
 
     private void stubSendFails() {
         CompletableFuture<SendResult<Object, Object>> failed =
                 CompletableFuture.failedFuture(new RuntimeException("broker down"));
-        when(kafkaTemplate.send(any(), any())).thenReturn(failed);
+        when(kafkaTemplate.send(any(), any(), any())).thenReturn(failed);
     }
 
     @Test
@@ -68,7 +66,7 @@ class OutboxRelayTest {
 
         relay(10).publishPending();
 
-        verify(kafkaTemplate).send("documents.csv", "{\"documentId\":1}");
+        verify(kafkaTemplate).send("documents.csv", "1", "{\"documentId\":1}");
         assertThat(event.getPublishedAt()).isNotNull();
         verify(outboxMetrics, never()).recordDeadLettered();
     }
@@ -101,6 +99,6 @@ class OutboxRelayTest {
 
         relay(10).publishPending();
 
-        verify(kafkaTemplate, times(5)).send(any(), any());
+        verify(kafkaTemplate, times(5)).send(any(), any(), any());
     }
 }

@@ -74,7 +74,9 @@ public class StalePendingReconciler {
             // pins a DB connection while the batch is being cleaned up.
             deleteOrphanedObject(document.storagePath());
             txTemplate.executeWithoutResult(
-                    status -> documentRepository.deleteById(document.id()));
+                    status ->
+                            documentRepository.deleteByIdIfStale(
+                                    document.id(), DocumentStatus.PENDING));
             log.warn(
                     "Reconciled stale PENDING document {} (no storage path, created {})",
                     document.id(),

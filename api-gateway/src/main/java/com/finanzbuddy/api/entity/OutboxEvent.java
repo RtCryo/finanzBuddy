@@ -35,6 +35,9 @@ public class OutboxEvent {
     @Column(name = "dead_lettered_at")
     private Instant deadLetteredAt;
 
+    @Column(name = "next_attempt_at")
+    private Instant nextAttemptAt;
+
     @Column(nullable = false)
     private int attempts;
 
@@ -59,6 +62,10 @@ public class OutboxEvent {
 
     public void recordFailedAttempt() {
         this.attempts++;
+    }
+
+    public void scheduleRetryAt(Instant when) {
+        this.nextAttemptAt = when;
     }
 
     public void deadLetter() {
@@ -91,6 +98,10 @@ public class OutboxEvent {
 
     public Instant getDeadLetteredAt() {
         return deadLetteredAt;
+    }
+
+    public Instant getNextAttemptAt() {
+        return nextAttemptAt;
     }
 
     public int getAttempts() {

@@ -39,9 +39,9 @@ This starts PostgreSQL, Kafka (with Zookeeper), MinIO, and the API Gateway.
 | `MINIO_ACCESS_KEY` | MinIO access key | `minioadmin` |
 | `MINIO_SECRET_KEY` | MinIO secret key | `minioadmin` |
 | `MINIO_BUCKET` | MinIO bucket for documents | `finanzbuddy-documents` |
-| `JWT_SECRET` | Base64-encoded JWT secret | `ZmluYW56YnVkZHktYXBpLWdhdGV3YXktand0LXNlY3JldC1rZXk=` |
+| `JWT_SECRET` | Base64-encoded JWT signing secret | **required, no default** — set in `.env` (`openssl rand -base64 32`) |
 | `JWT_EXPIRATION_MS` | JWT expiration in milliseconds | `86400000` |
-| `INTERNAL_API_KEY` | Shared key for internal service endpoints (`/internal/**`) | `local-internal-api-key` (local profile) |
+| `INTERNAL_API_KEY` | Shared key for internal service endpoints (`/internal/**`) | **required, no default** — `/internal/**` is locked until set |
 | `OUTBOX_POLL_INTERVAL_MS` | Interval the outbox relay polls for undelivered events | `5000` |
 
 ## API Endpoints

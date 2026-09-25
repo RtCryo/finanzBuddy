@@ -17,6 +17,7 @@ import com.finanzbuddy.api.repository.UserRepository;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.Set;
 import org.slf4j.Logger;
@@ -79,6 +80,8 @@ public class DocumentService {
         if (file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File must not be empty");
         }
+
+        validateContentMatchesType(documentType, file);
 
         String originalFilename = file.getOriginalFilename();
         if (originalFilename == null || originalFilename.isBlank()) {
@@ -192,6 +195,14 @@ public class DocumentService {
                                         new ResponseStatusException(
                                                 HttpStatus.NOT_FOUND, "Document not found"));
 
+        if (document.getStatus() == request.status()
+                && (request.status() == DocumentStatus.PROCESSED
+                        || request.status() == DocumentStatus.FAILED)) {
+            // Idempotent redelivery of a terminal status from an at-least-once parser: no-op 200
+            // instead of a 400 that would push the parser into a retry loop.
+            return toResponse(document);
+        }
+
         validateStatusTransition(document.getStatus(), request.status());
         document.setStatus(request.status());
         // Clear any stale failure reason on non-FAILED transitions (e.g. FAILED->PENDING reprocess)
@@ -257,6 +268,28 @@ public class DocumentService {
                         () ->
                                 new ResponseStatusException(
                                         HttpStatus.UNAUTHORIZED, "User not found"));
+    }
+
+    private void validateContentMatchesType(DocumentType type, MultipartFile file) {
+        // Defense-in-depth magic-byte check for binary types. CSV/XML are text and have no reliable
+        // signature, so their content is validated downstream by the parser.
+        if (type != DocumentType.PDF) {
+            return;
+        }
+        byte[] header;
+        try (InputStream inputStream = file.getInputStream()) {
+            header = inputStream.readNBytes(4);
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unable to read uploaded file");
+        }
+        if (header.length < 4
+                || header[0] != '%'
+                || header[1] != 'P'
+                || header[2] != 'D'
+                || header[3] != 'F') {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "File content does not match declared type PDF");
+        }
     }
 
     private DocumentType parseAndValidateType(String type) {

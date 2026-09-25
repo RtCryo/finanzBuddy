@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -23,6 +24,8 @@ import com.finanzbuddy.api.entity.DocumentStatus;
 import com.finanzbuddy.api.entity.OutboxEvent;
 import com.finanzbuddy.api.repository.OutboxEventRepository;
 import com.finanzbuddy.api.security.apikey.InternalApiKeyAuthFilter;
+import io.minio.MinioClient;
+import io.minio.PutObjectArgs;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,12 +54,14 @@ class DocumentControllerIntegrationTest {
 
     @Autowired private OutboxRelay outboxRelay;
 
+    @Autowired private MinioClient minioClient;
+
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
-        reset(kafkaTemplate);
+        reset(kafkaTemplate, minioClient);
         mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
     }
 
@@ -90,10 +95,12 @@ class DocumentControllerIntegrationTest {
         assertThat(enqueued.getTopic()).isEqualTo("documents.csv");
 
         // The relay, not the request thread, delivers to Kafka.
-        doReturn(CompletableFuture.completedFuture(null)).when(kafkaTemplate).send(any(), any());
+        doReturn(CompletableFuture.completedFuture(null))
+                .when(kafkaTemplate)
+                .send(any(), any(), any());
         outboxRelay.publishPending();
 
-        verify(kafkaTemplate, atLeastOnce()).send(any(), any());
+        verify(kafkaTemplate, atLeastOnce()).send(any(), any(), any());
         assertThat(findOutboxEvent(documentId).getPublishedAt()).isNotNull();
     }
 
@@ -210,6 +217,32 @@ class DocumentControllerIntegrationTest {
         // The FAILED->PENDING reprocess must publish a second upload event so the document is
         // actually picked up again instead of sitting in PENDING forever.
         assertThat(countOutboxEvents(documentId)).isEqualTo(2);
+    }
+
+    @Test
+    void uploadCleansUpWhenStorageFails() throws Exception {
+        String token = registerAndLogin("storagefail@example.com", "password123");
+        MockMultipartFile file =
+                new MockMultipartFile("file", "fail.csv", "text/csv", "a\n1".getBytes());
+
+        doThrow(new RuntimeException("minio down"))
+                .when(minioClient)
+                .putObject(any(PutObjectArgs.class));
+
+        mockMvc.perform(
+                        multipart("/documents")
+                                .file(file)
+                                .param("type", "CSV")
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isInternalServerError());
+
+        // The pending record must be rolled back and no upload event enqueued.
+        MvcResult listResult =
+                mockMvc.perform(get("/documents").header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode page = objectMapper.readTree(listResult.getResponse().getContentAsString());
+        assertThat(page.get("totalElements").asInt()).isZero();
     }
 
     private void transition(long documentId, DocumentStatus status, String message)

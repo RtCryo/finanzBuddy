@@ -16,6 +16,15 @@
             <column name="dead_lettered_at"/>
             <column name="created_at"/>
         </createIndex>
+
+        <rollback>
+            <dropIndex tableName="outbox_events" indexName="idx_outbox_events_unpublished"/>
+            <createIndex tableName="outbox_events" indexName="idx_outbox_events_unpublished">
+                <column name="published_at"/>
+                <column name="created_at"/>
+            </createIndex>
+            <dropColumn tableName="outbox_events" columnName="dead_lettered_at"/>
+        </rollback>
     </changeSet>
 
 </databaseChangeLog>
