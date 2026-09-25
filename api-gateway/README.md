@@ -138,3 +138,35 @@ before completion).
 ## MinIO Storage
 
 Uploaded files are stored under `users/{userId}/{documentId}-{originalFilename}`.
+
+## Design decisions & accepted limitations
+
+These are intentional and have come up in review before — documented here so they are not
+re-raised as defects.
+
+- **Single-instance outbox relay (no row locking / leader election).** The relay reads pending
+  events with a plain query — there is no `FOR UPDATE SKIP LOCKED` or leader election. This is
+  safe as deployed: the gateway runs as a **single instance**, so `@Scheduled(fixedDelay)` already
+  prevents overlapping polls. It is also safe if scaled later, because delivery is at-least-once
+  and the downstream consumer (parser service) is idempotent, so duplicate publishes are harmless.
+  A claim step (or `SKIP LOCKED`) would only be needed for a multi-instance deployment with a
+  non-idempotent consumer — and a naive lock would conflict with the design goal of not holding a
+  DB connection during the Kafka round-trip, so it must be a deliberate change, not a quick patch.
+
+- **Registration returns `409 Conflict` for an existing email (user enumeration).** This is an
+  accepted trade-off: hiding it (returning `201` for a duplicate) would be a functional regression
+  — the client legitimately needs to know registration did not create an account, and there is no
+  out-of-band email flow to compensate. Login is not affected: it returns a generic
+  `401 Unauthorized` for both unknown emails and wrong passwords.
+
+- **Integration tests run on H2, not Postgres.** Controller/service tests use H2
+  (`create-drop`). Entity↔migration drift is caught by `LiquibaseMigrationTest`, which runs the
+  real Liquibase changelog on H2 (PostgreSQL mode) and asserts column presence and nullability
+  parity. A full Testcontainers-Postgres suite (production-parity DB in CI) is a deliberate
+  deferred follow-up — it requires Docker in CI and is a larger infrastructure change.
+
+- **Two Jackson mappers coexist by design.** Spring Boot 4 auto-configures a Jackson 3
+  (`tools.jackson`) `ObjectMapper` for HTTP message conversion. `JacksonConfig` additionally
+  provides a Jackson 2 (`com.fasterxml`) `ObjectMapper` bean used only for outbox payload
+  (de)serialization; Boot does not expose a Jackson 2 bean, so this is required. It intentionally
+  does not participate in web (de)serialization — do not remove it.
