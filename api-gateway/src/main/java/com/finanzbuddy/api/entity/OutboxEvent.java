@@ -32,6 +32,9 @@ public class OutboxEvent {
     @Column(name = "published_at")
     private Instant publishedAt;
 
+    @Column(name = "dead_lettered_at")
+    private Instant deadLetteredAt;
+
     @Column(nullable = false)
     private int attempts;
 
@@ -58,6 +61,10 @@ public class OutboxEvent {
         this.attempts++;
     }
 
+    public void deadLetter() {
+        this.deadLetteredAt = Instant.now();
+    }
+
     public Long getId() {
         return id;
     }
@@ -80,6 +87,10 @@ public class OutboxEvent {
 
     public Instant getPublishedAt() {
         return publishedAt;
+    }
+
+    public Instant getDeadLetteredAt() {
+        return deadLetteredAt;
     }
 
     public int getAttempts() {

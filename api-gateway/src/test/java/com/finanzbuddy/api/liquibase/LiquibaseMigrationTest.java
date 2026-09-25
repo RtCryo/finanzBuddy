@@ -40,7 +40,6 @@ class LiquibaseMigrationTest {
                         "SELECT UPPER(table_schema || '.' || table_name) FROM information_schema.tables",
                         String.class);
 
-        assertThat(tables)
-                .contains("PUBLIC.USERS", "PUBLIC.DOCUMENTS", "PUBLIC.OUTBOX_EVENTS");
+        assertThat(tables).contains("PUBLIC.USERS", "PUBLIC.DOCUMENTS", "PUBLIC.OUTBOX_EVENTS");
     }
 }

@@ -1,11 +1,11 @@
 package com.finanzbuddy.api.document.cleanup;
 
+import com.finanzbuddy.api.document.DocumentStorage;
 import com.finanzbuddy.api.entity.Document;
 import com.finanzbuddy.api.entity.DocumentStatus;
 import com.finanzbuddy.api.repository.DocumentRepository;
 import io.minio.MinioClient;
 import io.minio.RemoveObjectArgs;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -18,8 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Removes documents left in {@code PENDING} with no storage path — the signature of an upload whose
- * metadata transaction never completed (e.g. the JVM died between persisting the row and storing the
- * file). The MinIO object, if it was written, is deleted best-effort using the deterministic path.
+ * metadata transaction never completed (e.g. the JVM died between persisting the row and storing
+ * the file). The MinIO object, if it was written, is deleted best-effort using the deterministic
+ * path.
  */
 @Component
 public class StalePendingReconciler {
@@ -61,11 +62,10 @@ public class StalePendingReconciler {
 
     private void deleteOrphanedObject(Document document) {
         String storagePath =
-                String.format(
-                        "users/%d/%d-%s",
+                DocumentStorage.objectKey(
                         document.getUser().getId(),
                         document.getId(),
-                        Paths.get(document.getOriginalFilename()).getFileName().toString());
+                        document.getOriginalFilename());
         try {
             minioClient.removeObject(
                     RemoveObjectArgs.builder().bucket(bucket).object(storagePath).build());

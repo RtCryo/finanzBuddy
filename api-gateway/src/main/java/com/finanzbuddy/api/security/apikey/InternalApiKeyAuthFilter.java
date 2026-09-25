@@ -28,10 +28,18 @@ public class InternalApiKeyAuthFilter extends OncePerRequestFilter {
 
     public static final String HEADER = "X-Internal-Api-Key";
 
+    private static final String INTERNAL_PATH_PREFIX = "/internal/";
+
     private final String apiKey;
 
     public InternalApiKeyAuthFilter(@Value("${app.internal.api-key:}") String apiKey) {
         this.apiKey = apiKey;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+        return !path.startsWith(INTERNAL_PATH_PREFIX);
     }
 
     @Override

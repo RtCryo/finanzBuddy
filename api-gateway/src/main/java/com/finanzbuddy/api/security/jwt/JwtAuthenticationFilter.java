@@ -21,8 +21,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
 
-    public JwtAuthenticationFilter(
-            JwtService jwtService, UserDetailsService userDetailsService) {
+    public JwtAuthenticationFilter(JwtService jwtService, UserDetailsService userDetailsService) {
         this.jwtService = jwtService;
         this.userDetailsService = userDetailsService;
     }
@@ -46,7 +45,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             username = jwtService.extractUsername(jwt);
         } catch (JwtException | IllegalArgumentException e) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            // Leave the request unauthenticated and let the authorization rules decide: a stale
+            // token must not block permitAll endpoints such as /auth/** or /actuator/health.
+            logger.debug("Ignoring invalid JWT bearer token", e);
+            filterChain.doFilter(request, response);
             return;
         }
 

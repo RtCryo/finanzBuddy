@@ -2,6 +2,7 @@ package com.finanzbuddy.api.document.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.finanzbuddy.api.document.DocumentStorage;
 import com.finanzbuddy.api.document.DocumentType;
 import com.finanzbuddy.api.document.dto.DocumentResponse;
 import com.finanzbuddy.api.document.dto.DocumentStatusUpdateRequest;
@@ -17,7 +18,6 @@ import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import java.io.InputStream;
-import java.nio.file.Paths;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,7 +49,7 @@ public class DocumentService {
     private final DocumentRepository documentRepository;
     private final UserRepository userRepository;
     private final OutboxEventRepository outboxEventRepository;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
     private final TransactionTemplate txTemplate;
 
     @Value("${app.minio.bucket}")
@@ -63,11 +63,13 @@ public class DocumentService {
             DocumentRepository documentRepository,
             UserRepository userRepository,
             OutboxEventRepository outboxEventRepository,
+            ObjectMapper objectMapper,
             PlatformTransactionManager txManager) {
         this.minioClient = minioClient;
         this.documentRepository = documentRepository;
         this.userRepository = userRepository;
         this.outboxEventRepository = outboxEventRepository;
+        this.objectMapper = objectMapper;
         this.txTemplate = new TransactionTemplate(txManager);
     }
 
@@ -102,15 +104,13 @@ public class DocumentService {
 
         Long userId = pending.getUser().getId();
         Long docId = pending.getId();
-        String storagePath = buildStoragePath(userId, docId, originalFilename);
+        String storagePath = DocumentStorage.objectKey(userId, docId, originalFilename);
 
         // MinIO upload outside any transaction — no DB connection held during I/O
         try (InputStream inputStream = file.getInputStream()) {
             minioClient.putObject(
-                    PutObjectArgs.builder()
-                            .bucket(bucket)
-                            .object(storagePath)
-                            .stream(inputStream, file.getSize(), -1)
+                    PutObjectArgs.builder().bucket(bucket).object(storagePath).stream(
+                                    inputStream, file.getSize(), -1)
                             .contentType(
                                     file.getContentType() != null
                                             ? file.getContentType()
@@ -190,9 +190,10 @@ public class DocumentService {
 
         validateStatusTransition(document.getStatus(), request.status());
         document.setStatus(request.status());
-        if (request.status() == DocumentStatus.FAILED && request.message() != null) {
-            document.setErrorMessage(request.message());
-        }
+        // Clear any stale failure reason on non-FAILED transitions (e.g. FAILED->PENDING reprocess)
+        // so a later success never keeps showing an old error message.
+        document.setErrorMessage(
+                request.status() == DocumentStatus.FAILED ? request.message() : null);
         return toResponse(document);
     }
 
@@ -259,11 +260,6 @@ public class DocumentService {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "Unsupported document type: " + type);
         }
-    }
-
-    private String buildStoragePath(Long userId, Long documentId, String originalFilename) {
-        String sanitized = Paths.get(originalFilename).getFileName().toString();
-        return String.format("users/%d/%d-%s", userId, documentId, sanitized);
     }
 
     private DocumentResponse toResponse(Document document) {

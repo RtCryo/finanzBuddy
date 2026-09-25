@@ -1,5 +1,6 @@
 package com.finanzbuddy.api.document.outbox;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finanzbuddy.api.entity.OutboxEvent;
 import com.finanzbuddy.api.event.DocumentUploadedEvent;
@@ -13,7 +14,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Component
 public class OutboxRelay {
@@ -22,54 +24,121 @@ public class OutboxRelay {
 
     private final OutboxEventRepository outboxEventRepository;
     private final KafkaTemplate<Object, Object> kafkaTemplate;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+    private final TransactionTemplate txTemplate;
     private final int batchSize;
     private final long sendTimeoutMs;
+    private final int maxAttempts;
 
     public OutboxRelay(
             OutboxEventRepository outboxEventRepository,
             KafkaTemplate<Object, Object> kafkaTemplate,
+            ObjectMapper objectMapper,
+            PlatformTransactionManager txManager,
             @Value("${app.outbox.batch-size:100}") int batchSize,
-            @Value("${app.outbox.send-timeout-ms:10000}") long sendTimeoutMs) {
+            @Value("${app.outbox.send-timeout-ms:10000}") long sendTimeoutMs,
+            @Value("${app.outbox.max-attempts:10}") int maxAttempts) {
         this.outboxEventRepository = outboxEventRepository;
         this.kafkaTemplate = kafkaTemplate;
+        this.objectMapper = objectMapper;
+        this.txTemplate = new TransactionTemplate(txManager);
         this.batchSize = batchSize;
         this.sendTimeoutMs = sendTimeoutMs;
+        this.maxAttempts = maxAttempts;
     }
 
     @Scheduled(fixedDelayString = "${app.outbox.poll-interval-ms:5000}")
-    @Transactional
     public void publishPending() {
         List<OutboxEvent> pending =
-                outboxEventRepository.findByPublishedAtIsNullOrderByCreatedAtAsc(
-                        PageRequest.of(0, batchSize));
+                txTemplate.execute(
+                        status ->
+                                outboxEventRepository
+                                        .findByPublishedAtIsNullAndDeadLetteredAtIsNullOrderByCreatedAtAsc(
+                                                PageRequest.of(0, batchSize)));
+        if (pending == null) {
+            return;
+        }
+        // The blocking broker round-trip happens outside any transaction so a slow or unreachable
+        // broker never pins a DB connection while events are being sent.
         for (OutboxEvent event : pending) {
             publishOne(event);
         }
     }
 
     private void publishOne(OutboxEvent event) {
+        DocumentUploadedEvent payload;
         try {
-            DocumentUploadedEvent payload =
-                    objectMapper.readValue(event.getPayload(), DocumentUploadedEvent.class);
-            kafkaTemplate
-                    .send(event.getTopic(), payload)
-                    .get(sendTimeoutMs, TimeUnit.MILLISECONDS);
-            event.markPublished();
-            log.info(
-                    "Published outbox event {} to topic {} for document {}",
+            payload = objectMapper.readValue(event.getPayload(), DocumentUploadedEvent.class);
+        } catch (JsonProcessingException e) {
+            // A payload that cannot be deserialized will never succeed; dead-letter it immediately
+            // instead of re-fetching the poison row on every poll.
+            log.error(
+                    "Dead-lettering outbox event {} for document {}: payload cannot be"
+                            + " deserialized",
+                    event.getId(),
+                    event.getAggregateId(),
+                    e);
+            deadLetter(event.getId());
+            return;
+        }
+
+        try {
+            kafkaTemplate.send(event.getTopic(), payload).get(sendTimeoutMs, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            recordFailure(event, e);
+            return;
+        }
+
+        markPublished(event.getId());
+        log.info(
+                "Published outbox event {} to topic {} for document {}",
+                event.getId(),
+                event.getTopic(),
+                event.getAggregateId());
+    }
+
+    private void recordFailure(OutboxEvent event, Exception cause) {
+        int attempts =
+                txTemplate.execute(
+                        status -> {
+                            OutboxEvent managed =
+                                    outboxEventRepository.findById(event.getId()).orElse(null);
+                            if (managed == null) {
+                                return 0;
+                            }
+                            managed.recordFailedAttempt();
+                            if (managed.getAttempts() >= maxAttempts) {
+                                managed.deadLetter();
+                            }
+                            return managed.getAttempts();
+                        });
+        if (attempts >= maxAttempts) {
+            log.error(
+                    "Dead-lettering outbox event {} to topic {} for document {} after {} failed"
+                            + " attempts",
                     event.getId(),
                     event.getTopic(),
-                    event.getAggregateId());
-        } catch (Exception e) {
-            event.recordFailedAttempt();
+                    event.getAggregateId(),
+                    attempts,
+                    cause);
+        } else {
             log.error(
                     "Failed to publish outbox event {} to topic {} for document {} (attempt {})",
                     event.getId(),
                     event.getTopic(),
                     event.getAggregateId(),
-                    event.getAttempts(),
-                    e);
+                    attempts,
+                    cause);
         }
+    }
+
+    private void markPublished(Long id) {
+        txTemplate.executeWithoutResult(
+                status -> outboxEventRepository.findById(id).ifPresent(OutboxEvent::markPublished));
+    }
+
+    private void deadLetter(Long id) {
+        txTemplate.executeWithoutResult(
+                status -> outboxEventRepository.findById(id).ifPresent(OutboxEvent::deadLetter));
     }
 }

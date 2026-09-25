@@ -9,5 +9,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> {
 
-    List<OutboxEvent> findByPublishedAtIsNullOrderByCreatedAtAsc(Pageable pageable);
+    List<OutboxEvent> findByPublishedAtIsNullAndDeadLetteredAtIsNullOrderByCreatedAtAsc(
+            Pageable pageable);
 }

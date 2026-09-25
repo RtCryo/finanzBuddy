@@ -8,5 +8,6 @@
     <include file="classpath:/db/changelog/changes/001-create-users-table.xml"/>
     <include file="classpath:/db/changelog/changes/002-create-documents-table.xml"/>
     <include file="classpath:/db/changelog/changes/003-create-outbox-events-table.xml"/>
+    <include file="classpath:/db/changelog/changes/004-add-outbox-dead-letter.xml"/>
 
 </databaseChangeLog>
