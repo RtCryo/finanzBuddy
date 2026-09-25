@@ -76,17 +76,22 @@ public class StalePendingReconciler {
             return;
         }
         for (StaleDocument document : stale) {
-            // MinIO removal runs outside any transaction so slow or unreachable storage never
-            // pins a DB connection while the batch is being cleaned up.
-            deleteOrphanedObject(document.storagePath());
-            txTemplate.executeWithoutResult(
-                    status ->
-                            documentRepository.deleteByIdIfStale(
-                                    document.id(), DocumentStatus.PENDING));
-            log.warn(
-                    "Reconciled stale PENDING document {} (no storage path, created {})",
-                    document.id(),
-                    document.createdAt());
+            // Delete the row first, conditionally on it still being stale; only then remove the
+            // MinIO object. This avoids wiping the object of an upload that finalized (storage_path
+            // set) between the scan and now. MinIO I/O still runs outside any transaction so slow
+            // or unreachable storage never pins a DB connection.
+            Integer deleted =
+                    txTemplate.execute(
+                            status ->
+                                    documentRepository.deleteByIdIfStale(
+                                            document.id(), DocumentStatus.PENDING));
+            if (deleted != null && deleted > 0) {
+                deleteOrphanedObject(document.storagePath());
+                log.warn(
+                        "Reconciled stale PENDING document {} (no storage path, created {})",
+                        document.id(),
+                        document.createdAt());
+            }
         }
     }
 
