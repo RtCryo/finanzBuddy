@@ -194,6 +194,41 @@ class DocumentControllerIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void reprocessTransitionEnqueuesNewUploadEvent() throws Exception {
+        String token = registerAndLogin("reprocess@example.com", "password123");
+        MockMultipartFile file =
+                new MockMultipartFile("file", "reprocess.csv", "text/csv", "a\n1".getBytes());
+        long documentId = uploadDocument(token, file, "CSV");
+
+        assertThat(countOutboxEvents(documentId)).isEqualTo(1);
+
+        transition(documentId, DocumentStatus.PROCESSING, null);
+        transition(documentId, DocumentStatus.FAILED, "boom");
+        transition(documentId, DocumentStatus.PENDING, null);
+
+        // The FAILED->PENDING reprocess must publish a second upload event so the document is
+        // actually picked up again instead of sitting in PENDING forever.
+        assertThat(countOutboxEvents(documentId)).isEqualTo(2);
+    }
+
+    private void transition(long documentId, DocumentStatus status, String message)
+            throws Exception {
+        DocumentStatusUpdateRequest update = new DocumentStatusUpdateRequest(status, message);
+        mockMvc.perform(
+                        put("/internal/documents/" + documentId + "/status")
+                                .header(InternalApiKeyAuthFilter.HEADER, API_KEY)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(update)))
+                .andExpect(status().isOk());
+    }
+
+    private long countOutboxEvents(long documentId) {
+        return outboxEventRepository.findAll().stream()
+                .filter(e -> e.getAggregateId().equals(documentId))
+                .count();
+    }
+
     private OutboxEvent findOutboxEvent(long documentId) {
         return outboxEventRepository.findAll().stream()
                 .filter(e -> e.getAggregateId().equals(documentId))

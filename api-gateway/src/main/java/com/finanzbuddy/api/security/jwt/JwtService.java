@@ -44,9 +44,10 @@ public class JwtService {
 
     public boolean isTokenValid(String token, UserDetails userDetails) {
         try {
+            // parseSignedClaims already rejects expired tokens with ExpiredJwtException, so a token
+            // that parses here is unexpired; only the subject still needs checking.
             Claims claims = extractAllClaims(token);
-            boolean notExpired = !claims.getExpiration().before(Date.from(Instant.now()));
-            return claims.getSubject().equals(userDetails.getUsername()) && notExpired;
+            return claims.getSubject().equals(userDetails.getUsername());
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }

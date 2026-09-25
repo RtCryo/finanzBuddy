@@ -26,7 +26,6 @@ public class OutboxRelay {
     private final int batchSize;
     private final long sendTimeoutMs;
     private final int maxAttempts;
-    private final int maxConsecutiveFailures;
 
     public OutboxRelay(
             OutboxEventRepository outboxEventRepository,
@@ -35,8 +34,7 @@ public class OutboxRelay {
             OutboxMetrics outboxMetrics,
             @Value("${app.outbox.batch-size:100}") int batchSize,
             @Value("${app.outbox.send-timeout-ms:3000}") long sendTimeoutMs,
-            @Value("${app.outbox.max-attempts:10}") int maxAttempts,
-            @Value("${app.outbox.max-consecutive-failures:5}") int maxConsecutiveFailures) {
+            @Value("${app.outbox.max-attempts:10}") int maxAttempts) {
         this.outboxEventRepository = outboxEventRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.txTemplate = new TransactionTemplate(txManager);
@@ -44,7 +42,6 @@ public class OutboxRelay {
         this.batchSize = batchSize;
         this.sendTimeoutMs = sendTimeoutMs;
         this.maxAttempts = maxAttempts;
-        this.maxConsecutiveFailures = maxConsecutiveFailures;
     }
 
     @Scheduled(fixedDelayString = "${app.outbox.poll-interval-ms:5000}")
@@ -59,24 +56,15 @@ public class OutboxRelay {
             return;
         }
         // The blocking broker round-trip happens outside any transaction so a slow or unreachable
-        // broker never pins a DB connection while events are being sent.
-        int consecutiveFailures = 0;
+        // broker never pins a DB connection while events are being sent. Every event in the batch
+        // is attempted (a failing event at the head must not block newer, deliverable ones); the
+        // batch size and per-send timeout bound the work when the broker is unhealthy.
         for (OutboxEvent event : pending) {
-            if (publishOne(event)) {
-                consecutiveFailures = 0;
-            } else if (++consecutiveFailures >= maxConsecutiveFailures) {
-                // Stop hammering an unhealthy broker for the rest of this batch; the remaining
-                // events stay pending and are retried on the next poll.
-                log.warn(
-                        "Aborting outbox poll after {} consecutive send failures; retrying next"
-                                + " cycle",
-                        consecutiveFailures);
-                break;
-            }
+            publishOne(event);
         }
     }
 
-    private boolean publishOne(OutboxEvent event) {
+    private void publishOne(OutboxEvent event) {
         // Send the durably stored JSON payload verbatim (StringSerializer) so the bytes on the wire
         // are exactly the bytes committed to the outbox — no re-serialization and no Java-class type
         // headers that would couple consumers to this module's package.
@@ -86,7 +74,7 @@ public class OutboxRelay {
                     .get(sendTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (Exception e) {
             recordFailure(event, e);
-            return false;
+            return;
         }
 
         markPublished(event.getId());
@@ -95,7 +83,6 @@ public class OutboxRelay {
                 event.getId(),
                 event.getTopic(),
                 event.getAggregateId());
-        return true;
     }
 
     private void recordFailure(OutboxEvent event, Exception cause) {

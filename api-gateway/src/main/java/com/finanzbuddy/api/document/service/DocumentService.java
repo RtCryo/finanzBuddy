@@ -198,6 +198,11 @@ public class DocumentService {
         // so a later success never keeps showing an old error message.
         document.setErrorMessage(
                 request.status() == DocumentStatus.FAILED ? request.message() : null);
+        // A reprocess (FAILED->PENDING) must re-publish the upload event in the same transaction;
+        // otherwise the document would sit in PENDING with no consumer ever picking it up again.
+        if (request.status() == DocumentStatus.PENDING) {
+            enqueueUploadedEvent(document);
+        }
         return toResponse(document);
     }
 

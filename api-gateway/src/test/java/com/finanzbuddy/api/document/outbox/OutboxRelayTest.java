@@ -30,16 +30,10 @@ class OutboxRelayTest {
     @Mock private PlatformTransactionManager txManager;
     @Mock private OutboxMetrics outboxMetrics;
 
-    private OutboxRelay relay(int maxAttempts, int maxConsecutiveFailures) {
+    private OutboxRelay relay(int maxAttempts) {
         return new OutboxRelay(
-                outboxEventRepository,
-                kafkaTemplate,
-                txManager,
-                outboxMetrics,
-                100,
-                1000L,
-                maxAttempts,
-                maxConsecutiveFailures);
+                outboxEventRepository, kafkaTemplate, txManager, outboxMetrics, 100, 1000L,
+                maxAttempts);
     }
 
     private OutboxEvent event(long id, String topic, String payload) {
@@ -72,7 +66,7 @@ class OutboxRelayTest {
         stubSendSucceeds();
         when(outboxEventRepository.findById(1L)).thenReturn(Optional.of(event));
 
-        relay(10, 5).publishPending();
+        relay(10).publishPending();
 
         verify(kafkaTemplate).send("documents.csv", "{\"documentId\":1}");
         assertThat(event.getPublishedAt()).isNotNull();
@@ -86,14 +80,15 @@ class OutboxRelayTest {
         stubSendFails();
         when(outboxEventRepository.findById(1L)).thenReturn(Optional.of(event));
 
-        relay(1, 5).publishPending();
+        relay(1).publishPending();
 
         assertThat(event.getDeadLetteredAt()).isNotNull();
         verify(outboxMetrics).recordDeadLettered();
     }
 
     @Test
-    void circuitBreakerStopsBatchAfterConsecutiveFailures() {
+    void attemptsEveryEventEvenWhenEarlierOnesFail() {
+        // A failing event at the head of the batch must not block newer, deliverable events.
         stubPending(
                 event(1L, "documents.csv", "a"),
                 event(2L, "documents.csv", "b"),
@@ -104,8 +99,8 @@ class OutboxRelayTest {
         when(outboxEventRepository.findById(anyLong()))
                 .thenAnswer(inv -> Optional.of(event(inv.getArgument(0), "documents.csv", "x")));
 
-        relay(10, 3).publishPending();
+        relay(10).publishPending();
 
-        verify(kafkaTemplate, times(3)).send(any(), any());
+        verify(kafkaTemplate, times(5)).send(any(), any());
     }
 }
