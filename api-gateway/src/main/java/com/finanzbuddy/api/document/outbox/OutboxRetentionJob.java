@@ -33,7 +33,8 @@ public class OutboxRetentionJob {
     @Transactional
     public void purgePublished() {
         Instant cutoff = Instant.now().minus(retention);
-        long removed = outboxEventRepository.deleteByPublishedAtIsNotNullAndPublishedAtBefore(cutoff);
+        long removed =
+                outboxEventRepository.deleteByPublishedAtIsNotNullAndPublishedAtBefore(cutoff);
         if (removed > 0) {
             log.info("Purged {} published outbox events older than {}", removed, cutoff);
         }

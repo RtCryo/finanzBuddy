@@ -73,7 +73,8 @@ public class OutboxRelay {
 
     private void publishOne(OutboxEvent event) {
         // Send the durably stored JSON payload verbatim (StringSerializer) so the bytes on the wire
-        // are exactly the bytes committed to the outbox — no re-serialization and no Java-class type
+        // are exactly the bytes committed to the outbox — no re-serialization and no Java-class
+        // type
         // headers that would couple consumers to this module's package. The aggregate id is the
         // partition key so all events for one document keep their relative order.
         try {

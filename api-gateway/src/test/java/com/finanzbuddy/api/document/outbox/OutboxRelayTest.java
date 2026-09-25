@@ -32,8 +32,15 @@ class OutboxRelayTest {
 
     private OutboxRelay relay(int maxAttempts) {
         return new OutboxRelay(
-                outboxEventRepository, kafkaTemplate, txManager, outboxMetrics, 100, 1000L,
-                maxAttempts, 5000L, 300000L);
+                outboxEventRepository,
+                kafkaTemplate,
+                txManager,
+                outboxMetrics,
+                100,
+                1000L,
+                maxAttempts,
+                5000L,
+                300000L);
     }
 
     private OutboxEvent event(long id, String topic, String payload) {

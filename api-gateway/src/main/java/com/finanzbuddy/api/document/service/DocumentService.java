@@ -280,7 +280,8 @@ public class DocumentService {
         try (InputStream inputStream = file.getInputStream()) {
             header = inputStream.readNBytes(4);
         } catch (IOException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unable to read uploaded file");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Unable to read uploaded file");
         }
         if (header.length < 4
                 || header[0] != '%'
