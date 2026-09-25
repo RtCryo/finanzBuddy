@@ -1,0 +1,50 @@
+package com.finanzbuddy.api.document.outbox;
+
+import com.finanzbuddy.api.repository.OutboxEventRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Duration;
+import java.time.Instant;
+import org.springframework.stereotype.Component;
+
+/**
+ * Exposes the outbox's health signals: how deep the unpublished backlog is, how old its oldest
+ * entry is (early warning for a stalled relay or a down consumer), and how many events have been
+ * dead-lettered (silent data loss unless alerted on).
+ */
+@Component
+public class OutboxMetrics {
+
+    private final OutboxEventRepository outboxEventRepository;
+    private final Counter deadLetteredCounter;
+
+    public OutboxMetrics(OutboxEventRepository outboxEventRepository, MeterRegistry registry) {
+        this.outboxEventRepository = outboxEventRepository;
+        this.deadLetteredCounter =
+                Counter.builder("outbox.events.dead_lettered")
+                        .description("Outbox events dead-lettered after exhausting retries")
+                        .register(registry);
+        Gauge.builder(
+                        "outbox.events.pending",
+                        outboxEventRepository,
+                        OutboxEventRepository::countByPublishedAtIsNullAndDeadLetteredAtIsNull)
+                .description("Outbox events awaiting delivery")
+                .register(registry);
+        Gauge.builder("outbox.events.oldest_pending_age", this, OutboxMetrics::oldestPendingAge)
+                .description("Age of the oldest undelivered outbox event")
+                .baseUnit("seconds")
+                .register(registry);
+    }
+
+    public void recordDeadLettered() {
+        deadLetteredCounter.increment();
+    }
+
+    private double oldestPendingAge() {
+        return outboxEventRepository
+                .findOldestPendingCreatedAt()
+                .map(created -> (double) Duration.between(created, Instant.now()).toSeconds())
+                .orElse(0.0);
+    }
+}

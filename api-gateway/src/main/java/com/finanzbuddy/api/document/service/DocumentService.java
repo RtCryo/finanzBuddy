@@ -76,6 +76,10 @@ public class DocumentService {
     public DocumentResponse uploadDocument(String userEmail, MultipartFile file, String type) {
         DocumentType documentType = parseAndValidateType(type);
 
+        if (file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File must not be empty");
+        }
+
         String originalFilename = file.getOriginalFilename();
         if (originalFilename == null || originalFilename.isBlank()) {
             throw new ResponseStatusException(

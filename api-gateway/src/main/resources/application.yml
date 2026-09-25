@@ -20,7 +20,7 @@ spring:
   kafka:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
       acks: all
       retries: 3
 
@@ -41,10 +41,17 @@ app:
   outbox:
     poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:5000}
     batch-size: ${OUTBOX_BATCH_SIZE:100}
-    send-timeout-ms: ${OUTBOX_SEND_TIMEOUT_MS:10000}
+    send-timeout-ms: ${OUTBOX_SEND_TIMEOUT_MS:3000}
+    max-consecutive-failures: ${OUTBOX_MAX_CONSECUTIVE_FAILURES:5}
   reconciler:
     poll-interval-ms: ${RECONCILER_POLL_INTERVAL_MS:900000}
     pending-timeout-ms: ${RECONCILER_PENDING_TIMEOUT_MS:3600000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
 
 ---
 spring:
@@ -59,6 +66,8 @@ spring:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 app:
+  jwt:
+    secret: ${JWT_SECRET:ZmluYW56YnVkZHktYXBpLWdhdGV3YXktand0LXNlY3JldC1rZXk=}
   internal:
     api-key: ${INTERNAL_API_KEY:local-internal-api-key}
 
