@@ -43,6 +43,7 @@ This starts PostgreSQL, Kafka (with Zookeeper), MinIO, and the API Gateway.
 | `JWT_EXPIRATION_MS` | JWT expiration in milliseconds | `86400000` |
 | `INTERNAL_API_KEY` | Shared key for internal service endpoints (`/internal/**`) | **required, no default** — `/internal/**` is locked until set |
 | `OUTBOX_POLL_INTERVAL_MS` | Interval the outbox relay polls for undelivered events | `5000` |
+| `UPLOAD_ACCEPTED_TYPES` | Comma-separated document types accepted for upload | `CSV` |
 
 ## API Endpoints
 
@@ -81,7 +82,9 @@ curl -X POST http://localhost:8080/documents \
   -F "type=CSV"
 ```
 
-Supported types: `CSV`, `PDF`, `XML`. Returns `201 Created`.
+Recognised types: `CSV`, `PDF`, `XML`. In the MVP only `CSV` is **accepted** (configurable via
+`UPLOAD_ACCEPTED_TYPES`); `PDF`/`XML` return `400 Bad Request` until the parser supports them.
+Returns `201 Created` on success.
 
 #### List own documents
 
@@ -143,6 +146,13 @@ Uploaded files are stored under `users/{userId}/{documentId}-{originalFilename}`
 
 These are intentional and have come up in review before — documented here so they are not
 re-raised as defects.
+
+- **At-least-once Kafka delivery.** The relay treats a send timeout as a failure and retries, but
+  does not cancel the in-flight send — with `acks=all` and producer retries the broker may still
+  commit the original, so a `DocumentUploadedEvent` can be published more than once. This is an
+  accepted property of the outbox pattern; the parser-service consumer is idempotent (dedupes on
+  `documentId`), so duplicates are harmless. Events for one document are still delivered in order
+  (the relay only publishes an aggregate's oldest undelivered event, keyed on `aggregateId`).
 
 - **Single-instance outbox relay (no row locking / leader election).** The relay reads pending
   events with a plain query — there is no `FOR UPDATE SKIP LOCKED` or leader election. This is

@@ -145,7 +145,15 @@ public class OutboxRelay {
 
     private long backoffMs(int attempts) {
         int shift = Math.min(attempts - 1, 20);
-        long backoff = retryBaseBackoffMs << shift;
+        long backoff = retryBaseBackoffMs;
+        for (int i = 0; i < shift; i++) {
+            backoff <<= 1;
+            // A large configured base can overflow to a negative value; clamp instead of scheduling
+            // the next attempt in the past.
+            if (backoff <= 0 || backoff >= retryMaxBackoffMs) {
+                return retryMaxBackoffMs;
+            }
+        }
         return Math.min(backoff, retryMaxBackoffMs);
     }
 }

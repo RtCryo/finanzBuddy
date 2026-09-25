@@ -119,13 +119,28 @@ class DocumentControllerIntegrationTest {
     }
 
     @Test
+    void uploadRejectsTypeNotAcceptedInMvp() throws Exception {
+        String token = registerAndLogin("mvptype@example.com", "password123");
+        MockMultipartFile file =
+                new MockMultipartFile("file", "data.pdf", "application/pdf", "%PDF-1.4".getBytes());
+
+        // PDF is a recognised type but not accepted in the MVP (parser support deferred).
+        mockMvc.perform(
+                        multipart("/documents")
+                                .file(file)
+                                .param("type", "PDF")
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void listAndGetWorkForOwnDocuments() throws Exception {
         String token = registerAndLogin("doclist@example.com", "password123");
 
         MockMultipartFile file =
-                new MockMultipartFile("file", "data.xml", "application/xml", "<root/>".getBytes());
+                new MockMultipartFile("file", "data.csv", "text/csv", "a,b\n1,2".getBytes());
 
-        long documentId = uploadDocument(token, file, "XML");
+        long documentId = uploadDocument(token, file, "CSV");
 
         mockMvc.perform(get("/documents").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
@@ -140,9 +155,9 @@ class DocumentControllerIntegrationTest {
         String otherToken = registerAndLogin("other@example.com", "password123");
 
         MockMultipartFile file =
-                new MockMultipartFile("file", "data.pdf", "application/pdf", "%PDF".getBytes());
+                new MockMultipartFile("file", "data.csv", "text/csv", "a,b\n1,2".getBytes());
 
-        long documentId = uploadDocument(ownerToken, file, "PDF");
+        long documentId = uploadDocument(ownerToken, file, "CSV");
 
         mockMvc.perform(
                         get("/documents/" + documentId)

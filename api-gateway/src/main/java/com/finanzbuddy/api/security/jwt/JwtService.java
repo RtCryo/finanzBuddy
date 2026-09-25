@@ -7,7 +7,6 @@ import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import java.time.Instant;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 import javax.crypto.SecretKey;
@@ -34,13 +33,9 @@ public class JwtService {
     }
 
     public String generateToken(UserDetails userDetails) {
-        Map<String, Object> claims = new HashMap<>();
-        claims.put(
-                "roles",
-                userDetails.getAuthorities().stream()
-                        .map(grantedAuthority -> grantedAuthority.getAuthority())
-                        .toList());
-        return createToken(claims, userDetails.getUsername());
+        // No custom claims: authorities are always reloaded from the database in the auth filter,
+        // so a roles claim would be dead weight (and must not be trusted).
+        return createToken(Map.of(), userDetails.getUsername());
     }
 
     public String extractUsername(String token) {

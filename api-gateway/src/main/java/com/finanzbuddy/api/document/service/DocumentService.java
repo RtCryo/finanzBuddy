@@ -59,6 +59,9 @@ public class DocumentService {
     @Value("${app.kafka.document-topic-prefix}")
     private String topicPrefix;
 
+    @Value("${app.upload.accepted-types:CSV}")
+    private Set<DocumentType> acceptedTypes;
+
     public DocumentService(
             MinioClient minioClient,
             DocumentRepository documentRepository,
@@ -205,9 +208,12 @@ public class DocumentService {
                                                 HttpStatus.NOT_FOUND, "Document not found"));
 
         if (document.getStatus() == request.status()) {
-            // Idempotent redelivery of the current status from an at-least-once parser: no-op 200
-            // instead of a 400 that would push the parser into a retry loop. No new event is
-            // enqueued — only a real FAILED->PENDING reprocess re-publishes.
+            // Idempotent redelivery of the current status from an at-least-once parser: return 200
+            // instead of a 400 that would push the parser into a retry loop, and do not re-enqueue.
+            // A repeated FAILED report may carry a more accurate reason, so refresh the message.
+            if (request.status() == DocumentStatus.FAILED) {
+                document.setErrorMessage(request.message());
+            }
             return toResponse(document);
         }
 
@@ -298,12 +304,20 @@ public class DocumentService {
         if (type == null || type.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Document type is required");
         }
+        DocumentType parsed;
         try {
-            return DocumentType.valueOf(type.toUpperCase());
+            parsed = DocumentType.valueOf(type.toUpperCase());
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "Unsupported document type: " + type);
         }
+        if (!acceptedTypes.contains(parsed)) {
+            // PDF/XML are recognised types but not consumable in the MVP (parser support deferred),
+            // so reject them here rather than let uploads sit PENDING with no consumer.
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Document type not accepted: " + parsed);
+        }
+        return parsed;
     }
 
     private DocumentResponse toResponse(Document document) {

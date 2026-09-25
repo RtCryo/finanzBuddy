@@ -41,6 +41,8 @@ app:
     create-bucket: true
   kafka:
     document-topic-prefix: ${KAFKA_DOCUMENT_TOPIC_PREFIX:documents}
+  upload:
+    accepted-types: ${UPLOAD_ACCEPTED_TYPES:CSV}
   internal:
     api-key: ${INTERNAL_API_KEY:}
   outbox:
