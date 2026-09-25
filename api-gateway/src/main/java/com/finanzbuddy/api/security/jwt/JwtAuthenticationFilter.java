@@ -50,7 +50,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // Expired tokens are common and useful for audit/ops; log them at a higher level than
             // malformed ones while still leaving the request unauthenticated so permitAll endpoints
             // keep working.
-            logger.info("Ignoring expired JWT bearer token for subject {}", e.getClaims().getSubject());
+            logger.info(
+                    "Ignoring expired JWT bearer token for subject "
+                            + e.getClaims().getSubject());
             filterChain.doFilter(request, response);
             return;
         } catch (JwtException | IllegalArgumentException e) {
