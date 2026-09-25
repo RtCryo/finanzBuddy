@@ -21,7 +21,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     Optional<Document> findByIdAndUserId(Long id, Long userId);
 
     List<Document> findByStatusAndStoragePathIsNullAndCreatedAtBefore(
-            DocumentStatus status, Instant cutoff);
+            DocumentStatus status, Instant cutoff, Pageable pageable);
 
     /**
      * Deletes a document only if it is still stale (same status, still no storage path), so an

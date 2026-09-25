@@ -11,6 +11,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -32,18 +33,21 @@ public class StalePendingReconciler {
     private final TransactionTemplate txTemplate;
     private final String bucket;
     private final Duration staleAfter;
+    private final int batchSize;
 
     public StalePendingReconciler(
             DocumentRepository documentRepository,
             MinioClient minioClient,
             PlatformTransactionManager txManager,
             @Value("${app.minio.bucket}") String bucket,
-            @Value("${app.reconciler.pending-timeout-ms:3600000}") long staleAfterMs) {
+            @Value("${app.reconciler.pending-timeout-ms:3600000}") long staleAfterMs,
+            @Value("${app.reconciler.batch-size:500}") int batchSize) {
         this.documentRepository = documentRepository;
         this.minioClient = minioClient;
         this.txTemplate = new TransactionTemplate(txManager);
         this.bucket = bucket;
         this.staleAfter = Duration.ofMillis(staleAfterMs);
+        this.batchSize = batchSize;
     }
 
     @Scheduled(fixedDelayString = "${app.reconciler.poll-interval-ms:900000}")
@@ -54,7 +58,9 @@ public class StalePendingReconciler {
                         status ->
                                 documentRepository
                                         .findByStatusAndStoragePathIsNullAndCreatedAtBefore(
-                                                DocumentStatus.PENDING, cutoff)
+                                                DocumentStatus.PENDING,
+                                                cutoff,
+                                                PageRequest.of(0, batchSize))
                                         .stream()
                                         .map(
                                                 doc ->

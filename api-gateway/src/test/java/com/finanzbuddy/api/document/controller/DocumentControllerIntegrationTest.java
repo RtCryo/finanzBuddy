@@ -245,6 +245,19 @@ class DocumentControllerIntegrationTest {
         assertThat(page.get("totalElements").asInt()).isZero();
     }
 
+    @Test
+    void redeliveredProcessingStatusIsIdempotent() throws Exception {
+        String token = registerAndLogin("reprocessing@example.com", "password123");
+        MockMultipartFile file =
+                new MockMultipartFile("file", "proc.csv", "text/csv", "a\n1".getBytes());
+        long documentId = uploadDocument(token, file, "CSV");
+
+        transition(documentId, DocumentStatus.PROCESSING, null);
+        // Redelivery of the same status from an at-least-once parser must be a no-op 200, not a
+        // 400 that would push the parser into a retry loop.
+        transition(documentId, DocumentStatus.PROCESSING, null);
+    }
+
     private void transition(long documentId, DocumentStatus status, String message)
             throws Exception {
         DocumentStatusUpdateRequest update = new DocumentStatusUpdateRequest(status, message);

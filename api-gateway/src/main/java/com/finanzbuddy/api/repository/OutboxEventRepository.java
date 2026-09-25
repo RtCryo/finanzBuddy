@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -17,6 +18,11 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
             "select o from OutboxEvent o"
                     + " where o.publishedAt is null and o.deadLetteredAt is null"
                     + " and (o.nextAttemptAt is null or o.nextAttemptAt <= :now)"
+                    + " and not exists ("
+                    + "   select 1 from OutboxEvent e"
+                    + "   where e.aggregateId = o.aggregateId"
+                    + "   and e.publishedAt is null and e.deadLetteredAt is null"
+                    + "   and e.id < o.id)"
                     + " order by o.createdAt asc")
     List<OutboxEvent> findPublishable(@Param("now") Instant now, Pageable pageable);
 
@@ -27,5 +33,7 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
                     + " where o.publishedAt is null and o.deadLetteredAt is null")
     Optional<Instant> findOldestPendingCreatedAt();
 
-    long deleteByPublishedAtIsNotNullAndPublishedAtBefore(Instant cutoff);
+    @Modifying
+    @Query("delete from OutboxEvent o where o.publishedAt is not null and o.publishedAt < :cutoff")
+    int deletePublishedBefore(@Param("cutoff") Instant cutoff);
 }

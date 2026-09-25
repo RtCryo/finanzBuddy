@@ -17,8 +17,8 @@ import com.finanzbuddy.api.repository.UserRepository;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,7 +81,16 @@ public class DocumentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File must not be empty");
         }
 
-        validateContentMatchesType(documentType, file);
+        // MultipartFile streams are not guaranteed re-readable, so buffer the content once (bounded
+        // by the multipart max-file-size) and reuse the same bytes for validation and storage.
+        byte[] content;
+        try {
+            content = file.getBytes();
+        } catch (IOException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Unable to read uploaded file");
+        }
+        validateContentMatchesType(documentType, content);
 
         String originalFilename = file.getOriginalFilename();
         if (originalFilename == null || originalFilename.isBlank()) {
@@ -114,10 +123,10 @@ public class DocumentService {
         String storagePath = DocumentStorage.objectKey(userId, docId, originalFilename);
 
         // MinIO upload outside any transaction — no DB connection held during I/O
-        try (InputStream inputStream = file.getInputStream()) {
+        try {
             minioClient.putObject(
                     PutObjectArgs.builder().bucket(bucket).object(storagePath).stream(
-                                    inputStream, file.getSize(), -1)
+                                    new ByteArrayInputStream(content), content.length, -1)
                             .contentType(
                                     file.getContentType() != null
                                             ? file.getContentType()
@@ -195,11 +204,10 @@ public class DocumentService {
                                         new ResponseStatusException(
                                                 HttpStatus.NOT_FOUND, "Document not found"));
 
-        if (document.getStatus() == request.status()
-                && (request.status() == DocumentStatus.PROCESSED
-                        || request.status() == DocumentStatus.FAILED)) {
-            // Idempotent redelivery of a terminal status from an at-least-once parser: no-op 200
-            // instead of a 400 that would push the parser into a retry loop.
+        if (document.getStatus() == request.status()) {
+            // Idempotent redelivery of the current status from an at-least-once parser: no-op 200
+            // instead of a 400 that would push the parser into a retry loop. No new event is
+            // enqueued — only a real FAILED->PENDING reprocess re-publishes.
             return toResponse(document);
         }
 
@@ -270,24 +278,17 @@ public class DocumentService {
                                         HttpStatus.UNAUTHORIZED, "User not found"));
     }
 
-    private void validateContentMatchesType(DocumentType type, MultipartFile file) {
+    private void validateContentMatchesType(DocumentType type, byte[] content) {
         // Defense-in-depth magic-byte check for binary types. CSV/XML are text and have no reliable
         // signature, so their content is validated downstream by the parser.
         if (type != DocumentType.PDF) {
             return;
         }
-        byte[] header;
-        try (InputStream inputStream = file.getInputStream()) {
-            header = inputStream.readNBytes(4);
-        } catch (IOException e) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Unable to read uploaded file");
-        }
-        if (header.length < 4
-                || header[0] != '%'
-                || header[1] != 'P'
-                || header[2] != 'D'
-                || header[3] != 'F') {
+        if (content.length < 4
+                || content[0] != '%'
+                || content[1] != 'P'
+                || content[2] != 'D'
+                || content[3] != 'F') {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "File content does not match declared type PDF");
         }
