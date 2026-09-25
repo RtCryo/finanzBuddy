@@ -115,7 +115,7 @@ class DocumentControllerIntegrationTest {
                 .andExpect(status().isOk());
 
         DocumentStatusUpdateRequest update =
-                new DocumentStatusUpdateRequest(DocumentStatus.PROCESSED);
+                new DocumentStatusUpdateRequest(DocumentStatus.PROCESSING);
         mockMvc.perform(
                         put("/documents/" + documentId + "/status")
                                 .header("Authorization", "Bearer " + token)

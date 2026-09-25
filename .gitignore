@@ -1,4 +1,5 @@
 .opencode/
+.env
 
 # Local test documents (bank statements, PDFs, XML exports) - may contain private data
 documents/*
