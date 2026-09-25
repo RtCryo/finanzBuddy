@@ -1,16 +1,21 @@
 package com.finanzbuddy.api.document.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finanzbuddy.api.document.DocumentType;
 import com.finanzbuddy.api.document.dto.DocumentResponse;
 import com.finanzbuddy.api.document.dto.DocumentStatusUpdateRequest;
 import com.finanzbuddy.api.entity.Document;
 import com.finanzbuddy.api.entity.DocumentStatus;
+import com.finanzbuddy.api.entity.OutboxEvent;
 import com.finanzbuddy.api.entity.User;
 import com.finanzbuddy.api.event.DocumentUploadedEvent;
 import com.finanzbuddy.api.repository.DocumentRepository;
+import com.finanzbuddy.api.repository.OutboxEventRepository;
 import com.finanzbuddy.api.repository.UserRepository;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import java.io.InputStream;
 import java.nio.file.Paths;
 import java.util.Set;
@@ -20,12 +25,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -46,7 +48,8 @@ public class DocumentService {
     private final MinioClient minioClient;
     private final DocumentRepository documentRepository;
     private final UserRepository userRepository;
-    private final KafkaTemplate<Object, Object> kafkaTemplate;
+    private final OutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private final TransactionTemplate txTemplate;
 
     @Value("${app.minio.bucket}")
@@ -59,12 +62,12 @@ public class DocumentService {
             MinioClient minioClient,
             DocumentRepository documentRepository,
             UserRepository userRepository,
-            KafkaTemplate<Object, Object> kafkaTemplate,
+            OutboxEventRepository outboxEventRepository,
             PlatformTransactionManager txManager) {
         this.minioClient = minioClient;
         this.documentRepository = documentRepository;
         this.userRepository = userRepository;
-        this.kafkaTemplate = kafkaTemplate;
+        this.outboxEventRepository = outboxEventRepository;
         this.txTemplate = new TransactionTemplate(txManager);
     }
 
@@ -98,7 +101,8 @@ public class DocumentService {
                         });
 
         Long userId = pending.getUser().getId();
-        String storagePath = buildStoragePath(userId, pending.getId(), originalFilename);
+        Long docId = pending.getId();
+        String storagePath = buildStoragePath(userId, docId, originalFilename);
 
         // MinIO upload outside any transaction — no DB connection held during I/O
         try (InputStream inputStream = file.getInputStream()) {
@@ -114,37 +118,39 @@ public class DocumentService {
                             .build());
         } catch (Exception e) {
             log.error(
-                    "Failed to store file in MinIO for document {}, cleaning up record",
-                    pending.getId(),
-                    e);
-            documentRepository.deleteById(pending.getId());
+                    "Failed to store file in MinIO for document {}, cleaning up record", docId, e);
+            deletePendingRecord(docId);
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store file");
         }
 
-        // TX2: persist storage path and fire Kafka event on commit
-        Long docId = pending.getId();
-        return txTemplate.execute(
-                status -> {
-                    Document doc =
-                            documentRepository
-                                    .findById(docId)
-                                    .orElseThrow(
-                                            () ->
-                                                    new ResponseStatusException(
-                                                            HttpStatus.INTERNAL_SERVER_ERROR,
-                                                            "Document record lost after upload"));
-                    doc.setStoragePath(storagePath);
-                    Document saved = documentRepository.save(doc);
-                    TransactionSynchronizationManager.registerSynchronization(
-                            new TransactionSynchronization() {
-                                @Override
-                                public void afterCommit() {
-                                    publishDocumentUploadedEvent(saved);
-                                }
-                            });
-                    return toResponse(saved);
-                });
+        // TX2: persist storage path and enqueue the upload event in the same transaction so the
+        // event cannot be lost once the document is committed (transactional outbox pattern).
+        try {
+            return txTemplate.execute(
+                    status -> {
+                        Document doc =
+                                documentRepository
+                                        .findById(docId)
+                                        .orElseThrow(
+                                                () ->
+                                                        new ResponseStatusException(
+                                                                HttpStatus.INTERNAL_SERVER_ERROR,
+                                                                "Document record lost after"
+                                                                        + " upload"));
+                        doc.setStoragePath(storagePath);
+                        Document saved = documentRepository.save(doc);
+                        enqueueUploadedEvent(saved);
+                        return toResponse(saved);
+                    });
+        } catch (RuntimeException e) {
+            // The file is already in MinIO but finalization failed; roll back the orphaned state.
+            log.error("Failed to finalize upload for document {}, cleaning up", docId, e);
+            removeStoredObject(storagePath);
+            deletePendingRecord(docId);
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR, "Failed to finalize upload");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -166,13 +172,17 @@ public class DocumentService {
         return toResponse(document);
     }
 
+    /**
+     * Updates a document's status on behalf of an internal parser service. Unlike the user-facing
+     * query endpoints this is not scoped to a document owner: parser services authenticate with a
+     * service API key and reference documents by id only.
+     */
     @Transactional
     public DocumentResponse updateDocumentStatus(
-            String userEmail, Long documentId, DocumentStatusUpdateRequest request) {
-        User user = getUser(userEmail);
+            Long documentId, DocumentStatusUpdateRequest request) {
         Document document =
                 documentRepository
-                        .findByIdAndUserId(documentId, user.getId())
+                        .findById(documentId)
                         .orElseThrow(
                                 () ->
                                         new ResponseStatusException(
@@ -180,7 +190,46 @@ public class DocumentService {
 
         validateStatusTransition(document.getStatus(), request.status());
         document.setStatus(request.status());
+        if (request.status() == DocumentStatus.FAILED && request.message() != null) {
+            document.setErrorMessage(request.message());
+        }
         return toResponse(document);
+    }
+
+    private void enqueueUploadedEvent(Document document) {
+        String topic = topicPrefix + "." + document.getType().toLowerCase();
+        DocumentUploadedEvent event =
+                new DocumentUploadedEvent(
+                        document.getId(),
+                        document.getUser().getId(),
+                        document.getType(),
+                        document.getStoragePath());
+        String payload;
+        try {
+            payload = objectMapper.writeValueAsString(event);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException(
+                    "Failed to serialize DocumentUploadedEvent for document " + document.getId(),
+                    e);
+        }
+        outboxEventRepository.save(new OutboxEvent(document.getId(), topic, payload));
+    }
+
+    private void removeStoredObject(String storagePath) {
+        try {
+            minioClient.removeObject(
+                    RemoveObjectArgs.builder().bucket(bucket).object(storagePath).build());
+        } catch (Exception e) {
+            log.error("Failed to remove orphaned MinIO object {}", storagePath, e);
+        }
+    }
+
+    private void deletePendingRecord(Long documentId) {
+        try {
+            txTemplate.executeWithoutResult(status -> documentRepository.deleteById(documentId));
+        } catch (RuntimeException e) {
+            log.error("Failed to delete orphaned document record {}", documentId, e);
+        }
     }
 
     private void validateStatusTransition(DocumentStatus current, DocumentStatus next) {
@@ -198,39 +247,6 @@ public class DocumentService {
                         () ->
                                 new ResponseStatusException(
                                         HttpStatus.UNAUTHORIZED, "User not found"));
-    }
-
-    private void publishDocumentUploadedEvent(Document document) {
-        String topic = topicPrefix + "." + document.getType().toLowerCase();
-        DocumentUploadedEvent event =
-                new DocumentUploadedEvent(
-                        document.getId(),
-                        document.getUser().getId(),
-                        document.getType(),
-                        document.getStoragePath());
-        var future = kafkaTemplate.send(topic, event);
-        if (future == null) {
-            log.warn(
-                    "Kafka send() returned null for topic {} document {}",
-                    topic,
-                    document.getId());
-            return;
-        }
-        future.whenComplete(
-                (result, ex) -> {
-                    if (ex != null) {
-                        log.error(
-                                "Failed to deliver event to topic {} for document {}",
-                                topic,
-                                document.getId(),
-                                ex);
-                    } else {
-                        log.info(
-                                "Published event to topic {} for document {}",
-                                topic,
-                                document.getId());
-                    }
-                });
     }
 
     private DocumentType parseAndValidateType(String type) {

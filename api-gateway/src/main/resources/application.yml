@@ -3,6 +3,10 @@ spring:
     name: api-gateway
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 15MB
   liquibase:
     change-log: classpath:/db/changelog/db.changelog-master.xml
     enabled: true
@@ -32,6 +36,15 @@ app:
     create-bucket: true
   kafka:
     document-topic-prefix: ${KAFKA_DOCUMENT_TOPIC_PREFIX:documents}
+  internal:
+    api-key: ${INTERNAL_API_KEY:}
+  outbox:
+    poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:5000}
+    batch-size: ${OUTBOX_BATCH_SIZE:100}
+    send-timeout-ms: ${OUTBOX_SEND_TIMEOUT_MS:10000}
+  reconciler:
+    poll-interval-ms: ${RECONCILER_POLL_INTERVAL_MS:900000}
+    pending-timeout-ms: ${RECONCILER_PENDING_TIMEOUT_MS:3600000}
 
 ---
 spring:
@@ -45,10 +58,9 @@ spring:
     driver-class-name: org.postgresql.Driver
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-  servlet:
-    multipart:
-      max-file-size: 10MB
-      max-request-size: 15MB
+app:
+  internal:
+    api-key: ${INTERNAL_API_KEY:local-internal-api-key}
 
 ---
 spring:
@@ -75,5 +87,10 @@ app:
   minio:
     enabled: false
     create-bucket: false
-  kafka:
-    enabled: false
+  internal:
+    api-key: test-internal-api-key
+  outbox:
+    poll-interval-ms: 3600000
+    send-timeout-ms: 2000
+  reconciler:
+    poll-interval-ms: 3600000

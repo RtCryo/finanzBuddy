@@ -1,5 +1,6 @@
 package com.finanzbuddy.api.security;
 
+import com.finanzbuddy.api.security.apikey.InternalApiKeyAuthFilter;
 import com.finanzbuddy.api.security.jwt.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,12 +26,15 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final InternalApiKeyAuthFilter internalApiKeyAuthFilter;
     private final UserDetailsService userDetailsService;
 
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter,
+            InternalApiKeyAuthFilter internalApiKeyAuthFilter,
             UserDetailsService userDetailsService) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.internalApiKeyAuthFilter = internalApiKeyAuthFilter;
         this.userDetailsService = userDetailsService;
     }
 
@@ -47,9 +51,13 @@ public class SecurityConfig {
                                         .permitAll()
                                         .requestMatchers("/actuator/health", "/actuator/info")
                                         .permitAll()
+                                        .requestMatchers("/internal/**")
+                                        .hasRole("SERVICE")
                                         .anyRequest()
                                         .authenticated())
                 .authenticationProvider(authenticationProvider())
+                .addFilterBefore(
+                        internalApiKeyAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(
                         jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(

@@ -88,6 +88,7 @@ services:
       MINIO_BUCKET: finanzbuddy-documents
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION_MS: 86400000
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-local-internal-api-key}
 
 volumes:
   postgres-data:

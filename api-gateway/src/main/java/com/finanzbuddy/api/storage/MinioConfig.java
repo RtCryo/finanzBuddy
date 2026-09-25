@@ -37,12 +37,20 @@ public class MinioConfig {
             havingValue = "true",
             matchIfMissing = true)
     public String documentsBucket(
-            MinioClient minioClient, @Value("${app.minio.bucket}") String bucket) throws Exception {
-        boolean exists =
-                minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
-        if (!exists) {
-            minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
-            log.info("Created MinIO bucket: {}", bucket);
+            MinioClient minioClient, @Value("${app.minio.bucket}") String bucket) {
+        try {
+            boolean exists =
+                    minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
+            if (!exists) {
+                minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
+                log.info("Created MinIO bucket: {}", bucket);
+            }
+        } catch (Exception e) {
+            log.warn(
+                    "Could not verify or create MinIO bucket {} at startup; MinioHealthIndicator"
+                            + " will report availability at runtime",
+                    bucket,
+                    e);
         }
         return bucket;
     }

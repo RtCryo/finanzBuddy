@@ -1,6 +1,9 @@
 package com.finanzbuddy.api.repository;
 
 import com.finanzbuddy.api.entity.Document;
+import com.finanzbuddy.api.entity.DocumentStatus;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -13,4 +16,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     Page<Document> findByUserId(Long userId, Pageable pageable);
 
     Optional<Document> findByIdAndUserId(Long id, Long userId);
+
+    List<Document> findByStatusAndStoragePathIsNullAndCreatedAtBefore(
+            DocumentStatus status, Instant cutoff);
 }

@@ -2,6 +2,8 @@ package com.finanzbuddy.api.document.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -16,7 +18,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finanzbuddy.api.auth.dto.LoginRequest;
 import com.finanzbuddy.api.auth.dto.RegisterRequest;
 import com.finanzbuddy.api.document.dto.DocumentStatusUpdateRequest;
+import com.finanzbuddy.api.document.outbox.OutboxRelay;
 import com.finanzbuddy.api.entity.DocumentStatus;
+import com.finanzbuddy.api.entity.OutboxEvent;
+import com.finanzbuddy.api.repository.OutboxEventRepository;
+import com.finanzbuddy.api.security.apikey.InternalApiKeyAuthFilter;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,9 +41,15 @@ import org.springframework.web.context.WebApplicationContext;
 @ActiveProfiles("test")
 class DocumentControllerIntegrationTest {
 
+    private static final String API_KEY = "test-internal-api-key";
+
     @Autowired private WebApplicationContext context;
 
     @Autowired private KafkaTemplate<Object, Object> kafkaTemplate;
+
+    @Autowired private OutboxEventRepository outboxEventRepository;
+
+    @Autowired private OutboxRelay outboxRelay;
 
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -48,7 +61,7 @@ class DocumentControllerIntegrationTest {
     }
 
     @Test
-    void uploadDocumentReturns201AndStoresMetadata() throws Exception {
+    void uploadDocumentReturns201AndEnqueuesOutboxEvent() throws Exception {
         String token = registerAndLogin("docuser@example.com", "password123");
 
         MockMultipartFile file =
@@ -65,12 +78,23 @@ class DocumentControllerIntegrationTest {
                         .andReturn();
 
         JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
-        assertThat(response.get("id").asLong()).isPositive();
+        long documentId = response.get("id").asLong();
+        assertThat(documentId).isPositive();
         assertThat(response.get("originalFilename").asText()).isEqualTo("report.csv");
         assertThat(response.get("type").asText()).isEqualTo("CSV");
         assertThat(response.get("status").asText()).isEqualTo(DocumentStatus.PENDING.name());
 
-        verify(kafkaTemplate).send(any(), any());
+        OutboxEvent enqueued = findOutboxEvent(documentId);
+        assertThat(enqueued).isNotNull();
+        assertThat(enqueued.getPublishedAt()).isNull();
+        assertThat(enqueued.getTopic()).isEqualTo("documents.csv");
+
+        // The relay, not the request thread, delivers to Kafka.
+        doReturn(CompletableFuture.completedFuture(null)).when(kafkaTemplate).send(any(), any());
+        outboxRelay.publishPending();
+
+        verify(kafkaTemplate, atLeastOnce()).send(any(), any());
+        assertThat(findOutboxEvent(documentId).getPublishedAt()).isNotNull();
     }
 
     @Test
@@ -88,39 +112,18 @@ class DocumentControllerIntegrationTest {
     }
 
     @Test
-    void listAndGetAndUpdateStatusWorkForOwnDocuments() throws Exception {
+    void listAndGetWorkForOwnDocuments() throws Exception {
         String token = registerAndLogin("doclist@example.com", "password123");
 
         MockMultipartFile file =
                 new MockMultipartFile("file", "data.xml", "application/xml", "<root/>".getBytes());
 
-        MvcResult uploadResult =
-                mockMvc.perform(
-                                multipart("/documents")
-                                        .file(file)
-                                        .param("type", "XML")
-                                        .header("Authorization", "Bearer " + token))
-                        .andExpect(status().isCreated())
-                        .andReturn();
-        long documentId =
-                objectMapper
-                        .readTree(uploadResult.getResponse().getContentAsString())
-                        .get("id")
-                        .asLong();
+        long documentId = uploadDocument(token, file, "XML");
 
         mockMvc.perform(get("/documents").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/documents/" + documentId).header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk());
-
-        DocumentStatusUpdateRequest update =
-                new DocumentStatusUpdateRequest(DocumentStatus.PROCESSING);
-        mockMvc.perform(
-                        put("/documents/" + documentId + "/status")
-                                .header("Authorization", "Bearer " + token)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(update)))
                 .andExpect(status().isOk());
     }
 
@@ -132,24 +135,86 @@ class DocumentControllerIntegrationTest {
         MockMultipartFile file =
                 new MockMultipartFile("file", "data.pdf", "application/pdf", "%PDF".getBytes());
 
-        MvcResult uploadResult =
-                mockMvc.perform(
-                                multipart("/documents")
-                                        .file(file)
-                                        .param("type", "PDF")
-                                        .header("Authorization", "Bearer " + ownerToken))
-                        .andExpect(status().isCreated())
-                        .andReturn();
-        long documentId =
-                objectMapper
-                        .readTree(uploadResult.getResponse().getContentAsString())
-                        .get("id")
-                        .asLong();
+        long documentId = uploadDocument(ownerToken, file, "PDF");
 
         mockMvc.perform(
                         get("/documents/" + documentId)
                                 .header("Authorization", "Bearer " + otherToken))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void internalStatusUpdateWithApiKeySucceeds() throws Exception {
+        String token = registerAndLogin("parsertarget@example.com", "password123");
+        MockMultipartFile file =
+                new MockMultipartFile("file", "bank.csv", "text/csv", "a,b\n1,2".getBytes());
+        long documentId = uploadDocument(token, file, "CSV");
+
+        DocumentStatusUpdateRequest update =
+                new DocumentStatusUpdateRequest(DocumentStatus.PROCESSING, null);
+        MvcResult result =
+                mockMvc.perform(
+                                put("/internal/documents/" + documentId + "/status")
+                                        .header(InternalApiKeyAuthFilter.HEADER, API_KEY)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsString(update)))
+                        .andExpect(status().isOk())
+                        .andReturn();
+
+        JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
+        assertThat(response.get("status").asText()).isEqualTo(DocumentStatus.PROCESSING.name());
+    }
+
+    @Test
+    void internalStatusUpdateWithoutApiKeyReturnsUnauthorized() throws Exception {
+        DocumentStatusUpdateRequest update =
+                new DocumentStatusUpdateRequest(DocumentStatus.PROCESSING, null);
+        mockMvc.perform(
+                        put("/internal/documents/1/status")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(update)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void internalStatusUpdateRejectsInvalidTransition() throws Exception {
+        String token = registerAndLogin("parserbad@example.com", "password123");
+        MockMultipartFile file =
+                new MockMultipartFile("file", "x.csv", "text/csv", "a\n1".getBytes());
+        long documentId = uploadDocument(token, file, "CSV");
+
+        // PENDING -> PROCESSED is not an allowed transition.
+        DocumentStatusUpdateRequest update =
+                new DocumentStatusUpdateRequest(DocumentStatus.PROCESSED, null);
+        mockMvc.perform(
+                        put("/internal/documents/" + documentId + "/status")
+                                .header(InternalApiKeyAuthFilter.HEADER, API_KEY)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(update)))
+                .andExpect(status().isBadRequest());
+    }
+
+    private OutboxEvent findOutboxEvent(long documentId) {
+        return outboxEventRepository.findAll().stream()
+                .filter(e -> e.getAggregateId().equals(documentId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private long uploadDocument(String token, MockMultipartFile file, String type)
+            throws Exception {
+        MvcResult uploadResult =
+                mockMvc.perform(
+                                multipart("/documents")
+                                        .file(file)
+                                        .param("type", type)
+                                        .header("Authorization", "Bearer " + token))
+                        .andExpect(status().isCreated())
+                        .andReturn();
+        return objectMapper
+                .readTree(uploadResult.getResponse().getContentAsString())
+                .get("id")
+                .asLong();
     }
 
     private String registerAndLogin(String email, String password) throws Exception {
