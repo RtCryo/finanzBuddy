@@ -3,7 +3,6 @@ package com.finanzbuddy.api.auth.service;
 import com.finanzbuddy.api.entity.User;
 import com.finanzbuddy.api.repository.UserRepository;
 import java.util.Collections;
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -12,10 +11,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@RequiredArgsConstructor
 public class DatabaseUserDetailsService implements UserDetailsService {
 
     private final UserRepository userRepository;
+
+    public DatabaseUserDetailsService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
 
     @Override
     @Transactional(readOnly = true)

@@ -3,7 +3,7 @@
 ## 1. Project Scaffolding
 
 - [x] 1.1 Create `api-gateway/` Maven module with Spring Boot 4.1 parent and verify `mvn clean compile` succeeds
-- [x] 1.2 Add dependencies: Spring Web, Spring Security, Spring Data JPA, Spring for Apache Kafka, PostgreSQL driver, MinIO client, Liquibase, Lombok, JWT (jjwt), and verify no dependency conflicts
+- [x] 1.2 Add dependencies: Spring Web, Spring Security, Spring Data JPA, Spring for Apache Kafka, PostgreSQL driver, MinIO client, Liquibase, JWT (jjwt), and verify no dependency conflicts
 - [x] 1.3 Create package structure `com.finanzbuddy.api` with main application class and verify the context loads
 - [x] 1.4 Add `application.yml` with profiles for local development and verify placeholders for secrets use environment variables
 

@@ -2,6 +2,7 @@ package com.finanzbuddy.api.config;
 
 import javax.sql.DataSource;
 import liquibase.integration.spring.SpringLiquibase;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,10 +16,21 @@ import org.springframework.context.annotation.Configuration;
 public class LiquibaseConfig {
 
     @Bean
-    public SpringLiquibase liquibase(DataSource dataSource) {
+    public SpringLiquibase liquibase(
+            DataSource dataSource,
+            @Value("${spring.liquibase.change-log:classpath:/db/changelog/db.changelog-master.xml}")
+                    String changeLog,
+            @Value("${spring.liquibase.default-schema:}") String defaultSchema,
+            @Value("${spring.liquibase.contexts:}") String contexts) {
         SpringLiquibase liquibase = new SpringLiquibase();
         liquibase.setDataSource(dataSource);
-        liquibase.setChangeLog("classpath:/db/changelog/db.changelog-master.xml");
+        liquibase.setChangeLog(changeLog);
+        if (!defaultSchema.isEmpty()) {
+            liquibase.setDefaultSchema(defaultSchema);
+        }
+        if (!contexts.isEmpty()) {
+            liquibase.setContexts(contexts);
+        }
         return liquibase;
     }
 }

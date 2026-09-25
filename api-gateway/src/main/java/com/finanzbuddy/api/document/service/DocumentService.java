@@ -12,8 +12,9 @@ import com.finanzbuddy.api.repository.UserRepository;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import java.io.InputStream;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.nio.file.Paths;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,24 +22,37 @@ import org.springframework.http.HttpStatus;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class DocumentService {
+
+    private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
 
     private final MinioClient minioClient;
     private final DocumentRepository documentRepository;
     private final UserRepository userRepository;
-    private final KafkaTemplate<String, DocumentUploadedEvent> kafkaTemplate;
+    private final KafkaTemplate<Object, Object> kafkaTemplate;
 
     @Value("${app.minio.bucket}")
     private String bucket;
 
     @Value("${app.kafka.document-topic-prefix}")
     private String topicPrefix;
+
+    public DocumentService(
+            MinioClient minioClient,
+            DocumentRepository documentRepository,
+            UserRepository userRepository,
+            KafkaTemplate<Object, Object> kafkaTemplate) {
+        this.minioClient = minioClient;
+        this.documentRepository = documentRepository;
+        this.userRepository = userRepository;
+        this.kafkaTemplate = kafkaTemplate;
+    }
 
     @Transactional
     public DocumentResponse uploadDocument(String userEmail, MultipartFile file, String type) {
@@ -57,13 +71,11 @@ public class DocumentService {
                     HttpStatus.BAD_REQUEST, "Original filename is required");
         }
 
-        Document document =
-                Document.builder()
-                        .user(user)
-                        .originalFilename(originalFilename)
-                        .type(documentType.name())
-                        .status(DocumentStatus.PENDING)
-                        .build();
+        Document document = new Document();
+        document.setUser(user);
+        document.setOriginalFilename(originalFilename);
+        document.setType(documentType.name());
+        document.setStatus(DocumentStatus.PENDING);
         document = documentRepository.save(document);
 
         String storagePath = buildStoragePath(user.getId(), document.getId(), originalFilename);
@@ -84,7 +96,15 @@ public class DocumentService {
                     HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store file");
         }
 
-        publishDocumentUploadedEvent(document);
+        Document finalDocument = document;
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        publishDocumentUploadedEvent(finalDocument);
+                    }
+                });
+
         return toResponse(document);
     }
 
@@ -150,12 +170,23 @@ public class DocumentService {
                         document.getUser().getId(),
                         document.getType(),
                         document.getStoragePath());
-        try {
-            kafkaTemplate.send(topic, event);
-            log.info("Published event to topic {} for document {}", topic, document.getId());
-        } catch (Exception e) {
-            log.error("Failed to publish document uploaded event to topic {}", topic, e);
-        }
+        kafkaTemplate
+                .send(topic, event)
+                .whenComplete(
+                        (result, ex) -> {
+                            if (ex != null) {
+                                log.error(
+                                        "Failed to deliver event to topic {} for document {}",
+                                        topic,
+                                        document.getId(),
+                                        ex);
+                            } else {
+                                log.info(
+                                        "Published event to topic {} for document {}",
+                                        topic,
+                                        document.getId());
+                            }
+                        });
     }
 
     private DocumentType parseAndValidateType(String type) {
@@ -171,7 +202,8 @@ public class DocumentService {
     }
 
     private String buildStoragePath(Long userId, Long documentId, String originalFilename) {
-        return String.format("users/%d/%d-%s", userId, documentId, originalFilename);
+        String sanitized = Paths.get(originalFilename).getFileName().toString();
+        return String.format("users/%d/%d-%s", userId, documentId, sanitized);
     }
 
     private DocumentResponse toResponse(Document document) {

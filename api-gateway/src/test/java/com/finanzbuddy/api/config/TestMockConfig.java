@@ -2,7 +2,6 @@ package com.finanzbuddy.api.config;
 
 import static org.mockito.Mockito.mock;
 
-import com.finanzbuddy.api.event.DocumentUploadedEvent;
 import io.minio.MinioClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,9 +18,9 @@ public class TestMockConfig {
     }
 
     @Bean
-    public KafkaTemplate<String, DocumentUploadedEvent> kafkaTemplate() {
+    public KafkaTemplate<Object, Object> kafkaTemplate() {
         @SuppressWarnings("unchecked")
-        KafkaTemplate<String, DocumentUploadedEvent> template = mock(KafkaTemplate.class);
+        KafkaTemplate<Object, Object> template = mock(KafkaTemplate.class);
         return template;
     }
 }

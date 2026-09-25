@@ -17,7 +17,6 @@ import com.finanzbuddy.api.auth.dto.LoginRequest;
 import com.finanzbuddy.api.auth.dto.RegisterRequest;
 import com.finanzbuddy.api.document.dto.DocumentStatusUpdateRequest;
 import com.finanzbuddy.api.entity.DocumentStatus;
-import com.finanzbuddy.api.event.DocumentUploadedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,7 +36,7 @@ class DocumentControllerIntegrationTest {
 
     @Autowired private WebApplicationContext context;
 
-    @Autowired private KafkaTemplate<String, DocumentUploadedEvent> kafkaTemplate;
+    @Autowired private KafkaTemplate<Object, Object> kafkaTemplate;
 
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -71,7 +70,7 @@ class DocumentControllerIntegrationTest {
         assertThat(response.get("type").asText()).isEqualTo("CSV");
         assertThat(response.get("status").asText()).isEqualTo(DocumentStatus.PENDING.name());
 
-        verify(kafkaTemplate).send(any(), any(DocumentUploadedEvent.class));
+        verify(kafkaTemplate).send(any(), any());
     }
 
     @Test
