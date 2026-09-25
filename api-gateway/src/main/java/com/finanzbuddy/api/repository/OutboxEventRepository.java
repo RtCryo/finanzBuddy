@@ -33,7 +33,5 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
                     + " where o.publishedAt is null and o.deadLetteredAt is null")
     Optional<Instant> findOldestPendingCreatedAt();
 
-    @Modifying
-    @Query("delete from OutboxEvent o where o.publishedAt is not null and o.publishedAt < :cutoff")
-    int deletePublishedBefore(@Param("cutoff") Instant cutoff);
+    List<OutboxEvent> findByPublishedAtBefore(Instant cutoff, Pageable pageable);
 }

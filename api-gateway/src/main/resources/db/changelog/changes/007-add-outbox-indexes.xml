@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <changeSet id="007-add-outbox-indexes" author="api-gateway">
+        <dropIndex tableName="outbox_events" indexName="idx_outbox_events_unpublished"/>
+        <createIndex tableName="outbox_events" indexName="idx_outbox_events_unpublished">
+            <column name="published_at"/>
+            <column name="dead_lettered_at"/>
+            <column name="next_attempt_at"/>
+            <column name="created_at"/>
+        </createIndex>
+
+        <createIndex tableName="outbox_events" indexName="idx_outbox_events_aggregate_id">
+            <column name="aggregate_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropIndex tableName="outbox_events" indexName="idx_outbox_events_aggregate_id"/>
+            <dropIndex tableName="outbox_events" indexName="idx_outbox_events_unpublished"/>
+            <createIndex tableName="outbox_events" indexName="idx_outbox_events_unpublished">
+                <column name="published_at"/>
+                <column name="dead_lettered_at"/>
+                <column name="created_at"/>
+            </createIndex>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

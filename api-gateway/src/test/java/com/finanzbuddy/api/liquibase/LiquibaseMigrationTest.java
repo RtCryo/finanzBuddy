@@ -91,6 +91,27 @@ class LiquibaseMigrationTest {
         assertThat(columns.get("ERROR_MESSAGE")).isEqualTo("YES");
     }
 
+    @Test
+    void usersEmailHasUniqueConstraint() {
+        List<String> constraints =
+                jdbcTemplate.queryForList(
+                        "SELECT UPPER(constraint_name) FROM information_schema.table_constraints"
+                                + " WHERE UPPER(table_name) = 'USERS' AND constraint_type = 'UNIQUE'",
+                        String.class);
+        assertThat(constraints).contains("UK_USERS_EMAIL");
+    }
+
+    @Test
+    void outboxEventsHasRequiredIndexes() {
+        List<String> indexes =
+                jdbcTemplate.queryForList(
+                        "SELECT UPPER(index_name) FROM information_schema.indexes"
+                                + " WHERE UPPER(table_name) = 'OUTBOX_EVENTS'",
+                        String.class);
+        assertThat(indexes)
+                .contains("IDX_OUTBOX_EVENTS_UNPUBLISHED", "IDX_OUTBOX_EVENTS_AGGREGATE_ID");
+    }
+
     private Map<String, String> columnNullability(String table) {
         return jdbcTemplate.query(
                 "SELECT UPPER(column_name) AS c, is_nullable AS n FROM information_schema.columns"

@@ -1,5 +1,6 @@
 package com.finanzbuddy.api.security.jwt;
 
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -45,6 +46,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         jwt = authHeader.substring(7);
         try {
             username = jwtService.extractUsername(jwt);
+        } catch (ExpiredJwtException e) {
+            // Expired tokens are common and useful for audit/ops; log them at a higher level than
+            // malformed ones while still leaving the request unauthenticated so permitAll endpoints
+            // keep working.
+            logger.info("Ignoring expired JWT bearer token for subject {}", e.getClaims().getSubject());
+            filterChain.doFilter(request, response);
+            return;
         } catch (JwtException | IllegalArgumentException e) {
             // Leave the request unauthenticated and let the authorization rules decide: a stale
             // token must not block permitAll endpoints such as /auth/** or /actuator/health.

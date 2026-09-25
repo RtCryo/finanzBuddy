@@ -72,9 +72,6 @@ public class StalePendingReconciler {
                                                                         doc.getOriginalFilename()),
                                                                 doc.getCreatedAt()))
                                         .toList());
-        if (stale == null) {
-            return;
-        }
         for (StaleDocument document : stale) {
             // Delete the row first, conditionally on it still being stale; only then remove the
             // MinIO object. This avoids wiping the object of an upload that finalized (storage_path

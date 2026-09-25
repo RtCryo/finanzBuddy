@@ -11,5 +11,7 @@
     <include file="classpath:/db/changelog/changes/004-add-outbox-dead-letter.xml"/>
     <include file="classpath:/db/changelog/changes/005-add-outbox-next-attempt.xml"/>
     <include file="classpath:/db/changelog/changes/006-add-document-version.xml"/>
+    <include file="classpath:/db/changelog/changes/007-add-outbox-indexes.xml"/>
+    <include file="classpath:/db/changelog/changes/008-add-users-email-unique-constraint.xml"/>
 
 </databaseChangeLog>

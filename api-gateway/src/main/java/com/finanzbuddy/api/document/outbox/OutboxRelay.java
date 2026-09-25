@@ -15,6 +15,15 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+/**
+ * Background relay that reads unpublished outbox events and delivers them to Kafka.
+ *
+ * <p><strong>Single-instance contract.</strong> The relay polls pending events with a plain query
+ * and has no row-level locking or leader election. It is safe when the API Gateway runs as a
+ * single instance (the default deployment). Running multiple instances concurrently will not lose
+ * events, but can produce duplicate deliveries because the consumer is assumed to be idempotent.
+ * Add {@code FOR UPDATE SKIP LOCKED} or a leader-election mechanism before scaling horizontally.
+ */
 @Component
 public class OutboxRelay {
 
@@ -59,9 +68,6 @@ public class OutboxRelay {
                         status ->
                                 outboxEventRepository.findPublishable(
                                         now, PageRequest.of(0, batchSize)));
-        if (pending == null) {
-            return;
-        }
         // The blocking broker round-trip happens outside any transaction so a slow or unreachable
         // broker never pins a DB connection while events are being sent. Every event in the batch
         // is attempted (a failing event at the head must not block newer, deliverable ones); the
@@ -145,14 +151,11 @@ public class OutboxRelay {
 
     private long backoffMs(int attempts) {
         int shift = Math.min(attempts - 1, 20);
-        long backoff = retryBaseBackoffMs;
-        for (int i = 0; i < shift; i++) {
-            backoff <<= 1;
-            // A large configured base can overflow to a negative value; clamp instead of scheduling
-            // the next attempt in the past.
-            if (backoff <= 0 || backoff >= retryMaxBackoffMs) {
-                return retryMaxBackoffMs;
-            }
+        long backoff;
+        try {
+            backoff = Math.multiplyExact(retryBaseBackoffMs, 1L << shift);
+        } catch (ArithmeticException e) {
+            backoff = Long.MAX_VALUE;
         }
         return Math.min(backoff, retryMaxBackoffMs);
     }

@@ -122,10 +122,16 @@ Allowed status values: `PENDING`, `PROCESSING`, `PROCESSED`, `FAILED`. Allowed t
 `FAILED→PENDING`. When reporting `FAILED`, include an optional `"message"` field to record the
 error. Status updates reference documents by id only (they are not scoped to the uploading user).
 
-### Health
+### Health & Metrics
 
 ```bash
 curl http://localhost:8080/actuator/health
+```
+
+Prometheus metrics are exposed publicly at `/actuator/prometheus`:
+
+```bash
+curl http://localhost:8080/actuator/prometheus
 ```
 
 ## Kafka Topics
@@ -154,14 +160,13 @@ re-raised as defects.
   `documentId`), so duplicates are harmless. Events for one document are still delivered in order
   (the relay only publishes an aggregate's oldest undelivered event, keyed on `aggregateId`).
 
-- **Single-instance outbox relay (no row locking / leader election).** The relay reads pending
-  events with a plain query — there is no `FOR UPDATE SKIP LOCKED` or leader election. This is
-  safe as deployed: the gateway runs as a **single instance**, so `@Scheduled(fixedDelay)` already
-  prevents overlapping polls. It is also safe if scaled later, because delivery is at-least-once
-  and the downstream consumer (parser service) is idempotent, so duplicate publishes are harmless.
-  A claim step (or `SKIP LOCKED`) would only be needed for a multi-instance deployment with a
-  non-idempotent consumer — and a naive lock would conflict with the design goal of not holding a
-  DB connection during the Kafka round-trip, so it must be a deliberate change, not a quick patch.
+- **Single-instance outbox relay (operational contract).** The relay reads pending events with a
+  plain query — there is no `FOR UPDATE SKIP LOCKED` or leader election. This is a deliberate
+  operational contract: **the gateway must run as a single instance**. `@Scheduled(fixedDelay)`
+  prevents overlapping polls on that one instance. Scaling horizontally without adding a claim
+  step will not lose events (delivery is at-least-once and the parser service consumer is
+  idempotent), but it will produce duplicate publishes. Add `FOR UPDATE SKIP LOCKED` or a
+  leader-election mechanism before running multiple gateway instances.
 
 - **Registration returns `409 Conflict` for an existing email (user enumeration).** This is an
   accepted trade-off: hiding it (returning `201` for a duplicate) would be a functional regression

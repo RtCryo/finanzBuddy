@@ -36,7 +36,7 @@ public class MinioConfig {
             name = "create-bucket",
             havingValue = "true",
             matchIfMissing = true)
-    public String documentsBucket(
+    public void documentsBucket(
             MinioClient minioClient, @Value("${app.minio.bucket}") String bucket) {
         try {
             boolean exists =
@@ -52,6 +52,5 @@ public class MinioConfig {
                     bucket,
                     e);
         }
-        return bucket;
     }
 }

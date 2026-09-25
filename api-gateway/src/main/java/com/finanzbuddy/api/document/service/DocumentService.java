@@ -23,6 +23,7 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -52,15 +53,9 @@ public class DocumentService {
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate txTemplate;
-
-    @Value("${app.minio.bucket}")
-    private String bucket;
-
-    @Value("${app.kafka.document-topic-prefix}")
-    private String topicPrefix;
-
-    @Value("${app.upload.accepted-types:CSV}")
-    private Set<DocumentType> acceptedTypes;
+    private final String bucket;
+    private final String topicPrefix;
+    private final Set<DocumentType> acceptedTypes;
 
     public DocumentService(
             MinioClient minioClient,
@@ -68,13 +63,19 @@ public class DocumentService {
             UserRepository userRepository,
             OutboxEventRepository outboxEventRepository,
             ObjectMapper objectMapper,
-            PlatformTransactionManager txManager) {
+            PlatformTransactionManager txManager,
+            @Value("${app.minio.bucket}") String bucket,
+            @Value("${app.kafka.document-topic-prefix}") String topicPrefix,
+            @Value("${app.upload.accepted-types:CSV}") Set<DocumentType> acceptedTypes) {
         this.minioClient = minioClient;
         this.documentRepository = documentRepository;
         this.userRepository = userRepository;
         this.outboxEventRepository = outboxEventRepository;
         this.objectMapper = objectMapper;
         this.txTemplate = new TransactionTemplate(txManager);
+        this.bucket = bucket;
+        this.topicPrefix = topicPrefix;
+        this.acceptedTypes = acceptedTypes;
     }
 
     public DocumentResponse uploadDocument(String userEmail, MultipartFile file, String type) {
@@ -199,36 +200,45 @@ public class DocumentService {
     @Transactional
     public DocumentResponse updateDocumentStatus(
             Long documentId, DocumentStatusUpdateRequest request) {
-        Document document =
-                documentRepository
-                        .findById(documentId)
-                        .orElseThrow(
-                                () ->
-                                        new ResponseStatusException(
-                                                HttpStatus.NOT_FOUND, "Document not found"));
+        try {
+            Document document =
+                    documentRepository
+                            .findById(documentId)
+                            .orElseThrow(
+                                    () ->
+                                            new ResponseStatusException(
+                                                    HttpStatus.NOT_FOUND, "Document not found"));
 
-        if (document.getStatus() == request.status()) {
-            // Idempotent redelivery of the current status from an at-least-once parser: return 200
-            // instead of a 400 that would push the parser into a retry loop, and do not re-enqueue.
-            // A repeated FAILED report may carry a more accurate reason, so refresh the message.
-            if (request.status() == DocumentStatus.FAILED) {
-                document.setErrorMessage(request.message());
+            if (document.getStatus() == request.status()) {
+                // Idempotent redelivery of the current status from an at-least-once parser: return
+                // 200 instead of a 400 that would push the parser into a retry loop, and do not
+                // re-enqueue. A repeated FAILED report may carry a more accurate reason, so refresh
+                // the message.
+                if (request.status() == DocumentStatus.FAILED) {
+                    document.setErrorMessage(request.message());
+                }
+                return toResponse(document);
+            }
+
+            validateStatusTransition(document.getStatus(), request.status());
+            document.setStatus(request.status());
+            // Clear any stale failure reason on non-FAILED transitions (e.g. FAILED->PENDING
+            // reprocess) so a later success never keeps showing an old error message.
+            document.setErrorMessage(
+                    request.status() == DocumentStatus.FAILED ? request.message() : null);
+            // A reprocess (FAILED->PENDING) must re-publish the upload event in the same
+            // transaction; otherwise the document would sit in PENDING with no consumer ever
+            // picking it up again.
+            if (request.status() == DocumentStatus.PENDING) {
+                enqueueUploadedEvent(document);
             }
             return toResponse(document);
+        } catch (OptimisticLockingFailureException e) {
+            // Two parser workers updated the same document concurrently. Return 409 so the caller
+            // can retry rather than a 500 that would be logged as an application error.
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Document status was modified concurrently", e);
         }
-
-        validateStatusTransition(document.getStatus(), request.status());
-        document.setStatus(request.status());
-        // Clear any stale failure reason on non-FAILED transitions (e.g. FAILED->PENDING reprocess)
-        // so a later success never keeps showing an old error message.
-        document.setErrorMessage(
-                request.status() == DocumentStatus.FAILED ? request.message() : null);
-        // A reprocess (FAILED->PENDING) must re-publish the upload event in the same transaction;
-        // otherwise the document would sit in PENDING with no consumer ever picking it up again.
-        if (request.status() == DocumentStatus.PENDING) {
-            enqueueUploadedEvent(document);
-        }
-        return toResponse(document);
     }
 
     private void enqueueUploadedEvent(Document document) {
