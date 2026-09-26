@@ -11,8 +11,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
@@ -80,13 +78,11 @@ class CsvTransactionParserTest {
 
     @Test
     void parsesRealGermanBankStatementCsv() throws IOException {
-        Path realCsv =
-                Path.of("..", "documents", "20260924-76085158-umsatz.CSV")
-                        .toAbsolutePath()
-                        .normalize();
+        InputStream realCsv = getClass().getResourceAsStream("/20260924-76085158-umsatz.CSV");
+        assertThat(realCsv).isNotNull();
         DocumentUploadedEvent event = new DocumentUploadedEvent(99L, 88L, "CSV", "csv/99");
 
-        try (InputStream inputStream = Files.newInputStream(realCsv)) {
+        try (InputStream inputStream = realCsv) {
             List<Transaction> transactions = parser.parse(inputStream, event, Locale.GERMANY);
 
             assertThat(transactions).hasSizeGreaterThan(150);
