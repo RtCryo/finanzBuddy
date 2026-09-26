@@ -8,8 +8,7 @@ import org.springframework.kafka.annotation.EnableKafka;
 @EnableKafka
 public class ParserServiceApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(ParserServiceApplication.class, args);
-	}
-
+    public static void main(String[] args) {
+        SpringApplication.run(ParserServiceApplication.class, args);
+    }
 }

@@ -26,16 +26,21 @@ public class RestClientConfig {
     }
 
     @Bean
-    public ConsumerFactory<String, Object> consumerFactory(org.springframework.core.env.Environment env) {
+    public ConsumerFactory<String, Object> consumerFactory(
+            org.springframework.core.env.Environment env) {
         Map<String, Object> props = new HashMap<>();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+        props.put(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 env.getProperty("spring.kafka.bootstrap-servers", "localhost:29092"));
-        props.put(ConsumerConfig.GROUP_ID_CONFIG,
+        props.put(
+                ConsumerConfig.GROUP_ID_CONFIG,
                 env.getProperty("spring.kafka.consumer.group-id", "parser-service"));
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+        props.put(
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
                 env.getProperty("spring.kafka.consumer.auto-offset-reset", "earliest"));
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+        props.put(
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
                 com.finanzbuddy.parser.event.DocumentUploadedEventDeserializer.class);
         return new DefaultKafkaConsumerFactory<>(props);
     }

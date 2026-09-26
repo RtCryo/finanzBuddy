@@ -22,9 +22,10 @@ public class GatewayStatusClient {
     private final String baseUrl;
     private final String internalApiKey;
 
-    public GatewayStatusClient(RestTemplate restTemplate,
-                               @Value("${parser.gateway.base-url}") String baseUrl,
-                               @Value("${parser.gateway.internal-api-key}") String internalApiKey) {
+    public GatewayStatusClient(
+            RestTemplate restTemplate,
+            @Value("${parser.gateway.base-url}") String baseUrl,
+            @Value("${parser.gateway.internal-api-key}") String internalApiKey) {
         this.restTemplate = restTemplate;
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.internalApiKey = internalApiKey;
@@ -42,22 +43,28 @@ public class GatewayStatusClient {
             StatusUpdateRequest requestBody = new StatusUpdateRequest(status, message);
             HttpEntity<StatusUpdateRequest> request = new HttpEntity<>(requestBody, headers);
 
-            ResponseEntity<Void> response = restTemplate.exchange(url, HttpMethod.PUT, request, Void.class);
+            ResponseEntity<Void> response =
+                    restTemplate.exchange(url, HttpMethod.PUT, request, Void.class);
             if (response.getStatusCode().is2xxSuccessful()) {
-                logger.info("Updated document status: documentId={}, status={}", documentId, status);
+                logger.info(
+                        "Updated document status: documentId={}, status={}", documentId, status);
             } else {
-                logger.error("Failed to update document status: documentId={}, status={}, httpStatus={}",
-                        documentId, status, response.getStatusCode());
-                throw new GatewayStatusException("Status update failed with HTTP " + response.getStatusCode());
+                logger.error(
+                        "Failed to update document status: documentId={}, status={}, httpStatus={}",
+                        documentId,
+                        status,
+                        response.getStatusCode());
+                throw new GatewayStatusException(
+                        "Status update failed with HTTP " + response.getStatusCode());
             }
         } catch (GatewayStatusException e) {
             throw e;
         } catch (Exception e) {
-            logger.error("Failed to report status: documentId={}, status={}", documentId, status, e);
+            logger.error(
+                    "Failed to report status: documentId={}, status={}", documentId, status, e);
             throw new GatewayStatusException("Failed to report status", e);
         }
     }
 
-    public record StatusUpdateRequest(DocumentStatus status, String message) {
-    }
+    public record StatusUpdateRequest(DocumentStatus status, String message) {}
 }

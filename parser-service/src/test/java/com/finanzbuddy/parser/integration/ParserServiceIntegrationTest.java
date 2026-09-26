@@ -21,7 +21,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.annotation.DirtiesContext;
@@ -32,7 +31,9 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
 @SpringBootTest
-@EmbeddedKafka(partitions = 1, topics = { "documents.csv" })
+@EmbeddedKafka(
+        partitions = 1,
+        topics = {"documents.csv"})
 @Import(IntegrationTestConfig.class)
 @ActiveProfiles("test")
 @DirtiesContext
@@ -40,17 +41,16 @@ class ParserServiceIntegrationTest {
 
     @DynamicPropertySource
     static void kafkaProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.kafka.bootstrap-servers", () -> System.getProperty("spring.embedded.kafka.brokers"));
+        registry.add(
+                "spring.kafka.bootstrap-servers",
+                () -> System.getProperty("spring.embedded.kafka.brokers"));
     }
 
-    @Autowired
-    private KafkaTemplate<String, DocumentUploadedEvent> kafkaTemplate;
+    @Autowired private KafkaTemplate<String, DocumentUploadedEvent> kafkaTemplate;
 
-    @Autowired
-    private TransactionRepository transactionRepository;
+    @Autowired private TransactionRepository transactionRepository;
 
-    @Autowired
-    private RestTemplate restTemplate;
+    @Autowired private RestTemplate restTemplate;
 
     private MockRestServiceServer mockServer;
 
@@ -65,19 +65,22 @@ class ParserServiceIntegrationTest {
         Long documentId = 42L;
         Long userId = 7L;
 
-        mockServer.expect(requestTo("http://localhost:9999/internal/documents/42/status"))
+        mockServer
+                .expect(requestTo("http://localhost:9999/internal/documents/42/status"))
                 .andExpect(method(HttpMethod.PUT))
                 .andExpect(header("X-Internal-Api-Key", "test-key"))
                 .andExpect(jsonPath("$.status").value("PROCESSING"))
                 .andRespond(withSuccess());
 
-        mockServer.expect(requestTo("http://localhost:9999/internal/documents/42/status"))
+        mockServer
+                .expect(requestTo("http://localhost:9999/internal/documents/42/status"))
                 .andExpect(method(HttpMethod.PUT))
                 .andExpect(header("X-Internal-Api-Key", "test-key"))
                 .andExpect(jsonPath("$.status").value("PROCESSED"))
                 .andRespond(withSuccess());
 
-        DocumentUploadedEvent event = new DocumentUploadedEvent(documentId, userId, "CSV", "csv/42");
+        DocumentUploadedEvent event =
+                new DocumentUploadedEvent(documentId, userId, "CSV", "csv/42");
         try {
             kafkaTemplate.send("documents.csv", event).get(5, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -87,12 +90,16 @@ class ParserServiceIntegrationTest {
             throw new RuntimeException(e);
         }
 
-        await().atMost(15, TimeUnit.SECONDS).pollInterval(Duration.ofMillis(200)).untilAsserted(() -> {
-            List<Transaction> transactions = transactionRepository.findByDocumentId(documentId);
-            assertThat(transactions).hasSize(2);
-            assertThat(transactions).allMatch(tx -> tx.getUserId().equals(userId));
-            assertThat(transactions.get(0).getRawData()).isNotBlank();
-        });
+        await().atMost(15, TimeUnit.SECONDS)
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(
+                        () -> {
+                            List<Transaction> transactions =
+                                    transactionRepository.findByDocumentId(documentId);
+                            assertThat(transactions).hasSize(2);
+                            assertThat(transactions).allMatch(tx -> tx.getUserId().equals(userId));
+                            assertThat(transactions.get(0).getRawData()).isNotBlank();
+                        });
 
         mockServer.verify();
     }

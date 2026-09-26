@@ -8,7 +8,8 @@ import org.slf4j.LoggerFactory;
 
 public class DocumentUploadedEventDeserializer implements Deserializer<DocumentUploadedEvent> {
 
-    private static final Logger logger = LoggerFactory.getLogger(DocumentUploadedEventDeserializer.class);
+    private static final Logger logger =
+            LoggerFactory.getLogger(DocumentUploadedEventDeserializer.class);
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -18,7 +19,8 @@ public class DocumentUploadedEventDeserializer implements Deserializer<DocumentU
             return null;
         }
         try {
-            return objectMapper.readValue(new String(data, StandardCharsets.UTF_8), DocumentUploadedEvent.class);
+            return objectMapper.readValue(
+                    new String(data, StandardCharsets.UTF_8), DocumentUploadedEvent.class);
         } catch (Exception e) {
             logger.error("Failed to deserialize DocumentUploadedEvent from topic {}", topic, e);
             throw new IllegalArgumentException("Invalid DocumentUploadedEvent payload", e);

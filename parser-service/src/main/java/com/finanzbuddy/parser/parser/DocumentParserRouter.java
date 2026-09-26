@@ -16,6 +16,9 @@ public class DocumentParserRouter {
         return parsers.stream()
                 .filter(parser -> parser.supports(documentType))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("No parser registered for document type: " + documentType));
+                .orElseThrow(
+                        () ->
+                                new IllegalArgumentException(
+                                        "No parser registered for document type: " + documentType));
     }
 }

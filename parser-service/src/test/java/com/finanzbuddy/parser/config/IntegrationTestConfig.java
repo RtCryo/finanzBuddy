@@ -20,9 +20,10 @@ import org.springframework.kafka.support.serializer.JsonSerializer;
 @TestConfiguration
 public class IntegrationTestConfig {
 
-    public static final String SAMPLE_CSV = "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"
-            + "10.01.24;10.01.24;-25.99;EUR;Coffee Shop;Morning coffee;Food\n"
-            + "11.01.24;11.01.24;2500.00;EUR;Employer;Monthly salary;Income";
+    public static final String SAMPLE_CSV =
+            "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"
+                    + "10.01.24;10.01.24;-25.99;EUR;Coffee Shop;Morning coffee;Food\n"
+                    + "11.01.24;11.01.24;2500.00;EUR;Employer;Monthly salary;Income";
 
     @Bean
     @Primary

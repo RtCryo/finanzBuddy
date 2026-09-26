@@ -35,13 +35,15 @@ public class CsvTransactionParser implements DocumentParser {
 
     private static final Logger logger = LoggerFactory.getLogger(CsvTransactionParser.class);
 
-    private static final DateTimeFormatter GERMAN_DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yy");
+    private static final DateTimeFormatter GERMAN_DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("dd.MM.yy");
 
     private final ObjectMapper objectMapper;
     private final Charset csvCharset;
 
-    public CsvTransactionParser(ObjectMapper objectMapper,
-                                @Value("${parser.formats.csv-charset:ISO-8859-1}") String csvCharset) {
+    public CsvTransactionParser(
+            ObjectMapper objectMapper,
+            @Value("${parser.formats.csv-charset:ISO-8859-1}") String csvCharset) {
         this.objectMapper = objectMapper;
         this.csvCharset = Charset.forName(csvCharset);
     }
@@ -52,17 +54,20 @@ public class CsvTransactionParser implements DocumentParser {
     }
 
     @Override
-    public List<Transaction> parse(InputStream inputStream, DocumentUploadedEvent event, Locale locale) {
+    public List<Transaction> parse(
+            InputStream inputStream, DocumentUploadedEvent event, Locale locale) {
         logger.info("Parsing CSV document: documentId={}", event.documentId());
         DateTimeFormatter dateFormatter = resolveDateFormatter(locale);
 
         try (Reader reader = new InputStreamReader(inputStream, csvCharset);
-                CSVReader csvReader = new CSVReaderBuilder(reader)
-                        .withCSVParser(new CSVParserBuilder()
-                                .withSeparator(';')
-                                .withQuoteChar('"')
-                                .build())
-                        .build()) {
+                CSVReader csvReader =
+                        new CSVReaderBuilder(reader)
+                                .withCSVParser(
+                                        new CSVParserBuilder()
+                                                .withSeparator(';')
+                                                .withQuoteChar('"')
+                                                .build())
+                                .build()) {
 
             String[] header = csvReader.readNext();
             if (header == null) {
@@ -81,7 +86,8 @@ public class CsvTransactionParser implements DocumentParser {
                     .collect(Collectors.toList());
         } catch (Exception e) {
             logger.error("Failed to parse CSV document: documentId={}", event.documentId(), e);
-            throw new IllegalArgumentException("Failed to parse CSV document " + event.documentId(), e);
+            throw new IllegalArgumentException(
+                    "Failed to parse CSV document " + event.documentId(), e);
         }
     }
 
@@ -93,12 +99,16 @@ public class CsvTransactionParser implements DocumentParser {
         return row;
     }
 
-    private Transaction mapToTransaction(Map<String, String> row, DocumentUploadedEvent event, DateTimeFormatter dateFormatter) {
+    private Transaction mapToTransaction(
+            Map<String, String> row, DocumentUploadedEvent event, DateTimeFormatter dateFormatter) {
         Transaction transaction = new Transaction();
         transaction.setDocumentId(event.documentId());
         transaction.setUserId(event.userId());
-        transaction.setBookingDate(parseDate(getColumnValue(row, CsvColumn.BOOKING_DATE), dateFormatter, "bookingDate"));
-        transaction.setValueDate(parseDate(getColumnValue(row, CsvColumn.VALUE_DATE), dateFormatter, "valueDate"));
+        transaction.setBookingDate(
+                parseDate(
+                        getColumnValue(row, CsvColumn.BOOKING_DATE), dateFormatter, "bookingDate"));
+        transaction.setValueDate(
+                parseDate(getColumnValue(row, CsvColumn.VALUE_DATE), dateFormatter, "valueDate"));
         transaction.setAmount(parseAmount(getColumnValue(row, CsvColumn.AMOUNT)));
         transaction.setCurrency(getColumnValue(row, CsvColumn.CURRENCY));
         transaction.setCounterparty(getColumnValue(row, CsvColumn.COUNTERPARTY));
@@ -133,11 +143,15 @@ public class CsvTransactionParser implements DocumentParser {
         try {
             return LocalDate.parse(value.trim(), dateFormatter);
         } catch (DateTimeParseException e) {
-            logger.warn("Failed to parse {} value '{}' with configured locale, trying German fallback", fieldName, value);
+            logger.warn(
+                    "Failed to parse {} value '{}' with configured locale, trying German fallback",
+                    fieldName,
+                    value);
             try {
                 return LocalDate.parse(value.trim(), GERMAN_DATE_FORMATTER);
             } catch (DateTimeParseException fallback) {
-                throw new IllegalArgumentException("Invalid date value for " + fieldName + ": " + value, fallback);
+                throw new IllegalArgumentException(
+                        "Invalid date value for " + fieldName + ": " + value, fallback);
             }
         }
     }

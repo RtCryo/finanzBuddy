@@ -17,7 +17,8 @@ public class PdfTransactionParser implements DocumentParser {
     }
 
     @Override
-    public List<Transaction> parse(InputStream inputStream, DocumentUploadedEvent event, Locale locale) {
+    public List<Transaction> parse(
+            InputStream inputStream, DocumentUploadedEvent event, Locale locale) {
         throw new UnsupportedOperationException("PDF parsing is not implemented in the MVP");
     }
 }

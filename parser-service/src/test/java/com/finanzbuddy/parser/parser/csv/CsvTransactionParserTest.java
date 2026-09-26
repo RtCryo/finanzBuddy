@@ -21,12 +21,14 @@ import org.junit.jupiter.api.Test;
 class CsvTransactionParserTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final CsvTransactionParser parser = new CsvTransactionParser(objectMapper, "ISO-8859-1");
+    private final CsvTransactionParser parser =
+            new CsvTransactionParser(objectMapper, "ISO-8859-1");
 
     @Test
     void parsesGermanDateFormat() {
-        String csv = "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"
-                + "15.03.24;15.03.24;-12.50;EUR;Supermarket;Weekly groceries;Food";
+        String csv =
+                "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"
+                        + "15.03.24;15.03.24;-12.50;EUR;Supermarket;Weekly groceries;Food";
         DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
 
         List<Transaction> transactions = parser.parse(toStream(csv), event, Locale.GERMANY);
@@ -54,8 +56,9 @@ class CsvTransactionParserTest {
 
     @Test
     void rejectsMalformedCsvGracefully() {
-        String csv = "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"
-                + "invalid-date;invalid-date;not-a-number;EUR;Counterparty;Description;Category";
+        String csv =
+                "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"
+                        + "invalid-date;invalid-date;not-a-number;EUR;Counterparty;Description;Category";
         DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
 
         assertThatThrownBy(() -> parser.parse(toStream(csv), event, Locale.GERMANY))
@@ -64,8 +67,9 @@ class CsvTransactionParserTest {
 
     @Test
     void fallsBackToGermanDateWhenLocaleMismatch() {
-        String csv = "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"
-                + "01.12.23;01.12.23;100.00;EUR;Employer;Salary;Income";
+        String csv =
+                "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"
+                        + "01.12.23;01.12.23;100.00;EUR;Employer;Salary;Income";
         DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
 
         List<Transaction> transactions = parser.parse(toStream(csv), event, Locale.US);
@@ -76,7 +80,10 @@ class CsvTransactionParserTest {
 
     @Test
     void parsesRealGermanBankStatementCsv() throws IOException {
-        Path realCsv = Path.of("..", "documents", "20260924-76085158-umsatz.CSV").toAbsolutePath().normalize();
+        Path realCsv =
+                Path.of("..", "documents", "20260924-76085158-umsatz.CSV")
+                        .toAbsolutePath()
+                        .normalize();
         DocumentUploadedEvent event = new DocumentUploadedEvent(99L, 88L, "CSV", "csv/99");
 
         try (InputStream inputStream = Files.newInputStream(realCsv)) {

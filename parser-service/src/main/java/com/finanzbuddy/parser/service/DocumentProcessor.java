@@ -26,10 +26,11 @@ public class DocumentProcessor {
     private final DocumentParserRouter parserRouter;
     private final GatewayStatusClient gatewayStatusClient;
 
-    public DocumentProcessor(TransactionRepository transactionRepository,
-                             MinioStorageService minioStorageService,
-                             DocumentParserRouter parserRouter,
-                             GatewayStatusClient gatewayStatusClient) {
+    public DocumentProcessor(
+            TransactionRepository transactionRepository,
+            MinioStorageService minioStorageService,
+            DocumentParserRouter parserRouter,
+            GatewayStatusClient gatewayStatusClient) {
         this.transactionRepository = transactionRepository;
         this.minioStorageService = minioStorageService;
         this.parserRouter = parserRouter;
@@ -38,7 +39,8 @@ public class DocumentProcessor {
 
     @Transactional
     public void process(DocumentUploadedEvent event) {
-        logger.info("Processing document: documentId={}, type={}", event.documentId(), event.type());
+        logger.info(
+                "Processing document: documentId={}, type={}", event.documentId(), event.type());
 
         if (transactionRepository.existsByDocumentId(event.documentId())) {
             logger.info("Duplicate event ignored for documentId={}", event.documentId());
@@ -51,14 +53,18 @@ public class DocumentProcessor {
             DocumentParser parser = parserRouter.route(event.type());
             List<Transaction> transactions = parser.parse(inputStream, event, resolveLocale(event));
 
-            transactions.forEach(transaction -> {
-                transaction.setDocumentId(event.documentId());
-                transaction.setUserId(event.userId());
-            });
+            transactions.forEach(
+                    transaction -> {
+                        transaction.setDocumentId(event.documentId());
+                        transaction.setUserId(event.userId());
+                    });
 
             transactionRepository.saveAll(transactions);
             reportStatus(event.documentId(), DocumentStatus.PROCESSED, null);
-            logger.info("Document processed successfully: documentId={}, transactions={}", event.documentId(), transactions.size());
+            logger.info(
+                    "Document processed successfully: documentId={}, transactions={}",
+                    event.documentId(),
+                    transactions.size());
         } catch (Exception e) {
             logger.error("Failed to process document: documentId={}", event.documentId(), e);
             String errorMessage = e.getMessage();
@@ -77,7 +83,8 @@ public class DocumentProcessor {
         try {
             gatewayStatusClient.reportStatus(documentId, status, message);
         } catch (Exception e) {
-            logger.error("Failed to report status: documentId={}, status={}", documentId, status, e);
+            logger.error(
+                    "Failed to report status: documentId={}, status={}", documentId, status, e);
         }
     }
 }
