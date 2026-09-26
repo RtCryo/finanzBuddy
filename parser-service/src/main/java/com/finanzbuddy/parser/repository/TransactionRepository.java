@@ -9,6 +9,4 @@ import org.springframework.stereotype.Repository;
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
     List<Transaction> findByDocumentId(Long documentId);
-
-    boolean existsByDocumentId(Long documentId);
 }

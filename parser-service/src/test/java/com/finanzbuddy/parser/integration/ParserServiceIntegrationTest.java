@@ -14,7 +14,12 @@ import com.finanzbuddy.parser.event.DocumentUploadedEvent;
 import com.finanzbuddy.parser.repository.TransactionRepository;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,8 +27,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpMethod;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.test.EmbeddedKafkaBroker;
 import org.springframework.kafka.test.context.EmbeddedKafka;
-import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -32,10 +38,9 @@ import org.springframework.test.web.client.MockRestServiceServer;
 @SpringBootTest
 @EmbeddedKafka(
         partitions = 1,
-        topics = {"documents.csv"})
+        topics = {"documents.csv", "documents.csv.dlt"})
 @Import(IntegrationTestConfig.class)
 @ActiveProfiles("test")
-@DirtiesContext
 class ParserServiceIntegrationTest {
 
     @DynamicPropertySource
@@ -46,6 +51,8 @@ class ParserServiceIntegrationTest {
     }
 
     @Autowired private KafkaTemplate<String, Object> kafkaTemplate;
+
+    @Autowired private EmbeddedKafkaBroker embeddedKafkaBroker;
 
     @Autowired private TransactionRepository transactionRepository;
 
@@ -98,6 +105,53 @@ class ParserServiceIntegrationTest {
                             assertThat(transactions).allMatch(tx -> tx.getUserId().equals(userId));
                             assertThat(transactions.get(0).getRawData()).isNotBlank();
                         });
+
+        mockServer.verify();
+    }
+
+    @Test
+    void permanentProcessingFailureIsReportedAndSentToDltWithoutRetries() {
+        Long documentId = 43L;
+        mockServer
+                .expect(requestTo("http://localhost:9999/internal/documents/43/status"))
+                .andExpect(method(HttpMethod.PUT))
+                .andExpect(jsonPath("$.status").value("PROCESSING"))
+                .andRespond(withSuccess());
+        mockServer
+                .expect(requestTo("http://localhost:9999/internal/documents/43/status"))
+                .andExpect(method(HttpMethod.PUT))
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andRespond(withSuccess());
+
+        Map<String, Object> consumerProperties =
+                KafkaTestUtils.consumerProps("parser-dlt-test", "false", embeddedKafkaBroker);
+        consumerProperties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        try (Consumer<String, byte[]> consumer =
+                new org.springframework.kafka.core.DefaultKafkaConsumerFactory<>(
+                                consumerProperties,
+                                new StringDeserializer(),
+                                new ByteArrayDeserializer())
+                        .createConsumer()) {
+            embeddedKafkaBroker.consumeFromAnEmbeddedTopic(consumer, "documents.csv.dlt");
+            DocumentUploadedEvent event =
+                    new DocumentUploadedEvent(documentId, 7L, "UNKNOWN", "csv/43");
+            try {
+                kafkaTemplate.send("documents.csv", event).get(5, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+
+            await().atMost(10, TimeUnit.SECONDS)
+                    .pollInterval(Duration.ofMillis(200))
+                    .untilAsserted(
+                            () ->
+                                    assertThat(
+                                                    KafkaTestUtils.getRecords(
+                                                                    consumer,
+                                                                    Duration.ofMillis(200))
+                                                            .records("documents.csv.dlt"))
+                                            .isNotEmpty());
+        }
 
         mockServer.verify();
     }

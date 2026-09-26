@@ -1,6 +1,9 @@
 package com.finanzbuddy.parser.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.finanzbuddy.parser.client.GatewayStatusClient;
+import com.finanzbuddy.parser.document.DocumentStatus;
+import com.finanzbuddy.parser.document.ErrorMessageTruncator;
 import com.finanzbuddy.parser.event.DocumentUploadedEvent;
 import com.finanzbuddy.parser.event.DocumentUploadedEventDeserializer;
 import java.util.HashMap;
@@ -80,7 +83,7 @@ public class KafkaConfig {
 
     @Bean
     public DeadLetterPublishingRecoverer deadLetterPublishingRecoverer(
-            KafkaTemplate<String, Object> kafkaTemplate) {
+            KafkaTemplate<String, Object> kafkaTemplate, GatewayStatusClient gatewayStatusClient) {
         return new DeadLetterPublishingRecoverer(
                 kafkaTemplate,
                 (record, exception) -> {
@@ -91,6 +94,20 @@ public class KafkaConfig {
                             originalTopic,
                             dltTopic,
                             exception);
+                    if (record.value() instanceof DocumentUploadedEvent event) {
+                        String message = ErrorMessageTruncator.truncate(exception, 4000);
+                        try {
+                            if (event.documentId() != null) {
+                                gatewayStatusClient.reportStatus(
+                                        event.documentId(), DocumentStatus.FAILED, message);
+                            }
+                        } catch (Exception statusException) {
+                            logger.error(
+                                    "Failed to report terminal failure for documentId={}",
+                                    event.documentId(),
+                                    statusException);
+                        }
+                    }
                     return new org.apache.kafka.common.TopicPartition(dltTopic, record.partition());
                 });
     }
@@ -107,6 +124,8 @@ public class KafkaConfig {
                 new DefaultErrorHandler(
                         deadLetterPublishingRecoverer,
                         new FixedBackOff(RETRY_INTERVAL_MS, RETRY_MAX_ATTEMPTS));
+        errorHandler.addNotRetryableExceptions(
+                IllegalArgumentException.class, UnsupportedOperationException.class);
         factory.setCommonErrorHandler(errorHandler);
         return factory;
     }

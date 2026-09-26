@@ -1,5 +1,6 @@
 package com.finanzbuddy.parser.service;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -61,10 +62,12 @@ class DocumentProcessorTest {
         when(parser.parse(any(InputStream.class), any(), any()))
                 .thenThrow(new IllegalArgumentException("parse error"));
 
-        processor.process(event);
+        assertThatThrownBy(() -> processor.process(event))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("parse error");
 
         verify(gatewayStatusClient).reportStatus(1L, DocumentStatus.PROCESSING, null);
-        verify(gatewayStatusClient)
+        verify(gatewayStatusClient, never())
                 .reportStatus(1L, DocumentStatus.FAILED, "IllegalArgumentException: parse error");
     }
 
@@ -76,14 +79,12 @@ class DocumentProcessorTest {
         when(parserRouter.route("CSV")).thenReturn(parser);
         when(parser.parse(any(InputStream.class), any(), any())).thenReturn(List.of());
 
-        processor.process(event);
+        assertThatThrownBy(() -> processor.process(event))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("No transactions found in document 1");
 
         verify(gatewayStatusClient).reportStatus(1L, DocumentStatus.PROCESSING, null);
-        verify(gatewayStatusClient)
-                .reportStatus(
-                        1L,
-                        DocumentStatus.FAILED,
-                        "IllegalArgumentException: No transactions found in document 1");
+        verify(gatewayStatusClient, never()).reportStatus(1L, DocumentStatus.FAILED, null);
         verify(transactionPersistenceService, never()).saveIfNotProcessed(any(), any());
     }
 
@@ -105,5 +106,16 @@ class DocumentProcessorTest {
                 .thenReturn(true);
         verify(transactionPersistenceService).saveIfNotProcessed(1L, List.of(transaction));
         verify(gatewayStatusClient).reportStatus(1L, DocumentStatus.PROCESSED, null);
+    }
+
+    @Test
+    void rejectsInvalidEventsBeforeCallingDependencies() {
+        DocumentUploadedEvent event = new DocumentUploadedEvent(null, 2L, "CSV", "csv/1");
+
+        assertThatThrownBy(() -> processor.process(event))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("positive documentId");
+
+        verify(minioStorageService, never()).download(any());
     }
 }

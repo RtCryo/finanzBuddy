@@ -127,6 +127,40 @@ class CsvTransactionParserTest {
     }
 
     @Test
+    void interpretsAmbiguousThousandsSeparatorsUsingConfiguredLocale() {
+        String csv =
+                "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"
+                        + "15.03.24;15.03.24;1,234;EUR;Test;Test;Other";
+        DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
+        CsvTransactionParser englishParser =
+                new CsvTransactionParser(objectMapper, "UTF-8", ";", 10000);
+
+        List<Transaction> german = parser.parse(toStream(csv), event, Locale.GERMANY);
+        List<Transaction> english = englishParser.parse(toStream(csv), event, Locale.US);
+
+        assertThat(german.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("1.234"));
+        assertThat(english.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("1234"));
+    }
+
+    @Test
+    void parsesAmountsWithNonBreakingSpaceGrouping() {
+        String csv =
+                "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"
+                        + "15.03.24;15.03.24;1\u202f234,56;EUR;Test;Test;Other";
+        DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
+        CsvTransactionParser utf8Parser =
+                new CsvTransactionParser(objectMapper, "UTF-8", ";", 10000);
+
+        List<Transaction> transactions =
+                utf8Parser.parse(
+                        new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8)),
+                        event,
+                        Locale.GERMANY);
+
+        assertThat(transactions.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("1234.56"));
+    }
+
+    @Test
     void stripsBomFromUtf8Csv() {
         String csv =
                 "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"

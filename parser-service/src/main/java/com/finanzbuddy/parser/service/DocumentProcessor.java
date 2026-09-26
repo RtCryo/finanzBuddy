@@ -7,28 +7,29 @@ import com.finanzbuddy.parser.event.DocumentUploadedEvent;
 import com.finanzbuddy.parser.parser.DocumentParser;
 import com.finanzbuddy.parser.parser.DocumentParserRouter;
 import com.finanzbuddy.parser.storage.MinioStorageService;
+import com.finanzbuddy.parser.storage.StorageException;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 @Service
 public class DocumentProcessor {
 
     private static final Logger logger = LoggerFactory.getLogger(DocumentProcessor.class);
-    private static final int MAX_ERROR_MESSAGE_LENGTH = 4000;
 
     private final TransactionPersistenceService transactionPersistenceService;
     private final MinioStorageService minioStorageService;
     private final DocumentParserRouter parserRouter;
     private final GatewayStatusClient gatewayStatusClient;
+    private final MeterRegistry meterRegistry;
     private final Locale defaultLocale;
     private final Counter processedCounter;
     private final Counter failedCounter;
@@ -46,6 +47,7 @@ public class DocumentProcessor {
         this.minioStorageService = minioStorageService;
         this.parserRouter = parserRouter;
         this.gatewayStatusClient = gatewayStatusClient;
+        this.meterRegistry = meterRegistry;
         this.defaultLocale = defaultLocale;
         this.processedCounter =
                 Counter.builder("parser.documents.processed")
@@ -66,57 +68,73 @@ public class DocumentProcessor {
     }
 
     public void process(DocumentUploadedEvent event) {
+        validate(event);
         logger.info(
                 "Processing document: documentId={}, type={}", event.documentId(), event.type());
 
-        if (transactionPersistenceService.isProcessed(event.documentId())) {
-            logger.info("Duplicate event ignored for documentId={}", event.documentId());
-            duplicateCounter.increment();
-            return;
-        }
-
-        reportStatus(event.documentId(), DocumentStatus.PROCESSING, null);
-
-        long start = System.nanoTime();
-        try (InputStream inputStream = minioStorageService.download(event.storagePath())) {
-            DocumentParser parser = parserRouter.route(event.type());
-            List<Transaction> transactions = parser.parse(inputStream, event, resolveLocale(event));
-
-            if (transactions.isEmpty()) {
-                throw new IllegalArgumentException(
-                        "No transactions found in document " + event.documentId());
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            if (transactionPersistenceService.isProcessed(event.documentId())) {
+                logger.info("Duplicate event ignored for documentId={}", event.documentId());
+                duplicateCounter.increment();
+                return;
             }
 
-            transactionPersistenceService.saveIfNotProcessed(event.documentId(), transactions);
-            reportStatus(event.documentId(), DocumentStatus.PROCESSED, null);
-            processedCounter.increment();
-            processingTimer.record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
-            logger.info(
-                    "Document processed successfully: documentId={}, transactions={}",
-                    event.documentId(),
-                    transactions.size());
+            reportStatus(event.documentId(), DocumentStatus.PROCESSING, null);
+            try (InputStream inputStream = minioStorageService.download(event.storagePath())) {
+                DocumentParser parser = parserRouter.route(event.type());
+                List<Transaction> transactions = parser.parse(inputStream, event, defaultLocale);
+
+                if (transactions.isEmpty()) {
+                    throw new IllegalArgumentException(
+                            "No transactions found in document " + event.documentId());
+                }
+
+                transactionPersistenceService.saveIfNotProcessed(event.documentId(), transactions);
+                reportStatus(event.documentId(), DocumentStatus.PROCESSED, null);
+                processedCounter.increment();
+                logger.info(
+                        "Document processed successfully: documentId={}, transactions={}",
+                        event.documentId(),
+                        transactions.size());
+            }
         } catch (DuplicateDocumentException e) {
             logger.info("Duplicate event ignored for documentId={}", event.documentId());
             duplicateCounter.increment();
-        } catch (Exception e) {
-            logger.error("Failed to process document: documentId={}", event.documentId(), e);
+        } catch (IllegalArgumentException | UnsupportedOperationException e) {
             failedCounter.increment();
-            reportStatus(event.documentId(), DocumentStatus.FAILED, truncateErrorMessage(e));
+            throw e;
+        } catch (StorageException | DataAccessException e) {
+            logger.error(
+                    "Transient failure processing document: documentId={}", event.documentId(), e);
+            failedCounter.increment();
+            throw e;
+        } catch (Exception e) {
+            logger.error(
+                    "Unexpected failure processing document: documentId={}", event.documentId(), e);
+            failedCounter.increment();
+            throw new IllegalStateException("Failed to process document " + event.documentId(), e);
+        } finally {
+            sample.stop(processingTimer);
         }
     }
 
-    private Locale resolveLocale(DocumentUploadedEvent event) {
-        // The event currently does not carry a locale; use the configured default.
-        // If a locale is added to the event later, it can be preferred here.
-        return defaultLocale;
-    }
-
-    private String truncateErrorMessage(Exception e) {
-        String errorMessage = e.getClass().getSimpleName() + ": " + e.getMessage();
-        if (errorMessage.length() > MAX_ERROR_MESSAGE_LENGTH) {
-            return errorMessage.substring(0, MAX_ERROR_MESSAGE_LENGTH);
+    private void validate(DocumentUploadedEvent event) {
+        if (event == null) {
+            throw new IllegalArgumentException("Document event must not be null");
         }
-        return errorMessage;
+        if (event.documentId() == null || event.documentId() <= 0) {
+            throw new IllegalArgumentException("Document event must contain a positive documentId");
+        }
+        if (event.userId() == null || event.userId() <= 0) {
+            throw new IllegalArgumentException("Document event must contain a positive userId");
+        }
+        if (event.type() == null || event.type().isBlank()) {
+            throw new IllegalArgumentException("Document event must contain a document type");
+        }
+        if (event.storagePath() == null || event.storagePath().isBlank()) {
+            throw new IllegalArgumentException("Document event must contain a storage path");
+        }
     }
 
     private void reportStatus(Long documentId, DocumentStatus status, String message) {

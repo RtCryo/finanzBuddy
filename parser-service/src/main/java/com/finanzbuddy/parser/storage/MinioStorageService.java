@@ -23,7 +23,7 @@ public class MinioStorageService {
     }
 
     public InputStream download(String storagePath) {
-        logger.info("Downloading file from MinIO: bucket={}, path={}", bucket, storagePath);
+        logger.debug("Downloading file from MinIO: bucket={}, path={}", bucket, storagePath);
         try {
             return minioClient.getObject(
                     GetObjectArgs.builder().bucket(bucket).object(storagePath).build());

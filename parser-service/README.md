@@ -27,13 +27,13 @@ Configuration is read from `application.yml` and can be overridden with environm
 | `MINIO_SECRET_KEY` | MinIO secret key | `minioadmin` |
 | `MINIO_BUCKET` | MinIO bucket | `finanzbuddy-documents` |
 | `GATEWAY_BASE_URL` | API Gateway base URL | `http://localhost:8080` |
-| `GATEWAY_INTERNAL_API_KEY` | Shared internal API key | (empty) |
+| `INTERNAL_API_KEY` | Shared internal API key | (empty) |
 | `GATEWAY_CONNECT_TIMEOUT` | HTTP connect timeout | `5s` |
 | `GATEWAY_READ_TIMEOUT` | HTTP read timeout | `30s` |
 | `PARSER_FORMAT_CSV` | Enable CSV consumer | `true` |
 | `PARSER_FORMAT_PDF` | Enable PDF consumer | `false` |
 | `PARSER_FORMAT_XML` | Enable XML consumer | `false` |
-| `PARSER_FORMAT_CSV_CHARSET` | Charset for CSV files | `ISO-8859-1` |
+| `PARSER_FORMAT_CSV_CHARSET` | Charset for CSV files | `windows-1252` |
 | `PARSER_FORMAT_CSV_SEPARATOR` | CSV field separator (`;`, `,`, `tab`, `semicolon`, `comma`) | `;` |
 | `PARSER_FORMAT_CSV_MAX_ROWS` | Maximum rows allowed per CSV file | `100000` |
 | `PARSER_FORMAT_CSV_LOCALE` | Locale for date parsing | `de-DE` |
@@ -108,10 +108,10 @@ The parser tries the following formats in order:
 | `-12,50` | `-12.50` |
 | `1.234,56` | `1234.56` |
 | `1234.56` | `1234.56` |
-| `1,234` | `1.234` (German decimal) |
+| `1,234` | `1.234` with the German locale; `1234` with an English locale |
 | `1,234.56` | `1234.56` |
 
-Files are read using the configured charset (`ISO-8859-1` by default for German umlauts). UTF-8 Byte Order Marks (BOM) are stripped automatically.
+Files are read using the configured charset (`windows-1252` by default for German umlauts). UTF-8 Byte Order Marks (BOM) are stripped automatically.
 
 Example German export row:
 
@@ -172,4 +172,6 @@ Database writes use Hibernate batch inserts (`spring.jpa.properties.hibernate.jd
 
 - Failed status reports to the gateway are retried up to 3 times.
 - Kafka consumer errors are retried 3 times before the record is moved to the DLT.
-- Parsing errors mark the document as `FAILED` and truncate the error message to 4000 characters.
+- Invalid events and parsing errors are not retried; they mark the document as `FAILED` and go to the DLT.
+- Transient storage/database failures are retried 3 times and then sent to the DLT; the gateway status is marked `FAILED` after retries are exhausted.
+- Error messages are truncated to 4000 Unicode code points.

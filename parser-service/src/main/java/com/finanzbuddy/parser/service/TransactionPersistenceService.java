@@ -28,9 +28,6 @@ public class TransactionPersistenceService {
 
     @Transactional
     public boolean saveIfNotProcessed(Long documentId, List<Transaction> transactions) {
-        if (processedDocumentRepository.existsById(documentId)) {
-            throw new DuplicateDocumentException(documentId);
-        }
         try {
             processedDocumentRepository.saveAndFlush(new ProcessedDocument(documentId));
         } catch (DataIntegrityViolationException e) {
