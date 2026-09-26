@@ -31,6 +31,7 @@ Configuration is read from `application.yml` and can be overridden with environm
 | `PARSER_FORMAT_CSV` | Enable CSV consumer | `true` |
 | `PARSER_FORMAT_PDF` | Enable PDF consumer | `false` |
 | `PARSER_FORMAT_XML` | Enable XML consumer | `false` |
+| `PARSER_FORMAT_CSV_CHARSET` | Charset for CSV files | `ISO-8859-1` |
 
 ## Build
 
@@ -74,14 +75,26 @@ docker-compose up -d parser-service
 
 ## CSV Format
 
-The CSV parser expects a semicolon-separated file with a header row:
+The CSV parser supports semicolon-separated German bank statement exports as well as the English header variant. The following columns are mapped:
+
+| CSV column (DE) | CSV column (EN) | Transaction field |
+|-----------------|-----------------|-------------------|
+| `Buchungstag` | `BookingDate` | booking date |
+| `Valutadatum` | `ValueDate` | value date |
+| `Betrag` | `Amount` | amount |
+| `Waehrung` | `Currency` | currency |
+| `Beguenstigter/Zahlungspflichtiger` | `Counterparty` | counterparty |
+| `Verwendungszweck` | `Description` | description |
+| `Kategorie` | `Category` | category |
+
+Amounts may use a comma or a dot as the decimal separator. Files are read using the configured charset (`ISO-8859-1` by default for German umlauts).
+
+Example German export row:
 
 ```csv
-BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category
-15.03.24;15.03.24;-12.50;EUR;Supermarket;Weekly groceries;Food
+"Auftragskonto";"Buchungstag";"Valutadatum";"Buchungstext";"Verwendungszweck";"Glaeubiger ID";"Mandatsreferenz";"Kundenreferenz (End-to-End)";"Sammlerreferenz";"Lastschrift Ursprungsbetrag";"Auslagenersatz Ruecklastschrift";"Beguenstigter/Zahlungspflichtiger";"Kontonummer/IBAN";"BIC (SWIFT-Code)";"Betrag";"Waehrung";"Info";"Kategorie"
+"DE12345678901234567890";"23.09.26";"23.09.26";"FOLGELASTSCHRIFT";"Order 123";"DE94ZZZ00000561653";"";"";"";"";"";"AMAZON PAYMENTS EUROPE S.C.A.";"DE87300308801908262006";"TUBDDEDD";"-22,09";"EUR";"Umsatz gebucht";"Einkäufe"
 ```
-
-Dates are parsed using the configured locale (`Locale.GERMANY` is used by default for CSV).
 
 ## Kafka Topics
 

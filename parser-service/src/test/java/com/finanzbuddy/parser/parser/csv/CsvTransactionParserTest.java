@@ -7,9 +7,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finanzbuddy.parser.entity.Transaction;
 import com.finanzbuddy.parser.event.DocumentUploadedEvent;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
@@ -18,7 +21,7 @@ import org.junit.jupiter.api.Test;
 class CsvTransactionParserTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final CsvTransactionParser parser = new CsvTransactionParser(objectMapper);
+    private final CsvTransactionParser parser = new CsvTransactionParser(objectMapper, "ISO-8859-1");
 
     @Test
     void parsesGermanDateFormat() {
@@ -69,6 +72,26 @@ class CsvTransactionParserTest {
 
         assertThat(transactions).hasSize(1);
         assertThat(transactions.get(0).getBookingDate()).isEqualTo(LocalDate.of(2023, 12, 1));
+    }
+
+    @Test
+    void parsesRealGermanBankStatementCsv() throws IOException {
+        Path realCsv = Path.of("..", "documents", "20260924-76085158-umsatz.CSV").toAbsolutePath().normalize();
+        DocumentUploadedEvent event = new DocumentUploadedEvent(99L, 88L, "CSV", "csv/99");
+
+        try (InputStream inputStream = Files.newInputStream(realCsv)) {
+            List<Transaction> transactions = parser.parse(inputStream, event, Locale.GERMANY);
+
+            assertThat(transactions).hasSizeGreaterThan(150);
+            Transaction first = transactions.get(0);
+            assertThat(first.getBookingDate()).isEqualTo(LocalDate.of(2026, 9, 23));
+            assertThat(first.getValueDate()).isEqualTo(LocalDate.of(2026, 9, 23));
+            assertThat(first.getAmount()).isEqualByComparingTo(new BigDecimal("-22.09"));
+            assertThat(first.getCurrency()).isEqualTo("EUR");
+            assertThat(first.getCounterparty()).isEqualTo("AMAZON PAYMENTS EUROPE S.C.A.");
+            assertThat(first.getCategory()).isEqualTo("Einkäufe");
+            assertThat(first.getRawData()).isNotBlank();
+        }
     }
 
     private InputStream toStream(String value) {
