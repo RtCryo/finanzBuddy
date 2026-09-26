@@ -18,6 +18,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
 import java.time.format.FormatStyle;
+import java.time.format.ResolverStyle;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.apache.commons.io.input.BOMInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,17 +37,27 @@ public class CsvTransactionParser implements DocumentParser {
 
     private static final Logger logger = LoggerFactory.getLogger(CsvTransactionParser.class);
 
-    private static final DateTimeFormatter GERMAN_DATE_FORMATTER =
+    private static final DateTimeFormatter GERMAN_SHORT_DATE_FORMATTER =
             DateTimeFormatter.ofPattern("dd.MM.yy");
+    private static final DateTimeFormatter GERMAN_LONG_DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("dd.MM.yyyy");
+    private static final DateTimeFormatter ISO_LIKE_DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     private final ObjectMapper objectMapper;
     private final Charset csvCharset;
+    private final char separator;
+    private final int maxRows;
 
     public CsvTransactionParser(
             ObjectMapper objectMapper,
-            @Value("${parser.formats.csv-charset:ISO-8859-1}") String csvCharset) {
+            @Value("${parser.formats.csv-charset:ISO-8859-1}") String csvCharset,
+            @Value("${parser.formats.csv-separator:;}") String separator,
+            @Value("${parser.formats.csv-max-rows:100000}") int maxRows) {
         this.objectMapper = objectMapper;
         this.csvCharset = Charset.forName(csvCharset);
+        this.separator = parseSeparator(separator);
+        this.maxRows = maxRows;
     }
 
     @Override
@@ -59,12 +71,14 @@ public class CsvTransactionParser implements DocumentParser {
         logger.info("Parsing CSV document: documentId={}", event.documentId());
         DateTimeFormatter dateFormatter = resolveDateFormatter(locale);
 
-        try (Reader reader = new InputStreamReader(inputStream, csvCharset);
+        try (BOMInputStream bomInputStream =
+                        BOMInputStream.builder().setInputStream(inputStream).get();
+                Reader reader = new InputStreamReader(bomInputStream, csvCharset);
                 CSVReader csvReader =
                         new CSVReaderBuilder(reader)
                                 .withCSVParser(
                                         new CSVParserBuilder()
-                                                .withSeparator(';')
+                                                .withSeparator(separator)
                                                 .withQuoteChar('"')
                                                 .build())
                                 .build()) {
@@ -74,10 +88,17 @@ public class CsvTransactionParser implements DocumentParser {
                 logger.warn("CSV document is empty: documentId={}", event.documentId());
                 return List.of();
             }
+            header = stripBomFromFirstHeader(header);
 
             List<Map<String, String>> rows = new ArrayList<>();
             String[] line;
+            int rowCount = 0;
             while ((line = csvReader.readNext()) != null) {
+                rowCount++;
+                if (rowCount > maxRows) {
+                    throw new IllegalArgumentException(
+                            "CSV document exceeds maximum allowed rows: " + maxRows);
+                }
                 rows.add(buildRow(header, line));
             }
 
@@ -89,6 +110,35 @@ public class CsvTransactionParser implements DocumentParser {
             throw new IllegalArgumentException(
                     "Failed to parse CSV document " + event.documentId(), e);
         }
+    }
+
+    private char parseSeparator(String separator) {
+        if (separator == null || separator.isBlank()) {
+            return ';';
+        }
+        if (separator.length() == 1) {
+            return separator.charAt(0);
+        }
+        return switch (separator.toLowerCase(Locale.ROOT)) {
+            case "tab", "\\t" -> '\t';
+            case "comma" -> ',';
+            case "semicolon" -> ';';
+            default -> throw new IllegalArgumentException("Invalid CSV separator: " + separator);
+        };
+    }
+
+    private String[] stripBomFromFirstHeader(String[] header) {
+        if (header.length == 0 || header[0].isEmpty()) {
+            return header;
+        }
+        // BOMInputStream removes the BOM bytes, but if the file was read as UTF-8
+        // without BOM awareness, the first header may still contain the zero-width
+        // BOM character (U+FEFF). Strip it defensively.
+        String first = header[0];
+        if (first.charAt(0) == '\uFEFF') {
+            header[0] = first.substring(1);
+        }
+        return header;
     }
 
     private Map<String, String> buildRow(String[] header, String[] values) {
@@ -140,21 +190,43 @@ public class CsvTransactionParser implements DocumentParser {
         if (value == null || value.isBlank()) {
             return null;
         }
+        String trimmed = value.trim();
+        return parseWithFormatter(trimmed, dateFormatter, fieldName)
+                .orElseGet(
+                        () ->
+                                parseWithFormatter(trimmed, GERMAN_SHORT_DATE_FORMATTER, fieldName)
+                                        .orElseGet(
+                                                () ->
+                                                        parseWithFormatter(
+                                                                        trimmed,
+                                                                        GERMAN_LONG_DATE_FORMATTER,
+                                                                        fieldName)
+                                                                .orElseGet(
+                                                                        () ->
+                                                                                parseWithFormatter(
+                                                                                                trimmed,
+                                                                                                ISO_LIKE_DATE_FORMATTER,
+                                                                                                fieldName)
+                                                                                        .orElseThrow(
+                                                                                                () ->
+                                                                                                        new IllegalArgumentException(
+                                                                                                                "Invalid date value for "
+                                                                                                                        + fieldName
+                                                                                                                        + ": "
+                                                                                                                        + value)))));
+    }
+
+    private java.util.Optional<LocalDate> parseWithFormatter(
+            String value, DateTimeFormatter formatter, String fieldName) {
         try {
-            return LocalDate.parse(value.trim(), dateFormatter);
+            return java.util.Optional.of(LocalDate.parse(value, formatter));
         } catch (DateTimeParseException e) {
-            // Real German bank exports use dd.MM.yy regardless of the configured locale,
-            // so we always fall back to a German formatter for compatibility.
-            logger.warn(
-                    "Failed to parse {} value '{}' with configured locale, trying German fallback",
+            logger.debug(
+                    "Failed to parse {} value '{}' with formatter {}",
                     fieldName,
-                    value);
-            try {
-                return LocalDate.parse(value.trim(), GERMAN_DATE_FORMATTER);
-            } catch (DateTimeParseException fallback) {
-                throw new IllegalArgumentException(
-                        "Invalid date value for " + fieldName + ": " + value, fallback);
-            }
+                    value,
+                    formatter.toString());
+            return java.util.Optional.empty();
         }
     }
 
@@ -163,19 +235,42 @@ public class CsvTransactionParser implements DocumentParser {
             return null;
         }
         String trimmed = value.trim().replace(" ", "");
-        String normalized;
-        if (trimmed.contains(",")) {
-            // German format: dot is the thousands separator, comma is the decimal separator.
-            normalized = trimmed.replace(".", "").replace(',', '.');
-        } else {
-            // Plain or English format: dot is the decimal separator.
-            normalized = trimmed;
-        }
+        String normalized = normalizeAmount(trimmed);
         try {
             return new BigDecimal(normalized);
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid amount value: " + value, e);
         }
+    }
+
+    private String normalizeAmount(String trimmed) {
+        boolean hasComma = trimmed.contains(",");
+        boolean hasDot = trimmed.contains(".");
+
+        if (hasComma && hasDot) {
+            // German format: 1.234,56 -> 1234.56
+            return trimmed.replace(".", "").replace(',', '.');
+        }
+
+        if (hasComma && !hasDot) {
+            int lastComma = trimmed.lastIndexOf(',');
+            int fractionalDigits = trimmed.length() - lastComma - 1;
+
+            // Heuristic: two fractional digits are common for currencies (German),
+            // three or more digits after a single comma are usually an English thousands
+            // separator, unless the value is tiny (e.g. 0,123).
+            if (fractionalDigits == 2 && trimmed.length() > 3) {
+                return trimmed.replace(',', '.');
+            }
+            if (fractionalDigits == 3 && lastComma == trimmed.length() - 4) {
+                return trimmed.replace(",", "");
+            }
+            // Default to German decimal separator for ambiguous cases.
+            return trimmed.replace(',', '.');
+        }
+
+        // Plain or English format: dot is the decimal separator.
+        return trimmed;
     }
 
     private DateTimeFormatter resolveDateFormatter(Locale locale) {
@@ -184,7 +279,8 @@ public class CsvTransactionParser implements DocumentParser {
         }
         return new DateTimeFormatterBuilder()
                 .appendLocalized(FormatStyle.SHORT, null)
-                .toFormatter(locale);
+                .toFormatter(locale)
+                .withResolverStyle(ResolverStyle.SMART);
     }
 
     private enum CsvColumn {

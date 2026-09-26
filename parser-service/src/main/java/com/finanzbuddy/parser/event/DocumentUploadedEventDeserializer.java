@@ -6,12 +6,20 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class DocumentUploadedEventDeserializer implements Deserializer<DocumentUploadedEvent> {
+public class DocumentUploadedEventDeserializer implements Deserializer<Object> {
 
     private static final Logger logger =
             LoggerFactory.getLogger(DocumentUploadedEventDeserializer.class);
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+
+    public DocumentUploadedEventDeserializer() {
+        this(new ObjectMapper());
+    }
+
+    public DocumentUploadedEventDeserializer(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     @Override
     public DocumentUploadedEvent deserialize(String topic, byte[] data) {

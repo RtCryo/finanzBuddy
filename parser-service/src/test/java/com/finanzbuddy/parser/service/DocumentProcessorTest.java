@@ -15,6 +15,7 @@ import com.finanzbuddy.parser.parser.DocumentParser;
 import com.finanzbuddy.parser.parser.DocumentParserRouter;
 import com.finanzbuddy.parser.repository.TransactionRepository;
 import com.finanzbuddy.parser.storage.MinioStorageService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -29,6 +30,7 @@ class DocumentProcessorTest {
     private final DocumentParserRouter parserRouter = mock(DocumentParserRouter.class);
     private final DocumentParser parser = mock(DocumentParser.class);
     private final GatewayStatusClient gatewayStatusClient = mock(GatewayStatusClient.class);
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     private final DocumentProcessor processor =
             new DocumentProcessor(
@@ -36,7 +38,8 @@ class DocumentProcessorTest {
                     minioStorageService,
                     parserRouter,
                     gatewayStatusClient,
-                    Locale.GERMANY);
+                    Locale.GERMANY,
+                    meterRegistry);
 
     @Test
     void ignoresDuplicateEvent() {
@@ -64,6 +67,26 @@ class DocumentProcessorTest {
         verify(gatewayStatusClient).reportStatus(1L, DocumentStatus.PROCESSING, null);
         verify(gatewayStatusClient)
                 .reportStatus(1L, DocumentStatus.FAILED, "IllegalArgumentException: parse error");
+    }
+
+    @Test
+    void reportsFailureWhenParsingReturnsEmptyList() {
+        DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
+        when(transactionRepository.existsByDocumentId(1L)).thenReturn(false);
+        when(minioStorageService.download("csv/1"))
+                .thenReturn(new ByteArrayInputStream("data".getBytes(StandardCharsets.UTF_8)));
+        when(parserRouter.route("CSV")).thenReturn(parser);
+        when(parser.parse(any(InputStream.class), any(), any())).thenReturn(List.of());
+
+        processor.process(event);
+
+        verify(gatewayStatusClient).reportStatus(1L, DocumentStatus.PROCESSING, null);
+        verify(gatewayStatusClient)
+                .reportStatus(
+                        1L,
+                        DocumentStatus.FAILED,
+                        "IllegalArgumentException: No transactions found in document 1");
+        verify(transactionRepository, never()).saveAll(any());
     }
 
     @Test

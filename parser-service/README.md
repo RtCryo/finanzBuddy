@@ -27,11 +27,16 @@ Configuration is read from `application.yml` and can be overridden with environm
 | `MINIO_SECRET_KEY` | MinIO secret key | `minioadmin` |
 | `MINIO_BUCKET` | MinIO bucket | `finanzbuddy-documents` |
 | `GATEWAY_BASE_URL` | API Gateway base URL | `http://localhost:8080` |
-| `INTERNAL_API_KEY` | Shared internal API key | (empty) |
+| `GATEWAY_INTERNAL_API_KEY` | Shared internal API key | (empty) |
+| `GATEWAY_CONNECT_TIMEOUT` | HTTP connect timeout | `5s` |
+| `GATEWAY_READ_TIMEOUT` | HTTP read timeout | `30s` |
 | `PARSER_FORMAT_CSV` | Enable CSV consumer | `true` |
 | `PARSER_FORMAT_PDF` | Enable PDF consumer | `false` |
 | `PARSER_FORMAT_XML` | Enable XML consumer | `false` |
 | `PARSER_FORMAT_CSV_CHARSET` | Charset for CSV files | `ISO-8859-1` |
+| `PARSER_FORMAT_CSV_SEPARATOR` | CSV field separator (`;`, `,`, `tab`, `semicolon`, `comma`) | `;` |
+| `PARSER_FORMAT_CSV_MAX_ROWS` | Maximum rows allowed per CSV file | `100000` |
+| `PARSER_FORMAT_CSV_LOCALE` | Locale for date parsing | `de-DE` |
 
 ## Build
 
@@ -75,7 +80,7 @@ docker-compose up -d parser-service
 
 ## CSV Format
 
-The CSV parser supports semicolon-separated German bank statement exports as well as the English header variant. The following columns are mapped:
+The CSV parser supports semicolon-separated German bank statement exports as well as English/comma-separated variants. The following columns are mapped:
 
 | CSV column (DE) | CSV column (EN) | Transaction field |
 |-----------------|-----------------|-------------------|
@@ -87,7 +92,26 @@ The CSV parser supports semicolon-separated German bank statement exports as wel
 | `Verwendungszweck` | `Description` | description |
 | `Kategorie` | `Category` | category |
 
-Amounts may use a comma or a dot as the decimal separator. Files are read using the configured charset (`ISO-8859-1` by default for German umlauts).
+### Supported date formats
+
+The parser tries the following formats in order:
+
+1. Locale-specific short date format (configured by `PARSER_FORMAT_CSV_LOCALE`)
+2. German `dd.MM.yy`
+3. German `dd.MM.yyyy`
+4. ISO-like `yyyy-MM-dd`
+
+### Supported amount formats
+
+| Input | Parsed as |
+|-------|-----------|
+| `-12,50` | `-12.50` |
+| `1.234,56` | `1234.56` |
+| `1234.56` | `1234.56` |
+| `1,234` | `1.234` (German decimal) |
+| `1,234.56` | `1234.56` |
+
+Files are read using the configured charset (`ISO-8859-1` by default for German umlauts). UTF-8 Byte Order Marks (BOM) are stripped automatically.
 
 Example German export row:
 
@@ -102,6 +126,14 @@ Example German export row:
 - `documents.pdf` — consumed when `parser.formats.pdf=true`
 - `documents.xml` — consumed when `parser.formats.xml=true`
 
+### Dead Letter Topics
+
+If a record cannot be deserialized or processed after three retries, it is published to the corresponding DLT:
+
+- `documents.csv.dlt`
+- `documents.pdf.dlt`
+- `documents.xml.dlt`
+
 ## Status Reporting
 
 The service reports the following statuses to `PUT /internal/documents/{id}/status` on the API Gateway:
@@ -110,4 +142,34 @@ The service reports the following statuses to `PUT /internal/documents/{id}/stat
 - `PROCESSED` — all transactions persisted successfully
 - `FAILED` — parsing failed with an error message
 
-All status calls include the `X-Internal-Api-Key` header.
+All status calls include the `X-Internal-Api-Key` header when the key is configured.
+
+Status reporting uses the modern `RestClient` with configurable connect/read timeouts and retries failed requests up to 3 times with exponential backoff.
+
+## Monitoring
+
+Spring Boot Actuator is enabled. Exposed endpoints:
+
+- `/actuator/health` — liveness and readiness probes
+- `/actuator/info` — build information
+- `/actuator/metrics` — Micrometer metrics
+- `/actuator/prometheus` — Prometheus scrape endpoint
+
+Custom metrics:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `parser.documents.processed` | Counter | Successfully processed documents |
+| `parser.documents.failed` | Counter | Failed document processing attempts |
+| `parser.documents.duplicate` | Counter | Duplicate document events ignored |
+| `parser.documents.processing.duration` | Timer | Document processing duration |
+
+## Performance
+
+Database writes use Hibernate batch inserts (`spring.jpa.properties.hibernate.jdbc.batch_size=100`) to reduce round-trips for large bank statements.
+
+## Retry & Error Handling
+
+- Failed status reports to the gateway are retried up to 3 times.
+- Kafka consumer errors are retried 3 times before the record is moved to the DLT.
+- Parsing errors mark the document as `FAILED` and truncate the error message to 4000 characters.

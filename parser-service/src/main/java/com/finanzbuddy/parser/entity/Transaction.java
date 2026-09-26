@@ -10,6 +10,7 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Objects;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -154,5 +155,26 @@ public class Transaction {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof Transaction)) {
+            return false;
+        }
+        Transaction that = (Transaction) o;
+        return Objects.equals(id, that.id)
+                && Objects.equals(documentId, that.documentId)
+                && Objects.equals(userId, that.userId)
+                && Objects.equals(bookingDate, that.bookingDate)
+                && Objects.equals(amount, that.amount);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, documentId, userId, bookingDate, amount);
     }
 }

@@ -12,6 +12,10 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+        jdbc:
+          batch_size: 100
+        order_inserts: true
+        order_updates: true
     show-sql: false
   liquibase:
     change-log: classpath:/db/changelog/db.changelog-master.xml
@@ -23,7 +27,9 @@ spring:
       group-id: parser-service
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: com.finanzbuddy.parser.event.DocumentUploadedEventDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: com.finanzbuddy.parser.event.DocumentUploadedEventDeserializer
 
 parser:
   formats:
@@ -31,6 +37,9 @@ parser:
     pdf: ${PARSER_FORMAT_PDF:false}
     xml: ${PARSER_FORMAT_XML:false}
     csv-charset: ${PARSER_FORMAT_CSV_CHARSET:ISO-8859-1}
+    csv-separator: ${PARSER_FORMAT_CSV_SEPARATOR:;}
+    csv-max-rows: ${PARSER_FORMAT_CSV_MAX_ROWS:100000}
+    csv-locale: ${PARSER_FORMAT_CSV_LOCALE:de-DE}
   storage:
     minio:
       endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
@@ -40,6 +49,21 @@ parser:
   gateway:
     base-url: ${GATEWAY_BASE_URL:http://localhost:8080}
     internal-api-key: ${INTERNAL_API_KEY:}
+    connect-timeout: ${GATEWAY_CONNECT_TIMEOUT:5s}
+    read-timeout: ${GATEWAY_READ_TIMEOUT:30s}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+      show-components: when_authorized
+  health:
+    defaults:
+      enabled: true
 
 logging:
   level:

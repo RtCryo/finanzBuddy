@@ -8,9 +8,13 @@ import com.finanzbuddy.parser.parser.DocumentParser;
 import com.finanzbuddy.parser.parser.DocumentParserRouter;
 import com.finanzbuddy.parser.repository.TransactionRepository;
 import com.finanzbuddy.parser.storage.MinioStorageService;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,24 +25,46 @@ import org.springframework.transaction.annotation.Transactional;
 public class DocumentProcessor {
 
     private static final Logger logger = LoggerFactory.getLogger(DocumentProcessor.class);
+    private static final int MAX_ERROR_MESSAGE_LENGTH = 4000;
 
     private final TransactionRepository transactionRepository;
     private final MinioStorageService minioStorageService;
     private final DocumentParserRouter parserRouter;
     private final GatewayStatusClient gatewayStatusClient;
     private final Locale defaultLocale;
+    private final Counter processedCounter;
+    private final Counter failedCounter;
+    private final Counter duplicateCounter;
+    private final Timer processingTimer;
 
     public DocumentProcessor(
             TransactionRepository transactionRepository,
             MinioStorageService minioStorageService,
             DocumentParserRouter parserRouter,
             GatewayStatusClient gatewayStatusClient,
-            @Value("${parser.formats.csv-locale:de-DE}") Locale defaultLocale) {
+            @Value("${parser.formats.csv-locale:de-DE}") Locale defaultLocale,
+            MeterRegistry meterRegistry) {
         this.transactionRepository = transactionRepository;
         this.minioStorageService = minioStorageService;
         this.parserRouter = parserRouter;
         this.gatewayStatusClient = gatewayStatusClient;
         this.defaultLocale = defaultLocale;
+        this.processedCounter =
+                Counter.builder("parser.documents.processed")
+                        .description("Number of successfully processed documents")
+                        .register(meterRegistry);
+        this.failedCounter =
+                Counter.builder("parser.documents.failed")
+                        .description("Number of failed document processing attempts")
+                        .register(meterRegistry);
+        this.duplicateCounter =
+                Counter.builder("parser.documents.duplicate")
+                        .description("Number of duplicate document events ignored")
+                        .register(meterRegistry);
+        this.processingTimer =
+                Timer.builder("parser.documents.processing.duration")
+                        .description("Document processing duration")
+                        .register(meterRegistry);
     }
 
     @Transactional
@@ -48,34 +74,34 @@ public class DocumentProcessor {
 
         if (transactionRepository.existsByDocumentId(event.documentId())) {
             logger.info("Duplicate event ignored for documentId={}", event.documentId());
+            duplicateCounter.increment();
             return;
         }
 
         reportStatus(event.documentId(), DocumentStatus.PROCESSING, null);
 
+        long start = System.nanoTime();
         try (InputStream inputStream = minioStorageService.download(event.storagePath())) {
             DocumentParser parser = parserRouter.route(event.type());
             List<Transaction> transactions = parser.parse(inputStream, event, resolveLocale(event));
 
-            transactions.forEach(
-                    transaction -> {
-                        transaction.setDocumentId(event.documentId());
-                        transaction.setUserId(event.userId());
-                    });
+            if (transactions.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "No transactions found in document " + event.documentId());
+            }
 
             transactionRepository.saveAll(transactions);
             reportStatus(event.documentId(), DocumentStatus.PROCESSED, null);
+            processedCounter.increment();
+            processingTimer.record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
             logger.info(
                     "Document processed successfully: documentId={}, transactions={}",
                     event.documentId(),
                     transactions.size());
         } catch (Exception e) {
             logger.error("Failed to process document: documentId={}", event.documentId(), e);
-            String errorMessage = e.getClass().getSimpleName() + ": " + e.getMessage();
-            if (errorMessage.length() > 4000) {
-                errorMessage = errorMessage.substring(0, 4000);
-            }
-            reportStatus(event.documentId(), DocumentStatus.FAILED, errorMessage);
+            failedCounter.increment();
+            reportStatus(event.documentId(), DocumentStatus.FAILED, truncateErrorMessage(e));
         }
     }
 
@@ -83,6 +109,14 @@ public class DocumentProcessor {
         // The event currently does not carry a locale; use the configured default.
         // If a locale is added to the event later, it can be preferred here.
         return defaultLocale;
+    }
+
+    private String truncateErrorMessage(Exception e) {
+        String errorMessage = e.getClass().getSimpleName() + ": " + e.getMessage();
+        if (errorMessage.length() > MAX_ERROR_MESSAGE_LENGTH) {
+            return errorMessage.substring(0, MAX_ERROR_MESSAGE_LENGTH);
+        }
+        return errorMessage;
     }
 
     private void reportStatus(Long documentId, DocumentStatus status, String message) {

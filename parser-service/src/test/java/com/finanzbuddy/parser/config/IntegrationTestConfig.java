@@ -1,6 +1,5 @@
 package com.finanzbuddy.parser.config;
 
-import com.finanzbuddy.parser.event.DocumentUploadedEvent;
 import com.finanzbuddy.parser.storage.MinioStorageService;
 import com.finanzbuddy.parser.storage.StorageException;
 import java.io.ByteArrayInputStream;
@@ -16,6 +15,8 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClient;
 
 @TestConfiguration
 public class IntegrationTestConfig {
@@ -24,6 +25,20 @@ public class IntegrationTestConfig {
             "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"
                     + "10.01.24;10.01.24;-25.99;EUR;Coffee Shop;Morning coffee;Food\n"
                     + "11.01.24;11.01.24;2500.00;EUR;Employer;Monthly salary;Income";
+
+    private static MockRestServiceServer mockServer;
+
+    @Bean
+    @Primary
+    public RestClient.Builder testRestClientBuilder() {
+        RestClient.Builder builder = RestClient.builder();
+        mockServer = MockRestServiceServer.bindTo(builder).build();
+        return builder;
+    }
+
+    public static MockRestServiceServer getMockServer() {
+        return mockServer;
+    }
 
     @Bean
     @Primary
@@ -40,7 +55,8 @@ public class IntegrationTestConfig {
     }
 
     @Bean
-    public KafkaTemplate<String, DocumentUploadedEvent> kafkaTemplate() {
+    @Primary
+    public KafkaTemplate<String, Object> kafkaTemplate() {
         String brokers = System.getProperty("spring.embedded.kafka.brokers", "localhost:9092");
         Map<String, Object> props = new HashMap<>();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokers);

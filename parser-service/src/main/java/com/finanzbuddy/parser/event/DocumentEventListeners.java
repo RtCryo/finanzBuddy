@@ -24,21 +24,21 @@ public class DocumentEventListeners {
     }
 
     @ConditionalOnProperty(name = "parser.formats.csv", havingValue = "true")
-    @KafkaListener(topics = "documents.csv", groupId = "parser-service")
+    @KafkaListener(topics = "documents.csv")
     public void onCsvDocument(DocumentUploadedEvent event) {
         logger.info("Received CSV document event: documentId={}", event.documentId());
         documentProcessor.process(event);
     }
 
     @ConditionalOnProperty(name = "parser.formats.pdf", havingValue = "true")
-    @KafkaListener(topics = "documents.pdf", groupId = "parser-service")
+    @KafkaListener(topics = "documents.pdf")
     public void onPdfDocument(DocumentUploadedEvent event) {
         logger.info("Received PDF document event: documentId={}", event.documentId());
         documentProcessor.process(event);
     }
 
     @ConditionalOnProperty(name = "parser.formats.xml", havingValue = "true")
-    @KafkaListener(topics = "documents.xml", groupId = "parser-service")
+    @KafkaListener(topics = "documents.xml")
     public void onXmlDocument(DocumentUploadedEvent event) {
         logger.info("Received XML document event: documentId={}", event.documentId());
         documentProcessor.process(event);

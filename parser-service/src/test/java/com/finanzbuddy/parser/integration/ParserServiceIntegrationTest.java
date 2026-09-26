@@ -28,7 +28,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.client.MockRestServiceServer;
-import org.springframework.web.client.RestTemplate;
 
 @SpringBootTest
 @EmbeddedKafka(
@@ -46,18 +45,17 @@ class ParserServiceIntegrationTest {
                 () -> System.getProperty("spring.embedded.kafka.brokers"));
     }
 
-    @Autowired private KafkaTemplate<String, DocumentUploadedEvent> kafkaTemplate;
+    @Autowired private KafkaTemplate<String, Object> kafkaTemplate;
 
     @Autowired private TransactionRepository transactionRepository;
-
-    @Autowired private RestTemplate restTemplate;
 
     private MockRestServiceServer mockServer;
 
     @BeforeEach
     void setUp() {
         transactionRepository.deleteAll();
-        mockServer = MockRestServiceServer.createServer(restTemplate);
+        mockServer = IntegrationTestConfig.getMockServer();
+        mockServer.reset();
     }
 
     @Test

@@ -1,67 +1,69 @@
 package com.finanzbuddy.parser.client;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.finanzbuddy.parser.document.DocumentStatus;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClient;
 
 class GatewayStatusClientTest {
 
-    private final RestTemplate restTemplate = mock(RestTemplate.class);
-    private final GatewayStatusClient client =
-            new GatewayStatusClient(restTemplate, "http://localhost:9999/", "test-key");
+    private RestClient.Builder restClientBuilder;
+    private MockRestServiceServer mockServer;
+
+    @BeforeEach
+    void setUp() {
+        restClientBuilder = RestClient.builder();
+        mockServer = MockRestServiceServer.bindTo(restClientBuilder).build();
+    }
 
     @Test
     void reportsStatusSuccessfully() {
-        when(restTemplate.exchange(
-                        any(String.class),
-                        eq(HttpMethod.PUT),
-                        any(HttpEntity.class),
-                        eq(Void.class)))
-                .thenReturn(ResponseEntity.ok().build());
+        GatewayStatusClient client =
+                new GatewayStatusClient(restClientBuilder, "http://localhost:9999", "test-key");
+        mockServer
+                .expect(requestTo("http://localhost:9999/internal/documents/1/status"))
+                .andExpect(method(HttpMethod.PUT))
+                .andExpect(header("X-Internal-Api-Key", "test-key"))
+                .andExpect(jsonPath("$.status").value("PROCESSED"))
+                .andRespond(withSuccess());
 
         client.reportStatus(1L, DocumentStatus.PROCESSED, null);
 
-        verify(restTemplate)
-                .exchange(
-                        eq("http://localhost:9999/internal/documents/1/status"),
-                        eq(HttpMethod.PUT),
-                        any(HttpEntity.class),
-                        eq(Void.class));
+        mockServer.verify();
     }
 
     @Test
     void throwsGatewayStatusExceptionOnNon2xxResponse() {
-        when(restTemplate.exchange(
-                        any(String.class),
-                        eq(HttpMethod.PUT),
-                        any(HttpEntity.class),
-                        eq(Void.class)))
-                .thenReturn(ResponseEntity.badRequest().build());
+        GatewayStatusClient client =
+                new GatewayStatusClient(restClientBuilder, "http://localhost:9999", "test-key");
+        mockServer
+                .expect(requestTo("http://localhost:9999/internal/documents/1/status"))
+                .andRespond(withBadRequest().contentType(MediaType.APPLICATION_JSON));
 
         assertThatThrownBy(() -> client.reportStatus(1L, DocumentStatus.PROCESSED, null))
                 .isInstanceOf(GatewayStatusException.class)
-                .hasMessageContaining("Status update failed with HTTP");
+                .hasMessageContaining("Failed to report status");
     }
 
     @Test
-    void throwsGatewayStatusExceptionOnRestFailure() {
-        when(restTemplate.exchange(
-                        any(String.class),
-                        eq(HttpMethod.PUT),
-                        any(HttpEntity.class),
-                        eq(Void.class)))
-                .thenThrow(new RestClientException("connection refused"));
+    void throwsGatewayStatusExceptionOnServerError() {
+        GatewayStatusClient client =
+                new GatewayStatusClient(restClientBuilder, "http://localhost:9999", "test-key");
+        mockServer
+                .expect(requestTo("http://localhost:9999/internal/documents/1/status"))
+                .andRespond(withServerError());
 
         assertThatThrownBy(() -> client.reportStatus(1L, DocumentStatus.PROCESSED, null))
                 .isInstanceOf(GatewayStatusException.class)
@@ -70,22 +72,16 @@ class GatewayStatusClientTest {
 
     @Test
     void stripsTrailingSlashFromBaseUrl() {
-        GatewayStatusClient trailingSlashClient =
-                new GatewayStatusClient(restTemplate, "http://gateway/", "key");
-        when(restTemplate.exchange(
-                        eq("http://gateway/internal/documents/2/status"),
-                        eq(HttpMethod.PUT),
-                        any(HttpEntity.class),
-                        eq(Void.class)))
-                .thenReturn(ResponseEntity.ok().build());
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        GatewayStatusClient client = new GatewayStatusClient(builder, "http://gateway/", "key");
+        server.expect(requestTo("http://gateway/internal/documents/2/status"))
+                .andExpect(method(HttpMethod.PUT))
+                .andExpect(header("X-Internal-Api-Key", "key"))
+                .andRespond(withSuccess());
 
-        trailingSlashClient.reportStatus(2L, DocumentStatus.PROCESSING, null);
+        client.reportStatus(2L, DocumentStatus.PROCESSING, null);
 
-        verify(restTemplate)
-                .exchange(
-                        eq("http://gateway/internal/documents/2/status"),
-                        eq(HttpMethod.PUT),
-                        any(HttpEntity.class),
-                        eq(Void.class));
+        server.verify();
     }
 }

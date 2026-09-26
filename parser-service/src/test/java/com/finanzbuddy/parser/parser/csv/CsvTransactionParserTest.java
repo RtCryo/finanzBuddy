@@ -10,6 +10,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
@@ -20,7 +21,7 @@ class CsvTransactionParserTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final CsvTransactionParser parser =
-            new CsvTransactionParser(objectMapper, "ISO-8859-1");
+            new CsvTransactionParser(objectMapper, "ISO-8859-1", ";", 10000);
 
     @Test
     void parsesGermanDateFormat() {
@@ -113,7 +114,75 @@ class CsvTransactionParserTest {
         assertThat(transactions.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("1234.56"));
     }
 
+    @Test
+    void stripsBomFromUtf8Csv() {
+        String csv =
+                "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"
+                        + "15.03.24;15.03.24;-12.50;EUR;Supermarket;Weekly groceries;Food";
+        byte[] utf8Bom = new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
+        byte[] csvBytes = csv.getBytes(StandardCharsets.UTF_8);
+        byte[] withBom = new byte[utf8Bom.length + csvBytes.length];
+        System.arraycopy(utf8Bom, 0, withBom, 0, utf8Bom.length);
+        System.arraycopy(csvBytes, 0, withBom, utf8Bom.length, csvBytes.length);
+        DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
+
+        List<Transaction> transactions =
+                parser.parse(new ByteArrayInputStream(withBom), event, Locale.GERMANY);
+
+        assertThat(transactions).hasSize(1);
+        assertThat(transactions.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("-12.50"));
+    }
+
+    @Test
+    void supportsCommaSeparator() {
+        CsvTransactionParser commaParser =
+                new CsvTransactionParser(objectMapper, "UTF-8", ",", 10000);
+        String csv =
+                "BookingDate,ValueDate,Amount,Currency,Counterparty,Description,Category\n"
+                        + "15.03.24,15.03.24,-12.50,EUR,Supermarket,Weekly groceries,Food";
+        DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
+
+        List<Transaction> transactions = commaParser.parse(toStream(csv), event, Locale.GERMANY);
+
+        assertThat(transactions).hasSize(1);
+        assertThat(transactions.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("-12.50"));
+    }
+
+    @Test
+    void rejectsCsvExceedingMaxRows() {
+        StringBuilder csv =
+                new StringBuilder(
+                        "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n");
+        for (int i = 0; i < 5; i++) {
+            csv.append("15.03.24;15.03.24;-12.50;EUR;Supermarket;Weekly groceries;Food\n");
+        }
+        CsvTransactionParser limitedParser =
+                new CsvTransactionParser(objectMapper, "UTF-8", ";", 2);
+        DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
+
+        assertThatThrownBy(
+                        () -> limitedParser.parse(toStream(csv.toString()), event, Locale.GERMANY))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Failed to parse CSV document")
+                .cause()
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("exceeds maximum allowed rows");
+    }
+
+    @Test
+    void parsesIsoDateFormat() {
+        String csv =
+                "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"
+                        + "2024-03-15;2024-03-15;-12.50;EUR;Supermarket;Weekly groceries;Food";
+        DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
+
+        List<Transaction> transactions = parser.parse(toStream(csv), event, Locale.GERMANY);
+
+        assertThat(transactions).hasSize(1);
+        assertThat(transactions.get(0).getBookingDate()).isEqualTo(LocalDate.of(2024, 3, 15));
+    }
+
     private InputStream toStream(String value) {
-        return new ByteArrayInputStream(value.getBytes(StandardCharsets.UTF_8));
+        return new ByteArrayInputStream(value.getBytes(Charset.forName("ISO-8859-1")));
     }
 }
