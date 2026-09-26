@@ -6,7 +6,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class DocumentUploadedEventDeserializer implements Deserializer<Object> {
+public class DocumentUploadedEventDeserializer implements Deserializer<DocumentUploadedEvent> {
 
     private static final Logger logger =
             LoggerFactory.getLogger(DocumentUploadedEventDeserializer.class);

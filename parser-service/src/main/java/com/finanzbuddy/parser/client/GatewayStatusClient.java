@@ -32,7 +32,7 @@ public class GatewayStatusClient {
     }
 
     @Retryable(
-            retryFor = RestClientException.class,
+            retryFor = GatewayStatusException.class,
             maxAttempts = 3,
             backoff = @Backoff(delay = 500, multiplier = 2))
     public void reportStatus(Long documentId, DocumentStatus status, String message) {

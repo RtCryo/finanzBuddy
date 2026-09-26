@@ -6,7 +6,6 @@ import com.finanzbuddy.parser.entity.Transaction;
 import com.finanzbuddy.parser.event.DocumentUploadedEvent;
 import com.finanzbuddy.parser.parser.DocumentParser;
 import com.finanzbuddy.parser.parser.DocumentParserRouter;
-import com.finanzbuddy.parser.repository.TransactionRepository;
 import com.finanzbuddy.parser.storage.MinioStorageService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -19,7 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class DocumentProcessor {
@@ -27,7 +25,7 @@ public class DocumentProcessor {
     private static final Logger logger = LoggerFactory.getLogger(DocumentProcessor.class);
     private static final int MAX_ERROR_MESSAGE_LENGTH = 4000;
 
-    private final TransactionRepository transactionRepository;
+    private final TransactionPersistenceService transactionPersistenceService;
     private final MinioStorageService minioStorageService;
     private final DocumentParserRouter parserRouter;
     private final GatewayStatusClient gatewayStatusClient;
@@ -38,13 +36,13 @@ public class DocumentProcessor {
     private final Timer processingTimer;
 
     public DocumentProcessor(
-            TransactionRepository transactionRepository,
+            TransactionPersistenceService transactionPersistenceService,
             MinioStorageService minioStorageService,
             DocumentParserRouter parserRouter,
             GatewayStatusClient gatewayStatusClient,
             @Value("${parser.formats.csv-locale:de-DE}") Locale defaultLocale,
             MeterRegistry meterRegistry) {
-        this.transactionRepository = transactionRepository;
+        this.transactionPersistenceService = transactionPersistenceService;
         this.minioStorageService = minioStorageService;
         this.parserRouter = parserRouter;
         this.gatewayStatusClient = gatewayStatusClient;
@@ -67,12 +65,11 @@ public class DocumentProcessor {
                         .register(meterRegistry);
     }
 
-    @Transactional
     public void process(DocumentUploadedEvent event) {
         logger.info(
                 "Processing document: documentId={}, type={}", event.documentId(), event.type());
 
-        if (transactionRepository.existsByDocumentId(event.documentId())) {
+        if (transactionPersistenceService.isProcessed(event.documentId())) {
             logger.info("Duplicate event ignored for documentId={}", event.documentId());
             duplicateCounter.increment();
             return;
@@ -90,7 +87,7 @@ public class DocumentProcessor {
                         "No transactions found in document " + event.documentId());
             }
 
-            transactionRepository.saveAll(transactions);
+            transactionPersistenceService.saveIfNotProcessed(event.documentId(), transactions);
             reportStatus(event.documentId(), DocumentStatus.PROCESSED, null);
             processedCounter.increment();
             processingTimer.record(System.nanoTime() - start, TimeUnit.NANOSECONDS);
@@ -98,6 +95,9 @@ public class DocumentProcessor {
                     "Document processed successfully: documentId={}, transactions={}",
                     event.documentId(),
                     transactions.size());
+        } catch (DuplicateDocumentException e) {
+            logger.info("Duplicate event ignored for documentId={}", event.documentId());
+            duplicateCounter.increment();
         } catch (Exception e) {
             logger.error("Failed to process document: documentId={}", event.documentId(), e);
             failedCounter.increment();

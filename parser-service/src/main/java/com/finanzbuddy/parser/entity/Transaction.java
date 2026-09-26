@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
+import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -19,7 +20,11 @@ import org.hibernate.type.SqlTypes;
 public class Transaction {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "transaction_sequence")
+    @SequenceGenerator(
+            name = "transaction_sequence",
+            sequenceName = "transactions_id_seq",
+            allocationSize = 1)
     private Long id;
 
     @Column(name = "document_id", nullable = false)
@@ -166,15 +171,14 @@ public class Transaction {
             return false;
         }
         Transaction that = (Transaction) o;
-        return Objects.equals(id, that.id)
-                && Objects.equals(documentId, that.documentId)
-                && Objects.equals(userId, that.userId)
-                && Objects.equals(bookingDate, that.bookingDate)
-                && Objects.equals(amount, that.amount);
+        if (id == null || that.id == null) {
+            return false;
+        }
+        return Objects.equals(id, that.id);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, documentId, userId, bookingDate, amount);
+        return id == null ? getClass().hashCode() : Objects.hash(id);
     }
 }

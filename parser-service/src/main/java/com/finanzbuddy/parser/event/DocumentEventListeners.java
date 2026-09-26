@@ -3,15 +3,9 @@ package com.finanzbuddy.parser.event;
 import com.finanzbuddy.parser.service.DocumentProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
-/**
- * Kafka listeners for document events. Method-level {@code @ConditionalOnProperty} is used
- * intentionally so that parser formats can be toggled independently without creating separate
- * listener beans for each format.
- */
 @Component
 public class DocumentEventListeners {
 
@@ -23,22 +17,19 @@ public class DocumentEventListeners {
         this.documentProcessor = documentProcessor;
     }
 
-    @ConditionalOnProperty(name = "parser.formats.csv", havingValue = "true")
-    @KafkaListener(topics = "documents.csv")
+    @KafkaListener(topics = "documents.csv", autoStartup = "${parser.formats.csv:true}")
     public void onCsvDocument(DocumentUploadedEvent event) {
         logger.info("Received CSV document event: documentId={}", event.documentId());
         documentProcessor.process(event);
     }
 
-    @ConditionalOnProperty(name = "parser.formats.pdf", havingValue = "true")
-    @KafkaListener(topics = "documents.pdf")
+    @KafkaListener(topics = "documents.pdf", autoStartup = "${parser.formats.pdf:false}")
     public void onPdfDocument(DocumentUploadedEvent event) {
         logger.info("Received PDF document event: documentId={}", event.documentId());
         documentProcessor.process(event);
     }
 
-    @ConditionalOnProperty(name = "parser.formats.xml", havingValue = "true")
-    @KafkaListener(topics = "documents.xml")
+    @KafkaListener(topics = "documents.xml", autoStartup = "${parser.formats.xml:false}")
     public void onXmlDocument(DocumentUploadedEvent event) {
         logger.info("Received XML document event: documentId={}", event.documentId());
         documentProcessor.process(event);

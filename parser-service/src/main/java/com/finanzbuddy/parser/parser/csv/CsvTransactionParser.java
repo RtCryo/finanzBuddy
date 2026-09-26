@@ -170,8 +170,10 @@ public class CsvTransactionParser implements DocumentParser {
 
     private String getColumnValue(Map<String, String> row, CsvColumn column) {
         for (String name : column.names) {
-            if (row.containsKey(name)) {
-                return row.get(name);
+            for (Map.Entry<String, String> entry : row.entrySet()) {
+                if (entry.getKey().trim().equalsIgnoreCase(name)) {
+                    return entry.getValue();
+                }
             }
         }
         return null;
@@ -256,6 +258,10 @@ public class CsvTransactionParser implements DocumentParser {
             int lastComma = trimmed.lastIndexOf(',');
             int fractionalDigits = trimmed.length() - lastComma - 1;
 
+            if (trimmed.startsWith("0,")) {
+                return trimmed.replace(',', '.');
+            }
+
             // Heuristic: two fractional digits are common for currencies (German),
             // three or more digits after a single comma are usually an English thousands
             // separator, unless the value is tiny (e.g. 0,123).
@@ -287,7 +293,7 @@ public class CsvTransactionParser implements DocumentParser {
         BOOKING_DATE("Buchungstag", "BookingDate"),
         VALUE_DATE("Valutadatum", "ValueDate"),
         AMOUNT("Betrag", "Amount"),
-        CURRENCY("Waehrung", "Currency"),
+        CURRENCY("Waehrung", "Währung", "Currency"),
         COUNTERPARTY("Beguenstigter/Zahlungspflichtiger", "Counterparty"),
         DESCRIPTION("Verwendungszweck", "Description"),
         CATEGORY("Kategorie", "Category");

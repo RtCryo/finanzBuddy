@@ -1,6 +1,7 @@
 package com.finanzbuddy.parser.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.finanzbuddy.parser.event.DocumentUploadedEvent;
 import com.finanzbuddy.parser.event.DocumentUploadedEventDeserializer;
 import java.util.HashMap;
 import java.util.Map;
@@ -23,6 +24,7 @@ import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
+import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.util.backoff.FixedBackOff;
 
 @Configuration
@@ -39,7 +41,7 @@ public class KafkaConfig {
     }
 
     @Bean
-    public ConsumerFactory<String, Object> consumerFactory(
+    public ConsumerFactory<String, DocumentUploadedEvent> consumerFactory(
             Environment env, DocumentUploadedEventDeserializer valueDeserializer) {
         Map<String, Object> props = new HashMap<>();
         props.put(
@@ -51,7 +53,7 @@ public class KafkaConfig {
         props.put(
                 ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
                 env.getProperty("spring.kafka.consumer.auto-offset-reset", "earliest"));
-        ErrorHandlingDeserializer<Object> errorHandlingDeserializer =
+        ErrorHandlingDeserializer<DocumentUploadedEvent> errorHandlingDeserializer =
                 new ErrorHandlingDeserializer<>(valueDeserializer);
         return new DefaultKafkaConsumerFactory<>(
                 props, new StringDeserializer(), errorHandlingDeserializer);
@@ -65,7 +67,7 @@ public class KafkaConfig {
                 ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 env.getProperty("spring.kafka.bootstrap-servers", "localhost:29092"));
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
         return new DefaultKafkaProducerFactory<>(props);
     }
 
@@ -94,10 +96,11 @@ public class KafkaConfig {
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory(
-            ConsumerFactory<String, Object> consumerFactory,
-            DeadLetterPublishingRecoverer deadLetterPublishingRecoverer) {
-        ConcurrentKafkaListenerContainerFactory<String, Object> factory =
+    public ConcurrentKafkaListenerContainerFactory<String, DocumentUploadedEvent>
+            kafkaListenerContainerFactory(
+                    ConsumerFactory<String, DocumentUploadedEvent> consumerFactory,
+                    DeadLetterPublishingRecoverer deadLetterPublishingRecoverer) {
+        ConcurrentKafkaListenerContainerFactory<String, DocumentUploadedEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory);
         DefaultErrorHandler errorHandler =

@@ -13,7 +13,6 @@ import com.finanzbuddy.parser.entity.Transaction;
 import com.finanzbuddy.parser.event.DocumentUploadedEvent;
 import com.finanzbuddy.parser.parser.DocumentParser;
 import com.finanzbuddy.parser.parser.DocumentParserRouter;
-import com.finanzbuddy.parser.repository.TransactionRepository;
 import com.finanzbuddy.parser.storage.MinioStorageService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.ByteArrayInputStream;
@@ -25,7 +24,8 @@ import org.junit.jupiter.api.Test;
 
 class DocumentProcessorTest {
 
-    private final TransactionRepository transactionRepository = mock(TransactionRepository.class);
+    private final TransactionPersistenceService transactionPersistenceService =
+            mock(TransactionPersistenceService.class);
     private final MinioStorageService minioStorageService = mock(MinioStorageService.class);
     private final DocumentParserRouter parserRouter = mock(DocumentParserRouter.class);
     private final DocumentParser parser = mock(DocumentParser.class);
@@ -34,7 +34,7 @@ class DocumentProcessorTest {
 
     private final DocumentProcessor processor =
             new DocumentProcessor(
-                    transactionRepository,
+                    transactionPersistenceService,
                     minioStorageService,
                     parserRouter,
                     gatewayStatusClient,
@@ -44,18 +44,17 @@ class DocumentProcessorTest {
     @Test
     void ignoresDuplicateEvent() {
         DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
-        when(transactionRepository.existsByDocumentId(1L)).thenReturn(true);
+        when(transactionPersistenceService.isProcessed(1L)).thenReturn(true);
 
         processor.process(event);
 
         verify(minioStorageService, never()).download(any());
-        verify(transactionRepository, never()).saveAll(any());
+        verify(transactionPersistenceService, never()).saveIfNotProcessed(any(), any());
     }
 
     @Test
     void reportsFailureWhenProcessingThrows() {
         DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
-        when(transactionRepository.existsByDocumentId(1L)).thenReturn(false);
         when(minioStorageService.download("csv/1"))
                 .thenReturn(new ByteArrayInputStream("data".getBytes(StandardCharsets.UTF_8)));
         when(parserRouter.route("CSV")).thenReturn(parser);
@@ -72,7 +71,6 @@ class DocumentProcessorTest {
     @Test
     void reportsFailureWhenParsingReturnsEmptyList() {
         DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
-        when(transactionRepository.existsByDocumentId(1L)).thenReturn(false);
         when(minioStorageService.download("csv/1"))
                 .thenReturn(new ByteArrayInputStream("data".getBytes(StandardCharsets.UTF_8)));
         when(parserRouter.route("CSV")).thenReturn(parser);
@@ -86,13 +84,12 @@ class DocumentProcessorTest {
                         1L,
                         DocumentStatus.FAILED,
                         "IllegalArgumentException: No transactions found in document 1");
-        verify(transactionRepository, never()).saveAll(any());
+        verify(transactionPersistenceService, never()).saveIfNotProcessed(any(), any());
     }
 
     @Test
     void continuesWhenStatusReportingFails() {
         DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
-        when(transactionRepository.existsByDocumentId(1L)).thenReturn(false);
         doThrow(new RuntimeException("gateway down"))
                 .when(gatewayStatusClient)
                 .reportStatus(1L, DocumentStatus.PROCESSING, null);
@@ -104,7 +101,9 @@ class DocumentProcessorTest {
 
         processor.process(event);
 
-        verify(transactionRepository).saveAll(List.of(transaction));
+        when(transactionPersistenceService.saveIfNotProcessed(1L, List.of(transaction)))
+                .thenReturn(true);
+        verify(transactionPersistenceService).saveIfNotProcessed(1L, List.of(transaction));
         verify(gatewayStatusClient).reportStatus(1L, DocumentStatus.PROCESSED, null);
     }
 }

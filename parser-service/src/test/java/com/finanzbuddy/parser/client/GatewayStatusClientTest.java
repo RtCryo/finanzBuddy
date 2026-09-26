@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.test.web.client.ExpectedCount;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
@@ -49,7 +50,9 @@ class GatewayStatusClientTest {
         GatewayStatusClient client =
                 new GatewayStatusClient(restClientBuilder, "http://localhost:9999", "test-key");
         mockServer
-                .expect(requestTo("http://localhost:9999/internal/documents/1/status"))
+                .expect(
+                        ExpectedCount.times(3),
+                        requestTo("http://localhost:9999/internal/documents/1/status"))
                 .andRespond(withBadRequest().contentType(MediaType.APPLICATION_JSON));
 
         assertThatThrownBy(() -> client.reportStatus(1L, DocumentStatus.PROCESSED, null))
@@ -62,7 +65,9 @@ class GatewayStatusClientTest {
         GatewayStatusClient client =
                 new GatewayStatusClient(restClientBuilder, "http://localhost:9999", "test-key");
         mockServer
-                .expect(requestTo("http://localhost:9999/internal/documents/1/status"))
+                .expect(
+                        ExpectedCount.times(3),
+                        requestTo("http://localhost:9999/internal/documents/1/status"))
                 .andRespond(withServerError());
 
         assertThatThrownBy(() -> client.reportStatus(1L, DocumentStatus.PROCESSED, null))

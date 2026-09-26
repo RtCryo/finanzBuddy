@@ -26,17 +26,13 @@ spring:
     consumer:
       group-id: parser-service
       auto-offset-reset: earliest
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
-      properties:
-        spring.deserializer.value.delegate.class: com.finanzbuddy.parser.event.DocumentUploadedEventDeserializer
 
 parser:
   formats:
     csv: ${PARSER_FORMAT_CSV:true}
     pdf: ${PARSER_FORMAT_PDF:false}
     xml: ${PARSER_FORMAT_XML:false}
-    csv-charset: ${PARSER_FORMAT_CSV_CHARSET:ISO-8859-1}
+    csv-charset: ${PARSER_FORMAT_CSV_CHARSET:windows-1252}
     csv-separator: ${PARSER_FORMAT_CSV_SEPARATOR:;}
     csv-max-rows: ${PARSER_FORMAT_CSV_MAX_ROWS:100000}
     csv-locale: ${PARSER_FORMAT_CSV_LOCALE:de-DE}
