@@ -1,5 +1,11 @@
 .opencode/
+.env
+.jdk/
 
 # Local test documents (bank statements, PDFs, XML exports) - may contain private data
 documents/*
 !documents/README.md
+
+# Code-review scratch artifacts
+.tokensave/
+review*.diff

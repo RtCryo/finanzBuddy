@@ -17,23 +17,23 @@ The system SHALL parse CSV bank statements and extract booking date, value date,
 - **WHEN** a CSV file cannot be parsed
 - **THEN** parsing fails with a clear error and no partial data is persisted
 
-### Requirement: PDF parser extracts transactions
-The system SHALL parse text-based PDF financial documents and extract transaction data.
+### Requirement: PDF parser is scaffolded for MVP
+The system SHALL register a PDF parser strategy that throws an explicit unsupported-operation error. PDF extraction and OCR are deferred beyond the MVP; PDF consumption is disabled by default.
 
 #### Scenario: Text-based PDF statement
 - **WHEN** a PDF containing selectable transaction text is parsed
-- **THEN** a list of transaction records is produced
+- **THEN** parsing fails with an explicit unsupported-operation error
 
 #### Scenario: Scanned PDF
 - **WHEN** a PDF contains only images
-- **THEN** parsing fails or returns an error indicating OCR is required
+- **THEN** parsing fails with an explicit unsupported-operation error
 
-### Requirement: XML parser extracts transactions
-The system SHALL parse XML financial documents and extract transaction data.
+### Requirement: XML parser is scaffolded for MVP
+The system SHALL register an XML parser strategy that throws an explicit unsupported-operation error. XML extraction is deferred beyond the MVP; XML consumption is disabled by default.
 
 #### Scenario: Valid XML statement
 - **WHEN** an XML file in a supported schema is parsed
-- **THEN** a list of transaction records is produced
+- **THEN** parsing fails with an explicit unsupported-operation error
 
 ### Requirement: Locale-aware date parsing
 The system SHALL parse dates according to the locale associated with the user or document.

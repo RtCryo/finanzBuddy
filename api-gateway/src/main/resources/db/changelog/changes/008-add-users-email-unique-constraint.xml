@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <changeSet id="008-add-users-email-unique-constraint" author="api-gateway">
+        <addUniqueConstraint
+                tableName="users"
+                columnNames="email"
+                constraintName="uk_users_email"/>
+
+        <rollback>
+            <dropUniqueConstraint tableName="users" constraintName="uk_users_email"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

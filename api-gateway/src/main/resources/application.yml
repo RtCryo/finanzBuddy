@@ -1,0 +1,106 @@
+spring:
+  application:
+    name: api-gateway
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 15MB
+  liquibase:
+    change-log: classpath:/db/changelog/db.changelog-master.xml
+    enabled: true
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  data:
+    web:
+      pageable:
+        default-page-size: 20
+        max-page-size: 100
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  minio:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:minioadmin}
+    secret-key: ${MINIO_SECRET_KEY:minioadmin}
+    bucket: ${MINIO_BUCKET:finanzbuddy-documents}
+    create-bucket: true
+  kafka:
+    document-topic-prefix: ${KAFKA_DOCUMENT_TOPIC_PREFIX:documents}
+  upload:
+    accepted-types: ${UPLOAD_ACCEPTED_TYPES:CSV}
+  internal:
+    api-key: ${INTERNAL_API_KEY:}
+  outbox:
+    poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:5000}
+    batch-size: ${OUTBOX_BATCH_SIZE:100}
+    send-timeout-ms: ${OUTBOX_SEND_TIMEOUT_MS:3000}
+  reconciler:
+    poll-interval-ms: ${RECONCILER_POLL_INTERVAL_MS:900000}
+    pending-timeout-ms: ${RECONCILER_PENDING_TIMEOUT_MS:3600000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:finanzbuddy}
+    username: ${DB_USER:finanzbuddy}
+    password: ${DB_PASSWORD:finanzbuddy}
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  liquibase:
+    enabled: false
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+  main:
+    allow-bean-definition-overriding: true
+app:
+  jwt:
+    secret: dGVzdC1zZWNyZXQta2V5LWZvci11bml0LXRlc3RzLW9ubHk=
+  minio:
+    enabled: false
+    create-bucket: false
+  internal:
+    api-key: test-internal-api-key
+  outbox:
+    poll-interval-ms: 3600000
+    send-timeout-ms: 2000
+  reconciler:
+    poll-interval-ms: 3600000

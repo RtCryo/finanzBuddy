@@ -2,8 +2,8 @@
 
 ## 1. Project Scaffolding
 
-- [ ] 1.1 Create `parser-service/` Maven module with Spring Boot 4.1 parent and verify `mvn clean compile` succeeds
-- [ ] 1.2 Add dependencies: Spring Web, Spring for Apache Kafka, Spring Data JPA, PostgreSQL driver, MinIO client, OpenCSV, Apache PDFBox, Jackson XML, Liquibase, Lombok, and verify no dependency conflicts
+- [x] 1.1 Create `parser-service/` Maven module with Spring Boot 4.1 parent and verify `mvn clean compile` succeeds
+- [ ] 1.2 Add dependencies: Spring Web, Spring for Apache Kafka, Spring Data JPA, PostgreSQL driver, MinIO client, OpenCSV, Apache PDFBox, Jackson XML, Liquibase, and verify no dependency conflicts
 - [ ] 1.3 Create package structure `com.finanzbuddy.parser` with main application class and verify the context loads
 - [ ] 1.4 Add `application.yml` with `parser.formats.csv/pdf/xml` flags and Kafka consumer configuration; verify placeholders use environment variables
 
