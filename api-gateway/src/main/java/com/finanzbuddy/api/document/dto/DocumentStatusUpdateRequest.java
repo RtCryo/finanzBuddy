@@ -7,8 +7,8 @@ import jakarta.validation.constraints.Size;
 /**
  * Request body for updating a document's processing status from an internal parser service.
  *
- * <p>The {@code message} field is intentionally capped at 4000 characters. It maps to the
- * {@code error_message} database column (TEXT), and without a length limit a parser could push an
+ * <p>The {@code message} field is intentionally capped at 4000 characters. It maps to the {@code
+ * error_message} database column (TEXT), and without a length limit a parser could push an
  * arbitrarily large string into the database. That inflates storage and backups, increases memory
  * usage when the message is serialized back to JSON responses, and can be abused as a DoS vector by
  * repeatedly reporting failures with multi-megabyte payloads. A 4000-character cap is enough for

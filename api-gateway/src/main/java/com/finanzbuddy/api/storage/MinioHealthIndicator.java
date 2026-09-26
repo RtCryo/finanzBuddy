@@ -32,7 +32,8 @@ public class MinioHealthIndicator implements HealthIndicator {
         Health health;
         try {
             minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
-            health = Health.up().withDetail("storage", "minio").withDetail("bucket", bucket).build();
+            health =
+                    Health.up().withDetail("storage", "minio").withDetail("bucket", bucket).build();
         } catch (Exception e) {
             health =
                     Health.down()

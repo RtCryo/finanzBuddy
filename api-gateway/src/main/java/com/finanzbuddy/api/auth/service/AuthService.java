@@ -41,7 +41,8 @@ public class AuthService {
     public AuthResponse register(RegisterRequest request) {
         // existsByEmail catches the common case cheaply, but it is not a uniqueness guarantee:
         // two concurrent requests can both pass the check and then race on the INSERT. The unique
-        // database index is the authoritative guard, so we also handle DataIntegrityViolationException
+        // database index is the authoritative guard, so we also handle
+        // DataIntegrityViolationException
         // and map it to the same 409 response.
         if (userRepository.existsByEmail(request.email())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");

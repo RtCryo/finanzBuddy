@@ -19,10 +19,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Background relay that reads unpublished outbox events and delivers them to Kafka.
  *
  * <p><strong>Single-instance contract.</strong> The relay polls pending events with a plain query
- * and has no row-level locking or leader election. It is safe when the API Gateway runs as a
- * single instance (the default deployment). Running multiple instances concurrently will not lose
- * events, but can produce duplicate deliveries because the consumer is assumed to be idempotent.
- * Add {@code FOR UPDATE SKIP LOCKED} or a leader-election mechanism before scaling horizontally.
+ * and has no row-level locking or leader election. It is safe when the API Gateway runs as a single
+ * instance (the default deployment). Running multiple instances concurrently will not lose events,
+ * but can produce duplicate deliveries because the consumer is assumed to be idempotent. Add {@code
+ * FOR UPDATE SKIP LOCKED} or a leader-election mechanism before scaling horizontally.
  */
 @Component
 public class OutboxRelay {
