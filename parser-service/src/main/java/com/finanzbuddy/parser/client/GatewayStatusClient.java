@@ -57,11 +57,12 @@ public class GatewayStatusClient {
                 throw new GatewayStatusException(
                         "Status update failed with HTTP " + response.getStatusCode());
             }
-        } catch (GatewayStatusException e) {
-            throw e;
         } catch (Exception e) {
             logger.error(
                     "Failed to report status: documentId={}, status={}", documentId, status, e);
+            if (e instanceof GatewayStatusException gatewayStatusException) {
+                throw gatewayStatusException;
+            }
             throw new GatewayStatusException("Failed to report status", e);
         }
     }

@@ -40,7 +40,7 @@
             <column name="raw_data" type="JSONB">
                 <constraints nullable="true"/>
             </column>
-            <column name="created_at" type="TIMESTAMPTZ" defaultValueComputed="CURRENT_TIMESTAMP">
+            <column name="created_at" type="TIMESTAMPTZ">
                 <constraints nullable="false"/>
             </column>
         </createTable>

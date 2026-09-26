@@ -143,6 +143,8 @@ public class CsvTransactionParser implements DocumentParser {
         try {
             return LocalDate.parse(value.trim(), dateFormatter);
         } catch (DateTimeParseException e) {
+            // Real German bank exports use dd.MM.yy regardless of the configured locale,
+            // so we always fall back to a German formatter for compatibility.
             logger.warn(
                     "Failed to parse {} value '{}' with configured locale, trying German fallback",
                     fieldName,
@@ -160,7 +162,15 @@ public class CsvTransactionParser implements DocumentParser {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String normalized = value.trim().replace(" ", "").replace(',', '.');
+        String trimmed = value.trim().replace(" ", "");
+        String normalized;
+        if (trimmed.contains(",")) {
+            // German format: dot is the thousands separator, comma is the decimal separator.
+            normalized = trimmed.replace(".", "").replace(',', '.');
+        } else {
+            // Plain or English format: dot is the decimal separator.
+            normalized = trimmed;
+        }
         try {
             return new BigDecimal(normalized);
         } catch (NumberFormatException e) {

@@ -85,7 +85,10 @@ class CsvTransactionParserTest {
         try (InputStream inputStream = realCsv) {
             List<Transaction> transactions = parser.parse(inputStream, event, Locale.GERMANY);
 
-            assertThat(transactions).hasSizeGreaterThan(150);
+            assertThat(transactions).hasSize(307);
+            assertThat(transactions)
+                    .anyMatch(tx -> tx.getAmount().compareTo(BigDecimal.ZERO) > 0)
+                    .anyMatch(tx -> tx.getAmount().compareTo(BigDecimal.ZERO) < 0);
             Transaction first = transactions.get(0);
             assertThat(first.getBookingDate()).isEqualTo(LocalDate.of(2026, 9, 23));
             assertThat(first.getValueDate()).isEqualTo(LocalDate.of(2026, 9, 23));
@@ -95,6 +98,19 @@ class CsvTransactionParserTest {
             assertThat(first.getCategory()).isEqualTo("Einkäufe");
             assertThat(first.getRawData()).isNotBlank();
         }
+    }
+
+    @Test
+    void parsesGermanAmountWithThousandSeparator() {
+        String csv =
+                "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"
+                        + "15.03.24;15.03.24;1.234,56;EUR;Supermarket;Weekly groceries;Food";
+        DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
+
+        List<Transaction> transactions = parser.parse(toStream(csv), event, Locale.GERMANY);
+
+        assertThat(transactions).hasSize(1);
+        assertThat(transactions.get(0).getAmount()).isEqualByComparingTo(new BigDecimal("1234.56"));
     }
 
     private InputStream toStream(String value) {

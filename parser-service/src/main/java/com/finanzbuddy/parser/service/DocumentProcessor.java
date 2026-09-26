@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,16 +26,19 @@ public class DocumentProcessor {
     private final MinioStorageService minioStorageService;
     private final DocumentParserRouter parserRouter;
     private final GatewayStatusClient gatewayStatusClient;
+    private final Locale defaultLocale;
 
     public DocumentProcessor(
             TransactionRepository transactionRepository,
             MinioStorageService minioStorageService,
             DocumentParserRouter parserRouter,
-            GatewayStatusClient gatewayStatusClient) {
+            GatewayStatusClient gatewayStatusClient,
+            @Value("${parser.formats.csv-locale:de-DE}") Locale defaultLocale) {
         this.transactionRepository = transactionRepository;
         this.minioStorageService = minioStorageService;
         this.parserRouter = parserRouter;
         this.gatewayStatusClient = gatewayStatusClient;
+        this.defaultLocale = defaultLocale;
     }
 
     @Transactional
@@ -67,8 +71,8 @@ public class DocumentProcessor {
                     transactions.size());
         } catch (Exception e) {
             logger.error("Failed to process document: documentId={}", event.documentId(), e);
-            String errorMessage = e.getMessage();
-            if (errorMessage != null && errorMessage.length() > 4000) {
+            String errorMessage = e.getClass().getSimpleName() + ": " + e.getMessage();
+            if (errorMessage.length() > 4000) {
                 errorMessage = errorMessage.substring(0, 4000);
             }
             reportStatus(event.documentId(), DocumentStatus.FAILED, errorMessage);
@@ -76,7 +80,9 @@ public class DocumentProcessor {
     }
 
     private Locale resolveLocale(DocumentUploadedEvent event) {
-        return Locale.GERMANY;
+        // The event currently does not carry a locale; use the configured default.
+        // If a locale is added to the event later, it can be preferred here.
+        return defaultLocale;
     }
 
     private void reportStatus(Long documentId, DocumentStatus status, String message) {
