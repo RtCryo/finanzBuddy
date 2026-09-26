@@ -90,6 +90,38 @@ services:
       JWT_EXPIRATION_MS: 86400000
       INTERNAL_API_KEY: ${INTERNAL_API_KEY}
 
+  parser-service:
+    build:
+      context: ./parser-service
+      dockerfile: Dockerfile
+    container_name: finanzbuddy-parser-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      minio:
+        condition: service_healthy
+      api-gateway:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: finanzbuddy
+      DB_USER: finanzbuddy
+      DB_PASSWORD: finanzbuddy
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: finanzbuddy-documents
+      GATEWAY_BASE_URL: http://api-gateway:8080
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      PARSER_FORMAT_CSV: "true"
+      PARSER_FORMAT_PDF: "false"
+      PARSER_FORMAT_XML: "false"
+
 volumes:
   postgres-data:
   minio-data:

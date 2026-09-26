@@ -1,0 +1,30 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  liquibase:
+    enabled: false
+  kafka:
+    bootstrap-servers: ${spring.embedded.kafka.brokers}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+parser:
+  formats:
+    csv: true
+    pdf: false
+    xml: false
+  storage:
+    minio:
+      endpoint: http://localhost:9999
+      access-key: test
+      secret-key: test
+      bucket: test
+  gateway:
+    base-url: http://localhost:9999
+    internal-api-key: test-key

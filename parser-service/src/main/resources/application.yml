@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: parser-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:finanzbuddy}
+    username: ${DB_USER:finanzbuddy}
+    password: ${DB_PASSWORD:finanzbuddy}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: false
+  liquibase:
+    change-log: classpath:/db/changelog/db.changelog-master.xml
+    enabled: true
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    consumer:
+      group-id: parser-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: com.finanzbuddy.parser.event.DocumentUploadedEventDeserializer
+
+parser:
+  formats:
+    csv: ${PARSER_FORMAT_CSV:true}
+    pdf: ${PARSER_FORMAT_PDF:false}
+    xml: ${PARSER_FORMAT_XML:false}
+  storage:
+    minio:
+      endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${MINIO_ACCESS_KEY:minioadmin}
+      secret-key: ${MINIO_SECRET_KEY:minioadmin}
+      bucket: ${MINIO_BUCKET:finanzbuddy-documents}
+  gateway:
+    base-url: ${GATEWAY_BASE_URL:http://localhost:8080}
+    internal-api-key: ${INTERNAL_API_KEY:}
+
+logging:
+  level:
+    com.finanzbuddy.parser: INFO
