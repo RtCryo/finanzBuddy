@@ -26,7 +26,7 @@ services:
       - "2181:2181"
 
   kafka:
-    image: confluentinc/cp-kafka:7.5.0
+    image: confluentinc/cp-kafka:7.9.10
     container_name: finanzbuddy-kafka
     depends_on:
       - zookeeper
