@@ -34,3 +34,10 @@ The system SHALL redirect unauthenticated users to the login page when they acce
 #### Scenario: Deep link without token
 - **WHEN** an unauthenticated user visits `/documents`
 - **THEN** the UI redirects to `/login`
+
+### Requirement: Authentication screens follow the approved English-language design
+The system SHALL present login and registration screens in English using the approved split-panel visual design.
+
+#### Scenario: User opens an authentication screen
+- **WHEN** a user opens `/login` or `/register`
+- **THEN** the UI presents the corresponding form and navigation link in English using the shared visual style

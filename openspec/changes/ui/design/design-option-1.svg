@@ -1,0 +1,175 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1000" viewBox="0 0 1440 1000" fill="none">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="4" stdDeviation="12" flood-color="#172B4D" flood-opacity=".07"/>
+    </filter>
+    <style>
+      text { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .muted { fill: #718096; }
+      .body { fill: #344054; }
+      .dark { fill: #172B4D; }
+      .small { font-size: 13px; }
+      .label { font-size: 12px; font-weight: 600; letter-spacing: .04em; }
+    </style>
+  </defs>
+  <rect width="1440" height="1000" fill="#F6F8FB"/>
+
+  <!-- Sidebar -->
+  <rect width="248" height="1000" fill="#FFFFFF"/>
+  <path d="M247.5 0V1000" stroke="#E8EDF3"/>
+  <rect x="30" y="28" width="38" height="38" rx="12" fill="#167D68"/>
+  <path d="M40 49.5L47 56L59 40" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="80" y="53" font-size="20" font-weight="700" class="dark">finanz<tspan fill="#167D68">Buddy</tspan></text>
+
+  <text x="28" y="117" class="label muted">WORKSPACE</text>
+  <rect x="16" y="137" width="216" height="46" rx="10" fill="#EAF5F1"/>
+  <rect x="32" y="151" width="18" height="18" rx="4" stroke="#167D68" stroke-width="1.8"/>
+  <path d="M36 156H46M36 161H46M36 166H43" stroke="#167D68" stroke-width="1.5" stroke-linecap="round"/>
+  <text x="62" y="166" font-size="14" font-weight="600" fill="#116653">Documents</text>
+  <rect x="33" y="207" width="17" height="17" rx="4" stroke="#7B8797" stroke-width="1.7"/>
+  <path d="M41.5 210V221M36 215.5H47" stroke="#7B8797" stroke-width="1.7" stroke-linecap="round"/>
+  <text x="62" y="221" font-size="14" font-weight="500" class="body">Upload a file</text>
+
+  <!-- Main header -->
+  <text x="292" y="57" font-size="13" class="muted">Workspace</text>
+  <path d="M365 48L369 52L365 56" stroke="#A0AAB8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="380" y="57" font-size="13" class="body">Documents</text>
+  <circle cx="1361" cy="48" r="18" fill="#FFFFFF" stroke="#E5EAF0"/>
+  <path d="M1353 49C1353 44.6 1356.6 41 1361 41C1365.4 41 1369 44.6 1369 49V53L1371 56H1351L1353 53V49Z" stroke="#64748B" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M1359 59C1360 61 1362 61 1363 59" stroke="#64748B" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="1368" cy="40" r="4" fill="#E6A23C" stroke="white" stroke-width="2"/>
+  <circle cx="1404" cy="48" r="18" fill="#E8EEF5"/>
+  <text x="1404" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#42566F">AM</text>
+  <line x1="278" y1="82" x2="1440" y2="82" stroke="#E8EDF3"/>
+
+  <!-- Page intro -->
+  <text x="292" y="145" font-size="30" font-weight="700" class="dark">Your documents</text>
+  <text x="292" y="176" font-size="15" class="muted">Upload statements and track processing, all in one place.</text>
+  <rect x="1180" y="119" width="220" height="48" rx="10" fill="#167D68" filter="url(#shadow)"/>
+  <path d="M1204 143H1220M1212 135V151" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <text x="1232" y="148" font-size="14" font-weight="600" fill="white">Upload document</text>
+
+  <!-- Summary cards -->
+  <g filter="url(#shadow)">
+    <rect x="292" y="211" width="345" height="112" rx="14" fill="white"/>
+    <rect x="655" y="211" width="345" height="112" rx="14" fill="white"/>
+    <rect x="1018" y="211" width="382" height="112" rx="14" fill="white"/>
+  </g>
+  <text x="316" y="244" font-size="13" class="muted">Total documents</text>
+  <text x="316" y="286" font-size="29" font-weight="700" class="dark">12</text>
+  <rect x="572" y="236" width="42" height="42" rx="12" fill="#EAF5F1"/>
+  <path d="M585 247H601V267H585V247ZM589 252H597M589 257H597M589 262H595" stroke="#167D68" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="679" y="244" font-size="13" class="muted">Processed</text>
+  <text x="679" y="286" font-size="29" font-weight="700" class="dark">9</text>
+  <rect x="935" y="236" width="42" height="42" rx="12" fill="#EAF5F1"/>
+  <path d="M946 257L952 263L966 249" stroke="#167D68" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="1042" y="244" font-size="13" class="muted">Processing</text>
+  <text x="1042" y="286" font-size="29" font-weight="700" class="dark">2</text>
+  <rect x="1335" y="236" width="42" height="42" rx="12" fill="#FFF4E5"/>
+  <circle cx="1356" cy="257" r="9" stroke="#D68A1C" stroke-width="1.8"/>
+  <path d="M1356 252V257L1360 260" stroke="#D68A1C" stroke-width="1.8" stroke-linecap="round"/>
+
+  <!-- Table container -->
+  <rect x="292" y="351" width="1108" height="566" rx="14" fill="white" filter="url(#shadow)"/>
+  <text x="318" y="389" font-size="17" font-weight="650" class="dark">All documents</text>
+  <text x="318" y="412" font-size="12" class="muted">12 files</text>
+
+  <!-- Search and filter -->
+  <rect x="923" y="369" width="218" height="38" rx="8" fill="white" stroke="#DCE3EB"/>
+  <circle cx="942" cy="386" r="6" stroke="#8B97A7" stroke-width="1.5"/>
+  <path d="M946.5 390.5L951 395" stroke="#8B97A7" stroke-width="1.5" stroke-linecap="round"/>
+  <text x="960" y="391" font-size="12" class="muted">Search documents</text>
+  <rect x="1151" y="369" width="113" height="38" rx="8" fill="white" stroke="#DCE3EB"/>
+  <path d="M1168 381H1182M1171 386H1179M1174 391H1176" stroke="#66758A" stroke-width="1.4" stroke-linecap="round"/>
+  <text x="1190" y="392" font-size="12" class="body">All statuses</text>
+  <path d="M1247 384L1251 388L1255 384" stroke="#7C8898" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="1274" y="369" width="100" height="38" rx="8" fill="white" stroke="#DCE3EB"/>
+  <path d="M1292 381V393M1288 389L1292 393L1296 389" stroke="#66758A" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="1304" y="392" font-size="12" class="body">By date</text>
+
+  <rect x="292" y="429" width="1108" height="43" fill="#F8FAFC"/>
+  <text x="318" y="456" class="label muted">NAME</text>
+  <text x="780" y="456" class="label muted">TYPE</text>
+  <text x="914" y="456" class="label muted">DATE UPLOADED</text>
+  <text x="1210" y="456" class="label muted">STATUS</text>
+
+  <!-- Row 1 -->
+  <rect x="318" y="486" width="34" height="38" rx="7" fill="#EAF5F1"/>
+  <path d="M328 495H342V516H328V495ZM331 500H339M331 505H339M331 510H337" stroke="#167D68" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="365" y="502" font-size="13" font-weight="600" class="dark">September_2026_statement.csv</text>
+  <text x="365" y="520" font-size="11" class="muted">248 KB</text>
+  <rect x="780" y="494" width="45" height="23" rx="6" fill="#F1F4F8"/>
+  <text x="802.5" y="510" text-anchor="middle" font-size="11" font-weight="600" class="body">CSV</text>
+  <text x="914" y="508" font-size="12" class="body">Sep 27, 2026</text>
+  <rect x="1210" y="493" width="102" height="25" rx="12.5" fill="#EAF5F1"/>
+  <circle cx="1224" cy="505.5" r="3.5" fill="#167D68"/>
+  <text x="1234" y="510" font-size="11" font-weight="600" fill="#116653">Processed</text>
+  <line x1="318" y1="540" x2="1374" y2="540" stroke="#EEF1F5"/>
+
+  <!-- Row 2 -->
+  <rect x="318" y="555" width="34" height="38" rx="7" fill="#FFF2E8"/>
+  <path d="M328 564H342V585H328V564ZM331 569H339M331 574H339M331 579H337" stroke="#C76B31" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="365" y="571" font-size="13" font-weight="600" class="dark">August_invoice.pdf</text>
+  <text x="365" y="589" font-size="11" class="muted">1.2 MB</text>
+  <rect x="780" y="563" width="45" height="23" rx="6" fill="#F1F4F8"/>
+  <text x="802.5" y="579" text-anchor="middle" font-size="11" font-weight="600" class="body">PDF</text>
+  <text x="914" y="577" font-size="12" class="body">Sep 26, 2026</text>
+  <rect x="1210" y="562" width="121" height="25" rx="12.5" fill="#FFF4E5"/>
+  <circle cx="1224" cy="574.5" r="3.5" fill="#D68A1C"/>
+  <text x="1234" y="579" font-size="11" font-weight="600" fill="#9A620F">Processing</text>
+  <line x1="318" y1="609" x2="1374" y2="609" stroke="#EEF1F5"/>
+
+  <!-- Row 3 -->
+  <rect x="318" y="624" width="34" height="38" rx="7" fill="#EAF5F1"/>
+  <path d="M328 633H342V654H328V633ZM331 638H339M331 643H339M331 648H337" stroke="#167D68" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="365" y="640" font-size="13" font-weight="600" class="dark">Primary_account_transactions.csv</text>
+  <text x="365" y="658" font-size="11" class="muted">316 KB</text>
+  <rect x="780" y="632" width="45" height="23" rx="6" fill="#F1F4F8"/>
+  <text x="802.5" y="648" text-anchor="middle" font-size="11" font-weight="600" class="body">CSV</text>
+  <text x="914" y="646" font-size="12" class="body">Sep 24, 2026</text>
+  <rect x="1210" y="631" width="102" height="25" rx="12.5" fill="#EAF5F1"/>
+  <circle cx="1224" cy="643.5" r="3.5" fill="#167D68"/>
+  <text x="1234" y="648" font-size="11" font-weight="600" fill="#116653">Processed</text>
+  <line x1="318" y1="678" x2="1374" y2="678" stroke="#EEF1F5"/>
+
+  <!-- Row 4 -->
+  <rect x="318" y="693" width="34" height="38" rx="7" fill="#F1EDFA"/>
+  <path d="M328 702H342V723H328V702ZM331 707H339M331 712H339M331 717H337" stroke="#7563A8" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="365" y="709" font-size="13" font-weight="600" class="dark">July_card_statement.xml</text>
+  <text x="365" y="727" font-size="11" class="muted">92 KB</text>
+  <rect x="780" y="701" width="45" height="23" rx="6" fill="#F1F4F8"/>
+  <text x="802.5" y="717" text-anchor="middle" font-size="11" font-weight="600" class="body">XML</text>
+  <text x="914" y="715" font-size="12" class="body">Sep 20, 2026</text>
+  <rect x="1210" y="700" width="80" height="25" rx="12.5" fill="#F1F4F8"/>
+  <circle cx="1224" cy="712.5" r="3.5" fill="#8290A2"/>
+  <text x="1234" y="717" font-size="11" font-weight="600" fill="#59677A">Queued</text>
+  <line x1="318" y1="747" x2="1374" y2="747" stroke="#EEF1F5"/>
+
+  <!-- Row 5 -->
+  <rect x="318" y="762" width="34" height="38" rx="7" fill="#FFF2E8"/>
+  <path d="M328 771H342V792H328V771ZM331 776H339M331 781H339M331 786H337" stroke="#C76B31" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="365" y="778" font-size="13" font-weight="600" class="dark">Credit_report.pdf</text>
+  <text x="365" y="796" font-size="11" class="muted">840 KB</text>
+  <rect x="780" y="770" width="45" height="23" rx="6" fill="#F1F4F8"/>
+  <text x="802.5" y="786" text-anchor="middle" font-size="11" font-weight="600" class="body">PDF</text>
+  <text x="914" y="784" font-size="12" class="body">Sep 18, 2026</text>
+  <rect x="1210" y="769" width="87" height="25" rx="12.5" fill="#FDECEC"/>
+  <circle cx="1224" cy="781.5" r="3.5" fill="#C74646"/>
+  <text x="1234" y="786" font-size="11" font-weight="600" fill="#A53030">Failed</text>
+  <line x1="318" y1="816" x2="1374" y2="816" stroke="#EEF1F5"/>
+
+  <!-- Footer pagination -->
+  <text x="318" y="873" font-size="12" class="muted">Showing 5 of 12 documents</text>
+  <rect x="1214" y="850" width="34" height="34" rx="8" fill="white" stroke="#DCE3EB"/>
+  <path d="M1235 861L1229 867L1235 873" stroke="#69788B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="1256" y="850" width="34" height="34" rx="8" fill="#167D68"/>
+  <text x="1273" y="872" text-anchor="middle" font-size="12" font-weight="600" fill="white">1</text>
+  <rect x="1298" y="850" width="34" height="34" rx="8" fill="white" stroke="#DCE3EB"/>
+  <text x="1315" y="872" text-anchor="middle" font-size="12" class="body">2</text>
+  <rect x="1340" y="850" width="34" height="34" rx="8" fill="white" stroke="#DCE3EB"/>
+  <path d="M1353 861L1359 867L1353 873" stroke="#69788B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="292" y="963" font-size="11" class="muted">Your financial data is secure and only accessible to you.</text>
+</svg>

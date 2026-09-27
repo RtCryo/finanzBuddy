@@ -7,11 +7,15 @@ Allows authenticated users to upload financial documents and tag them by type be
 ## ADDED Requirements
 
 ### Requirement: User can select a file
-The system SHALL provide a file input that accepts the supported document formats.
+The system SHALL provide a file drop zone and file picker that accept the supported document formats.
 
 #### Scenario: Select CSV file
 - **WHEN** a user selects a `.csv` file
 - **THEN** the file is ready for upload
+
+#### Scenario: Drag and drop a supported file
+- **WHEN** a user drops a supported file into the upload area
+- **THEN** the file is selected and ready for upload
 
 ### Requirement: User must select a document type
 The system SHALL require the user to choose a document type before upload.
@@ -26,6 +30,8 @@ The system SHALL require the user to choose a document type before upload.
 
 ### Requirement: Upload shows progress and result
 The system SHALL display upload progress and the final server response.
+
+The upload page SHALL follow the approved English-language application shell and visual design.
 
 #### Scenario: Successful upload
 - **WHEN** the file and type are submitted

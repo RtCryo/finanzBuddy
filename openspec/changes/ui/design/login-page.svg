@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1000" viewBox="0 0 1440 1000" fill="none">
+  <defs><style>text{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.dark{fill:#172B4D}.muted{fill:#718096}.body{fill:#344054}</style><filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="8" stdDeviation="18" flood-color="#172B4D" flood-opacity=".08"/></filter></defs>
+  <rect width="1440" height="1000" fill="#F6F8FB"/>
+  <rect x="48" y="40" width="1344" height="920" rx="24" fill="white" filter="url(#shadow)"/>
+  <path d="M760 40H1368C1381.3 40 1392 50.7 1392 64V936C1392 949.3 1381.3 960 1368 960H760V40Z" fill="#EAF5F1"/>
+  <rect x="94" y="82" width="38" height="38" rx="12" fill="#167D68"/><path d="M104 103L111 110L123 94" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="144" y="107" font-size="20" font-weight="700" class="dark">finanz<tspan fill="#167D68">Buddy</tspan></text>
+  <text x="94" y="278" font-size="13" font-weight="700" letter-spacing="1.1" fill="#167D68">WELCOME BACK</text>
+  <text x="94" y="326" font-size="34" font-weight="700" class="dark">Sign in to your account</text>
+  <text x="94" y="358" font-size="15" class="muted">Pick up right where you left off.</text>
+  <text x="94" y="420" font-size="13" font-weight="600" class="body">Email address</text>
+  <rect x="94" y="434" width="560" height="50" rx="9" fill="white" stroke="#DCE3EB"/><text x="110" y="465" font-size="14" class="muted">alex@example.com</text>
+  <text x="94" y="524" font-size="13" font-weight="600" class="body">Password</text>
+  <rect x="94" y="538" width="560" height="50" rx="9" fill="white" stroke="#DCE3EB"/><text x="110" y="569" font-size="14" class="muted">Enter your password</text>
+  <path d="M614 556C618 550 623 548 627 548C631 548 636 550 640 556C636 562 631 564 627 564C623 564 618 562 614 556Z" stroke="#8290A2" stroke-width="1.5"/><circle cx="627" cy="556" r="2.5" stroke="#8290A2" stroke-width="1.5"/>
+  <text x="94" y="622" font-size="13" font-weight="600" fill="#167D68">Forgot password?</text>
+  <rect x="94" y="650" width="560" height="50" rx="9" fill="#167D68"/><text x="374" y="681" text-anchor="middle" font-size="14" font-weight="600" fill="white">Sign in</text>
+  <text x="94" y="746" font-size="13" class="muted">Don't have an account?</text><text x="231" y="746" font-size="13" font-weight="600" fill="#167D68">Create account</text>
+  <path d="M94 900H654" stroke="#E8EDF3"/><text x="94" y="927" font-size="11" class="muted">Your financial data is secure and only accessible to you.</text>
+  <circle cx="1076" cy="280" r="186" fill="#DCEFE8"/>
+  <rect x="927" y="223" width="306" height="202" rx="18" fill="white" filter="url(#shadow)"/>
+  <text x="955" y="261" font-size="13" class="muted">Documents processed</text><text x="955" y="307" font-size="32" font-weight="700" class="dark">12</text>
+  <rect x="955" y="335" width="250" height="8" rx="4" fill="#E8EDF3"/><rect x="955" y="335" width="190" height="8" rx="4" fill="#167D68"/>
+  <circle cx="971" cy="382" r="13" fill="#EAF5F1"/><path d="M965 382L969 386L977 378" stroke="#167D68" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><text x="994" y="386" font-size="12" font-weight="600" class="body">Everything is up to date</text>
+  <text x="842" y="548" font-size="29" font-weight="700" class="dark">Your finances,</text><text x="842" y="586" font-size="29" font-weight="700" fill="#167D68">finally in order.</text>
+  <text x="842" y="622" font-size="14" class="muted">A clearer view of your documents and transactions.</text>
+  <text x="842" y="910" font-size="11" class="muted">Simple, secure financial document management.</text>
+</svg>
