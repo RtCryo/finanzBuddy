@@ -1,0 +1,32 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  liquibase:
+    enabled: false
+  kafka:
+    bootstrap-servers: localhost:9999
+    consumer:
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: com.finanzbuddy.parser.event.DocumentUploadedEventDeserializer
+
+parser:
+  formats:
+    csv: true
+    pdf: false
+    xml: false
+    csv-max-rows: 10000
+  storage:
+    minio:
+      endpoint: http://localhost:9999
+      access-key: test
+      secret-key: test
+      bucket: test
+  gateway:
+    base-url: http://localhost:9999
+    internal-api-key: test-key

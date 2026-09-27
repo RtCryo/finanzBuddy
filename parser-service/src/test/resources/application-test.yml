@@ -1,0 +1,42 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+  liquibase:
+    enabled: false
+  kafka:
+    bootstrap-servers: ${spring.embedded.kafka.brokers}
+
+parser:
+  formats:
+    csv: true
+    pdf: false
+    xml: false
+    csv-max-rows: 10000
+  storage:
+    minio:
+      endpoint: http://localhost:9999
+      access-key: test
+      secret-key: test
+      bucket: test
+  gateway:
+    base-url: http://localhost:9999
+    internal-api-key: test-key
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+      show-components: always

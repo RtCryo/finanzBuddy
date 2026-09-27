@@ -1,0 +1,13 @@
+package com.finanzbuddy.parser;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+
+@SpringBootTest
+@ActiveProfiles("test")
+class ParserServiceApplicationTests {
+
+    @Test
+    void contextLoads() {}
+}
