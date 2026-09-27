@@ -65,6 +65,19 @@ class CsvTransactionParserTest {
     }
 
     @Test
+    void rejectsCsvWithoutRequiredTransactionColumns() {
+        String csv = "Name;Value\nAlice;100\n";
+        DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
+
+        assertThatThrownBy(() -> parser.parse(toStream(csv), event, Locale.GERMANY))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Failed to parse CSV document")
+                .cause()
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("missing required column: Buchungstag");
+    }
+
+    @Test
     void fallsBackToGermanDateWhenLocaleMismatch() {
         String csv =
                 "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"

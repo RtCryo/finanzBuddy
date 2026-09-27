@@ -6,6 +6,7 @@ import com.finanzbuddy.parser.document.DocumentStatus;
 import com.finanzbuddy.parser.document.ErrorMessageTruncator;
 import com.finanzbuddy.parser.event.DocumentUploadedEvent;
 import com.finanzbuddy.parser.event.DocumentUploadedEventDeserializer;
+import com.finanzbuddy.parser.service.TransactionPersistenceService;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -83,7 +84,9 @@ public class KafkaConfig {
 
     @Bean
     public DeadLetterPublishingRecoverer deadLetterPublishingRecoverer(
-            KafkaTemplate<String, Object> kafkaTemplate, GatewayStatusClient gatewayStatusClient) {
+            KafkaTemplate<String, Object> kafkaTemplate,
+            GatewayStatusClient gatewayStatusClient,
+            TransactionPersistenceService transactionPersistenceService) {
         return new DeadLetterPublishingRecoverer(
                 kafkaTemplate,
                 (record, exception) -> {
@@ -95,11 +98,19 @@ public class KafkaConfig {
                             dltTopic,
                             exception);
                     if (record.value() instanceof DocumentUploadedEvent event) {
-                        String message = ErrorMessageTruncator.truncate(exception, 4000);
                         try {
                             if (event.documentId() != null) {
+                                boolean alreadyProcessed =
+                                        transactionPersistenceService.isProcessed(
+                                                event.documentId());
                                 gatewayStatusClient.reportStatus(
-                                        event.documentId(), DocumentStatus.FAILED, message);
+                                        event.documentId(),
+                                        alreadyProcessed
+                                                ? DocumentStatus.PROCESSED
+                                                : DocumentStatus.FAILED,
+                                        alreadyProcessed
+                                                ? null
+                                                : ErrorMessageTruncator.truncate(exception, 4000));
                             }
                         } catch (Exception statusException) {
                             logger.error(

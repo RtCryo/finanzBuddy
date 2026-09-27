@@ -75,6 +75,7 @@ public class CsvTransactionParser implements DocumentParser {
                 return List.of();
             }
             header = stripBomFromFirstHeader(header);
+            validateHeader(header);
 
             List<Transaction> transactions = new ArrayList<>();
             String[] line;
@@ -131,6 +132,24 @@ public class CsvTransactionParser implements DocumentParser {
             header[0] = first.substring(1);
         }
         return header;
+    }
+
+    private void validateHeader(String[] header) {
+        for (CsvColumn requiredColumn : List.of(CsvColumn.BOOKING_DATE, CsvColumn.AMOUNT)) {
+            boolean found =
+                    Arrays.stream(header)
+                            .filter(name -> name != null)
+                            .map(String::trim)
+                            .anyMatch(
+                                    name ->
+                                            requiredColumn.names.stream()
+                                                    .anyMatch(
+                                                            alias -> alias.equalsIgnoreCase(name)));
+            if (!found) {
+                throw new IllegalArgumentException(
+                        "CSV document is missing required column: " + requiredColumn.names.get(0));
+            }
+        }
     }
 
     private Map<String, String> buildRow(String[] header, String[] values) {

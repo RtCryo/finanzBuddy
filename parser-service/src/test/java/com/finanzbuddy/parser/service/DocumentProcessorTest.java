@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import com.finanzbuddy.parser.client.GatewayStatusClient;
 import com.finanzbuddy.parser.document.DocumentStatus;
-import com.finanzbuddy.parser.entity.Transaction;
 import com.finanzbuddy.parser.event.DocumentUploadedEvent;
 import com.finanzbuddy.parser.parser.DocumentParser;
 import com.finanzbuddy.parser.parser.DocumentParserRouter;
@@ -89,23 +88,28 @@ class DocumentProcessorTest {
     }
 
     @Test
-    void continuesWhenStatusReportingFails() {
+    void retriesBeforeProcessingWhenProcessingStatusReportingFails() {
         DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
         doThrow(new RuntimeException("gateway down"))
                 .when(gatewayStatusClient)
                 .reportStatus(1L, DocumentStatus.PROCESSING, null);
-        when(minioStorageService.download("csv/1"))
-                .thenReturn(new ByteArrayInputStream("data".getBytes(StandardCharsets.UTF_8)));
-        when(parserRouter.route("CSV")).thenReturn(parser);
-        Transaction transaction = new Transaction();
-        when(parser.parse(any(InputStream.class), any(), any())).thenReturn(List.of(transaction));
+        assertThatThrownBy(() -> processor.process(event))
+                .isInstanceOf(IllegalStateException.class)
+                .hasCauseInstanceOf(RuntimeException.class);
+
+        verify(minioStorageService, never()).download(any());
+        verify(transactionPersistenceService, never()).saveIfNotProcessed(any(), any());
+    }
+
+    @Test
+    void retriesProcessedStatusForAlreadyPersistedDocument() {
+        DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
+        when(transactionPersistenceService.isProcessed(1L)).thenReturn(true);
 
         processor.process(event);
 
-        when(transactionPersistenceService.saveIfNotProcessed(1L, List.of(transaction)))
-                .thenReturn(true);
-        verify(transactionPersistenceService).saveIfNotProcessed(1L, List.of(transaction));
         verify(gatewayStatusClient).reportStatus(1L, DocumentStatus.PROCESSED, null);
+        verify(minioStorageService, never()).download(any());
     }
 
     @Test

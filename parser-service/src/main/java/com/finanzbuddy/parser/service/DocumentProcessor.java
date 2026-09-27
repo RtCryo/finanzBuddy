@@ -76,6 +76,7 @@ public class DocumentProcessor {
         try {
             if (transactionPersistenceService.isProcessed(event.documentId())) {
                 logger.info("Duplicate event ignored for documentId={}", event.documentId());
+                reportStatus(event.documentId(), DocumentStatus.PROCESSED, null);
                 duplicateCounter.increment();
                 return;
             }
@@ -100,6 +101,7 @@ public class DocumentProcessor {
             }
         } catch (DuplicateDocumentException e) {
             logger.info("Duplicate event ignored for documentId={}", event.documentId());
+            reportStatus(event.documentId(), DocumentStatus.PROCESSED, null);
             duplicateCounter.increment();
         } catch (IllegalArgumentException | UnsupportedOperationException e) {
             failedCounter.increment();
@@ -138,11 +140,6 @@ public class DocumentProcessor {
     }
 
     private void reportStatus(Long documentId, DocumentStatus status, String message) {
-        try {
-            gatewayStatusClient.reportStatus(documentId, status, message);
-        } catch (Exception e) {
-            logger.error(
-                    "Failed to report status: documentId={}, status={}", documentId, status, e);
-        }
+        gatewayStatusClient.reportStatus(documentId, status, message);
     }
 }
