@@ -122,6 +122,23 @@ services:
       PARSER_FORMAT_PDF: "false"
       PARSER_FORMAT_XML: "false"
 
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    container_name: finanzbuddy-ui
+    depends_on:
+      api-gateway:
+        condition: service_started
+    ports:
+      - "3000:80"
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1/" ]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
 volumes:
   postgres-data:
   minio-data:

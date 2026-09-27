@@ -32,7 +32,7 @@ The mockups cover sign in, registration, upload, the document list, processed tr
 - Authentication pages use a split-panel layout with the form and product introduction; authenticated page copy and authentication copy are in English.
 - The documents table has no separate action column. Clicking a document row opens that document's detail route.
 - Document statuses are text badges with status-specific color, not icon-only indicators. On detail pages, the text badge sits beside the filename.
-- Document detail pages expose an icon-only download button aligned to the far right of the filename header. The button has an accessible name/tooltip and downloads the original document.
+- Document detail pages expose an icon-only download button aligned to the far right of the filename header. The button has an accessible name/tooltip and calls the authenticated download route; MinIO streaming remains a follow-up implementation.
 - Upload supports choosing a file through a drop zone or the native file picker, followed by document type selection and upload progress/result feedback.
 
 ### Screen references
@@ -86,7 +86,7 @@ The mockups cover sign in, registration, upload, the document list, processed tr
 | JWT in localStorage vulnerable to XSS | Keep token short-lived; move to httpOnly cookies in v2 |
 | CORS in production | Configure API Gateway CORS origins explicitly |
 | Large file upload UX | Show progress bar and handle timeout errors |
-| Original-file download is not exposed by the current API Gateway contract | Define an authenticated download endpoint and response contract before wiring the detail-page download button |
+| Original-file download streaming is not implemented yet | The owner-scoped authenticated route currently returns `501 Not Implemented`; stream the stored MinIO object in a follow-up |
 
 ## Migration Plan
 

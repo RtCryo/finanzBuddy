@@ -150,6 +150,74 @@ class DocumentControllerIntegrationTest {
     }
 
     @Test
+    void transactionEndpointReturnsStubbedListAndChecksDocumentOwner() throws Exception {
+        String ownerToken = registerAndLogin("transaction-owner@example.com", "password123");
+        String otherToken = registerAndLogin("transaction-other@example.com", "password123");
+        MockMultipartFile file =
+                new MockMultipartFile(
+                        "file", "transactions.csv", "text/csv", "a,b\n1,2".getBytes());
+        long documentId = uploadDocument(ownerToken, file, "CSV");
+
+        mockMvc.perform(get("/documents/" + documentId + "/transactions"))
+                .andExpect(status().isUnauthorized());
+
+        MvcResult result =
+                mockMvc.perform(
+                                get("/documents/" + documentId + "/transactions")
+                                        .header("Authorization", "Bearer " + ownerToken))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        assertThat(result.getResponse().getContentAsString()).isEqualTo("[]");
+
+        mockMvc.perform(
+                        get("/documents/" + documentId + "/transactions")
+                                .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void downloadEndpointIsAuthenticatedAndOwnerScopedWhileStubbed() throws Exception {
+        String ownerToken = registerAndLogin("download-owner@example.com", "password123");
+        String otherToken = registerAndLogin("download-other@example.com", "password123");
+        MockMultipartFile file =
+                new MockMultipartFile("file", "original.csv", "text/csv", "a,b\n1,2".getBytes());
+        long documentId = uploadDocument(ownerToken, file, "CSV");
+
+        mockMvc.perform(get("/documents/" + documentId + "/download"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(
+                        get("/documents/" + documentId + "/download")
+                                .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().is(501));
+
+        mockMvc.perform(
+                        get("/documents/" + documentId + "/download")
+                                .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void failedDocumentResponseIncludesErrorMessage() throws Exception {
+        String token = registerAndLogin("failed-detail@example.com", "password123");
+        MockMultipartFile file =
+                new MockMultipartFile("file", "failed.csv", "text/csv", "a,b\n1,2".getBytes());
+        long documentId = uploadDocument(token, file, "CSV");
+        transition(documentId, DocumentStatus.PROCESSING, null);
+        transition(documentId, DocumentStatus.FAILED, "The statement could not be parsed");
+
+        MvcResult result =
+                mockMvc.perform(
+                                get("/documents/" + documentId)
+                                        .header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
+        assertThat(response.get("errorMessage").asText())
+                .isEqualTo("The statement could not be parsed");
+    }
+
+    @Test
     void getForeignDocumentReturns404() throws Exception {
         String ownerToken = registerAndLogin("owner@example.com", "password123");
         String otherToken = registerAndLogin("other@example.com", "password123");

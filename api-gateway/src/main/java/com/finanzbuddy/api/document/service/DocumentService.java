@@ -336,6 +336,7 @@ public class DocumentService {
                 document.getOriginalFilename(),
                 document.getType(),
                 document.getStatus(),
-                document.getCreatedAt());
+                document.getCreatedAt(),
+                document.getStatus() == DocumentStatus.FAILED ? document.getErrorMessage() : null);
     }
 }
