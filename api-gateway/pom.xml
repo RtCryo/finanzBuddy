@@ -16,6 +16,7 @@
 	<properties>
 		<java.version>21</java.version>
 		<minio.version>8.6.0</minio.version>
+		<okhttp.version>5.1.0</okhttp.version>
 		<jjwt.version>0.13.0</jjwt.version>
 		<spotless.version>2.43.0</spotless.version>
 		<jacoco.version>0.8.14</jacoco.version>
@@ -60,6 +61,17 @@
 			<groupId>io.minio</groupId>
 			<artifactId>minio</artifactId>
 			<version>${minio.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>com.squareup.okhttp3</groupId>
+					<artifactId>okhttp</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>com.squareup.okhttp3</groupId>
+			<artifactId>okhttp-jvm</artifactId>
+			<version>${okhttp.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.liquibase</groupId>
