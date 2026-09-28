@@ -7,11 +7,27 @@ type PageResponse<T> = {
   totalElements: number
 }
 
-export async function getDocuments() {
+const pageSize = 100
+
+async function fetchDocumentPage(page: number) {
   const response = await api.get<PageResponse<DocumentRecord>>('/documents', {
-    params: { page: 0, size: 100, sort: 'createdAt,desc' },
+    params: { page, size: pageSize, sort: 'createdAt,desc' },
   })
   return response.data
+}
+
+export async function getDocuments() {
+  const first = await fetchDocumentPage(0)
+  if (first.content.length >= first.totalElements) return first
+
+  const remainingPages = Math.ceil(first.totalElements / pageSize) - 1
+  const rest = await Promise.all(
+    Array.from({ length: remainingPages }, (_, index) => fetchDocumentPage(index + 1)),
+  )
+  return {
+    content: [...first.content, ...rest.flatMap((page) => page.content)],
+    totalElements: first.totalElements,
+  }
 }
 
 export async function getDocument(id: string) {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getDocuments } from '../api/documents'
 import { getErrorMessage } from '../api/errors'
@@ -26,20 +26,27 @@ export function DocumentsPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const latestRequest = useRef(0)
 
   const refresh = useCallback(async (showLoading = false) => {
     if (showLoading) {
       setIsRefreshing(true)
       setError('')
     }
+    const requestId = ++latestRequest.current
     try {
       const page = await getDocuments()
+      if (requestId !== latestRequest.current) return
       setDocuments(page.content)
+      setError('')
     } catch (requestError) {
+      if (requestId !== latestRequest.current) return
       setError(getErrorMessage(requestError, 'We could not load your documents.'))
     } finally {
-      setIsLoading(false)
-      setIsRefreshing(false)
+      if (requestId === latestRequest.current) {
+        setIsLoading(false)
+        setIsRefreshing(false)
+      }
     }
   }, [])
 

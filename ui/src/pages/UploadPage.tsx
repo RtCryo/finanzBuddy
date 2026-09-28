@@ -6,11 +6,17 @@ import { getErrorMessage } from '../api/errors'
 import { AppShell } from '../components/AppShell'
 import type { DocumentRecord } from '../types/document'
 
-const supportedExtensions = ['.csv', '.pdf', '.xml']
+const extensionTypes: Record<string, string> = { '.csv': 'CSV', '.pdf': 'PDF', '.xml': 'XML' }
+const supportedExtensions = Object.keys(extensionTypes)
 const maxFileSize = 10 * 1024 * 1024
 
+function typeForFile(file: File) {
+  const extension = supportedExtensions.find((candidate) => file.name.toLowerCase().endsWith(candidate))
+  return extension ? extensionTypes[extension] : ''
+}
+
 function isSupportedFile(file: File) {
-  return supportedExtensions.some((extension) => file.name.toLowerCase().endsWith(extension))
+  return typeForFile(file) !== ''
 }
 
 function formatFileSize(size: number) {
@@ -47,6 +53,7 @@ export function UploadPage() {
     }
 
     setFile(nextFile)
+    setType(typeForFile(nextFile))
   }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -70,6 +77,11 @@ export function UploadPage() {
     }
     if (!type) {
       setError('Select a document type before uploading.')
+      return
+    }
+    const expectedType = typeForFile(file)
+    if (expectedType && type !== expectedType) {
+      setError(`This looks like a ${expectedType} file. Select ${expectedType} as the document type.`)
       return
     }
 

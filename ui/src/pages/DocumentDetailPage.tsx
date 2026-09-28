@@ -9,10 +9,16 @@ import type { DocumentRecord } from '../types/document'
 import type { TransactionRecord } from '../types/transaction'
 
 function formatDate(value: string) {
-  const date = new Date(value)
+  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value)
+  const date = new Date(isDateOnly ? `${value}T00:00:00Z` : value)
   return Number.isNaN(date.valueOf())
     ? '—'
-    : new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date)
+    : new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        ...(isDateOnly ? { timeZone: 'UTC' } : {}),
+      }).format(date)
 }
 
 export function DocumentDetailPage() {
