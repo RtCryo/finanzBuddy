@@ -130,7 +130,7 @@ public class DocumentService {
         try {
             minioClient.putObject(
                     PutObjectArgs.builder().bucket(bucket).object(storagePath).stream(
-                                    new ByteArrayInputStream(content), content.length, -1)
+                                    new ByteArrayInputStream(content), (long) content.length, -1L)
                             .contentType(
                                     file.getContentType() != null
                                             ? file.getContentType()
