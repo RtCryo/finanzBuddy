@@ -102,6 +102,26 @@ curl http://localhost:8080/documents/<id> \
 
 Returns `404 Not Found` if the document does not belong to the authenticated user.
 
+#### List document transactions
+
+```bash
+curl http://localhost:8080/documents/<id>/transactions \
+  -H "Authorization: Bearer <token>"
+```
+
+Returns the normalized transactions parsed from the document (empty until the parser service has
+processed it). Returns `404 Not Found` if the document does not belong to the authenticated user.
+
+#### Download original file
+
+```bash
+curl -OJ http://localhost:8080/documents/<id>/download \
+  -H "Authorization: Bearer <token>"
+```
+
+Streams the originally uploaded file from object storage with a `Content-Disposition` filename.
+Returns `404 Not Found` if the document does not belong to the authenticated user.
+
 ### Internal endpoints
 
 Endpoints under `/internal/**` are for trusted backend services (e.g. the parser service)
@@ -179,6 +199,14 @@ re-raised as defects.
   real Liquibase changelog on H2 (PostgreSQL mode) and asserts column presence and nullability
   parity. A full Testcontainers-Postgres suite (production-parity DB in CI) is a deliberate
   deferred follow-up — it requires Docker in CI and is a larger infrastructure change.
+
+- **Transactions are read cross-service via JDBC, not a JPA entity.** The `transactions` table is
+  owned and written by the parser-service; the gateway only reads it (for
+  `GET /documents/{id}/transactions`). It uses a JDBC query rather than a mapped `@Entity`
+  deliberately: the gateway starts before the parser-service (see `docker-compose.yml`), so with
+  `ddl-auto: validate` a JPA entity would fail the gateway's startup on a fresh database where the
+  table does not yet exist. The JDBC read takes no schema-validation dependency on another
+  service's table.
 
 - **Two Jackson mappers coexist by design.** Spring Boot 4 auto-configures a Jackson 3
   (`tools.jackson`) `ObjectMapper` for HTTP message conversion. `JacksonConfig` additionally

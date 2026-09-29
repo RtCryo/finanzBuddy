@@ -5,10 +5,10 @@ The finanzBuddy web interface. A React 18 + TypeScript single-page application b
 ## What it does
 
 - User registration and login against the API Gateway.
-- Upload financial documents (`CSV`, `PDF`, `XML`) with a document type tag.
+- Upload financial documents (`CSV`) with a document type tag.
 - List uploaded documents and poll for processing status updates.
 - View normalized transactions for processed documents.
-- Download the original document from the document detail screen (the API Gateway download route is currently a `501` stub until MinIO streaming is implemented).
+- Download the original document from the document detail screen.
 
 ## Prerequisites
 

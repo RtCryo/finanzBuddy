@@ -44,8 +44,8 @@ public class JwtService {
 
     /**
      * Parses and signature-verifies the token once, returning its claims. Throws {@link
-     * io.jsonwebtoken.ExpiredJwtException} for expired tokens and {@link JwtException} /
-     * {@link IllegalArgumentException} for malformed ones, letting callers avoid a second parse.
+     * io.jsonwebtoken.ExpiredJwtException} for expired tokens and {@link JwtException} / {@link
+     * IllegalArgumentException} for malformed ones, letting callers avoid a second parse.
      */
     public Claims parseClaims(String token) {
         return extractAllClaims(token);
