@@ -39,17 +39,18 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        String email = normalizeEmail(request.email());
         // existsByEmail catches the common case cheaply, but it is not a uniqueness guarantee:
         // two concurrent requests can both pass the check and then race on the INSERT. The unique
         // database index is the authoritative guard, so we also handle
         // DataIntegrityViolationException
         // and map it to the same 409 response.
-        if (userRepository.existsByEmail(request.email())) {
+        if (userRepository.existsByEmail(email)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
         }
 
         User user = new User();
-        user.setEmail(request.email());
+        user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
 
         try {
@@ -72,6 +73,10 @@ public class AuthService {
         } catch (BadCredentialsException e) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
+    }
+
+    private static String normalizeEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
     private UserDetails toUserDetails(User user) {

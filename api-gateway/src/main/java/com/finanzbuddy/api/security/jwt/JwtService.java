@@ -42,6 +42,15 @@ public class JwtService {
         return extractClaim(token, Claims::getSubject);
     }
 
+    /**
+     * Parses and signature-verifies the token once, returning its claims. Throws {@link
+     * io.jsonwebtoken.ExpiredJwtException} for expired tokens and {@link JwtException} /
+     * {@link IllegalArgumentException} for malformed ones, letting callers avoid a second parse.
+     */
+    public Claims parseClaims(String token) {
+        return extractAllClaims(token);
+    }
+
     public boolean isTokenValid(String token, UserDetails userDetails) {
         try {
             // parseSignedClaims already rejects expired tokens with ExpiredJwtException, so a token

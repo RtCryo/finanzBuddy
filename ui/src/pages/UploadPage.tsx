@@ -6,7 +6,7 @@ import { getErrorMessage } from '../api/errors'
 import { AppShell } from '../components/AppShell'
 import type { DocumentRecord } from '../types/document'
 
-const extensionTypes: Record<string, string> = { '.csv': 'CSV', '.pdf': 'PDF', '.xml': 'XML' }
+const extensionTypes: Record<string, string> = { '.csv': 'CSV' }
 const supportedExtensions = Object.keys(extensionTypes)
 const maxFileSize = 10 * 1024 * 1024
 
@@ -43,7 +43,7 @@ export function UploadPage() {
     if (!nextFile) return
     if (!isSupportedFile(nextFile)) {
       setFile(null)
-      setError('Choose a CSV, PDF, or XML file.')
+      setError('Choose a CSV file.')
       return
     }
     if (nextFile.size > maxFileSize) {
@@ -130,9 +130,9 @@ export function UploadPage() {
             ref={fileInput}
             className="visually-hidden"
             type="file"
-            accept=".csv,.pdf,.xml"
+            accept=".csv"
             onChange={handleFileChange}
-            aria-label="Choose a CSV, PDF, or XML file"
+            aria-label="Choose a CSV file"
           />
           <div
             className={`drop-zone${isDragging ? ' dragging' : ''}${file ? ' has-file' : ''}`}
@@ -165,15 +165,13 @@ export function UploadPage() {
               </>
             )}
           </div>
-          <p className="supported-formats">Supported formats: CSV, PDF, XML · Maximum file size: 10 MB</p>
+          <p className="supported-formats">Supported format: CSV · Maximum file size: 10 MB</p>
 
           <label className="field upload-type-field">
             <span>Document type</span>
             <select value={type} onChange={(event) => setType(event.target.value)} required>
               <option value="" disabled>Select document type</option>
               <option value="CSV">CSV</option>
-              <option value="PDF">PDF</option>
-              <option value="XML">XML</option>
             </select>
           </label>
 

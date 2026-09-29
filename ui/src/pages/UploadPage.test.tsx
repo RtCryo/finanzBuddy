@@ -21,7 +21,7 @@ describe('UploadPage', () => {
     )
 
     const file = new File(['a,b'], 'statement.csv', { type: 'text/csv' })
-    await user.upload(screen.getByLabelText('Choose a CSV, PDF, or XML file'), file)
+    await user.upload(screen.getByLabelText('Choose a CSV file'), file)
     await user.selectOptions(screen.getByRole('combobox'), 'CSV')
     await user.click(screen.getByRole('button', { name: 'Upload document' }))
 

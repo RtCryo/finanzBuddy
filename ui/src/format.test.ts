@@ -11,6 +11,11 @@ describe('formatDateOnly', () => {
     expect(formatDateOnly(null)).toBe('—')
     expect(formatDateOnly('')).toBe('—')
   })
+
+  it('rejects an out-of-range date instead of rolling it over', () => {
+    expect(formatDateOnly('2024-13-45')).toBe('—')
+    expect(formatDateOnly('2024-02-30')).toBe('—')
+  })
 })
 
 describe('formatInstant', () => {

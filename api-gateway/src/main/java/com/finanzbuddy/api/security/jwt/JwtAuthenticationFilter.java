@@ -1,5 +1,6 @@
 package com.finanzbuddy.api.security.jwt;
 
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
@@ -36,7 +37,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         final String authHeader = request.getHeader("Authorization");
         final String jwt;
-        String username;
+        final Claims claims;
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
@@ -45,7 +46,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         jwt = authHeader.substring(7);
         try {
-            username = jwtService.extractUsername(jwt);
+            // Parse and verify the signature once; the claims are reused below for the subject and
+            // the validity check, avoiding a second HMAC verification on the hot auth path.
+            claims = jwtService.parseClaims(jwt);
         } catch (ExpiredJwtException e) {
             // Expired tokens are common and useful for audit/ops; log them at a higher level than
             // malformed ones while still leaving the request unauthenticated so permitAll endpoints
@@ -62,10 +65,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
+        String username = claims.getSubject();
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             try {
                 UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
-                if (jwtService.isTokenValid(jwt, userDetails)) {
+                if (username.equals(userDetails.getUsername())) {
                     UsernamePasswordAuthenticationToken authToken =
                             new UsernamePasswordAuthenticationToken(
                                     userDetails, null, userDetails.getAuthorities());

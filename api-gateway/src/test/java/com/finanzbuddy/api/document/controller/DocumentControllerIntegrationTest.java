@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -24,14 +25,22 @@ import com.finanzbuddy.api.entity.DocumentStatus;
 import com.finanzbuddy.api.entity.OutboxEvent;
 import com.finanzbuddy.api.repository.OutboxEventRepository;
 import com.finanzbuddy.api.security.apikey.InternalApiKeyAuthFilter;
+import io.minio.GetObjectArgs;
+import io.minio.GetObjectResponse;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import java.io.ByteArrayInputStream;
+import java.math.BigDecimal;
+import java.sql.Date;
 import java.util.concurrent.CompletableFuture;
+import okhttp3.Headers;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
@@ -55,6 +64,8 @@ class DocumentControllerIntegrationTest {
     @Autowired private OutboxRelay outboxRelay;
 
     @Autowired private MinioClient minioClient;
+
+    @Autowired private JdbcTemplate jdbcTemplate;
 
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -191,7 +202,7 @@ class DocumentControllerIntegrationTest {
     }
 
     @Test
-    void transactionEndpointReturnsStubbedListAndChecksDocumentOwner() throws Exception {
+    void transactionEndpointReturnsOwnersTransactionsAndChecksDocumentOwner() throws Exception {
         String ownerToken = registerAndLogin("transaction-owner@example.com", "password123");
         String otherToken = registerAndLogin("transaction-other@example.com", "password123");
         MockMultipartFile file =
@@ -199,17 +210,57 @@ class DocumentControllerIntegrationTest {
                         "file", "transactions.csv", "text/csv", "a,b\n1,2".getBytes());
         long documentId = uploadDocument(ownerToken, file, "CSV");
 
+        // The transactions table is owned by the parser-service; recreate its shape here since the
+        // test profile runs neither that service's Liquibase nor a JPA entity for it.
+        jdbcTemplate.execute(
+                "CREATE TABLE IF NOT EXISTS transactions (id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                        + " document_id BIGINT NOT NULL, user_id BIGINT, booking_date DATE,"
+                        + " value_date DATE, amount DECIMAL(19,4), currency VARCHAR(3),"
+                        + " counterparty VARCHAR(500), description CLOB, category VARCHAR(255),"
+                        + " raw_data CLOB, created_at TIMESTAMP)");
+
         mockMvc.perform(get("/documents/" + documentId + "/transactions"))
                 .andExpect(status().isUnauthorized());
 
-        MvcResult result =
+        // No parsed transactions yet -> empty list.
+        MvcResult empty =
                 mockMvc.perform(
                                 get("/documents/" + documentId + "/transactions")
                                         .header("Authorization", "Bearer " + ownerToken))
                         .andExpect(status().isOk())
                         .andReturn();
-        assertThat(result.getResponse().getContentAsString()).isEqualTo("[]");
+        assertThat(empty.getResponse().getContentAsString()).isEqualTo("[]");
 
+        // The parser-service writes normalized rows into the shared transactions table; the owner
+        // must then see them through the gateway read view.
+        jdbcTemplate.update(
+                "INSERT INTO transactions (document_id, booking_date, value_date, amount,"
+                        + " currency, counterparty, description, category) VALUES (?, ?, ?, ?, ?, ?,"
+                        + " ?, ?)",
+                documentId,
+                Date.valueOf("2024-01-15"),
+                Date.valueOf("2024-01-16"),
+                new BigDecimal("42.5000"),
+                "EUR",
+                "ACME GmbH",
+                "Invoice 4711",
+                "Income");
+
+        MvcResult listed =
+                mockMvc.perform(
+                                get("/documents/" + documentId + "/transactions")
+                                        .header("Authorization", "Bearer " + ownerToken))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode rows = objectMapper.readTree(listed.getResponse().getContentAsString());
+        assertThat(rows.isArray()).isTrue();
+        assertThat(rows.size()).isEqualTo(1);
+        assertThat(rows.get(0).get("amount").asDouble()).isEqualTo(42.5);
+        assertThat(rows.get(0).get("currency").asText()).isEqualTo("EUR");
+        assertThat(rows.get(0).get("counterparty").asText()).isEqualTo("ACME GmbH");
+        assertThat(rows.get(0).get("bookingDate").asText()).isEqualTo("2024-01-15");
+
+        // A different user cannot see the document's transactions.
         mockMvc.perform(
                         get("/documents/" + documentId + "/transactions")
                                 .header("Authorization", "Bearer " + otherToken))
@@ -217,20 +268,38 @@ class DocumentControllerIntegrationTest {
     }
 
     @Test
-    void downloadEndpointIsAuthenticatedAndOwnerScopedWhileStubbed() throws Exception {
+    void downloadReturnsOwnersFileAndIsOwnerScoped() throws Exception {
         String ownerToken = registerAndLogin("download-owner@example.com", "password123");
         String otherToken = registerAndLogin("download-other@example.com", "password123");
+        byte[] storedBytes = "a,b\n1,2".getBytes();
         MockMultipartFile file =
-                new MockMultipartFile("file", "original.csv", "text/csv", "a,b\n1,2".getBytes());
+                new MockMultipartFile("file", "original.csv", "text/csv", storedBytes);
         long documentId = uploadDocument(ownerToken, file, "CSV");
 
         mockMvc.perform(get("/documents/" + documentId + "/download"))
                 .andExpect(status().isUnauthorized());
 
-        mockMvc.perform(
-                        get("/documents/" + documentId + "/download")
-                                .header("Authorization", "Bearer " + ownerToken))
-                .andExpect(status().is(501));
+        doReturn(
+                        new GetObjectResponse(
+                                Headers.of(),
+                                "finanzbuddy-documents",
+                                null,
+                                "obj",
+                                new ByteArrayInputStream(storedBytes)))
+                .when(minioClient)
+                .getObject(any(GetObjectArgs.class));
+
+        MvcResult result =
+                mockMvc.perform(
+                                get("/documents/" + documentId + "/download")
+                                        .header("Authorization", "Bearer " + ownerToken))
+                        .andExpect(status().isOk())
+                        .andExpect(
+                                header().string(
+                                                "Content-Disposition",
+                                                Matchers.containsString("original.csv")))
+                        .andReturn();
+        assertThat(result.getResponse().getContentAsByteArray()).isEqualTo(storedBytes);
 
         mockMvc.perform(
                         get("/documents/" + documentId + "/download")
