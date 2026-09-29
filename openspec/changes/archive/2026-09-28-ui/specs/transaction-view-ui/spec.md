@@ -38,4 +38,8 @@ The system SHALL show the status text badge beside the document filename and an 
 - **WHEN** an authenticated owner activates the download control
 - **THEN** the UI downloads the original document through an authenticated API Gateway endpoint
 
-The API Gateway download endpoint and response contract are a prerequisite and are not currently defined.
+## Implementation Notes
+
+- The API Gateway transaction route is authenticated and owner-scoped. It currently returns an empty list; the controller contains a TODO to connect the transaction read model.
+- The authenticated download route is owner-scoped and currently returns `501 Not Implemented`; the controller contains a TODO to stream the original object from MinIO with a download filename.
+- `DocumentResponse.errorMessage` is populated only for documents in the `FAILED` state so the detail screen can show parser failure details.

@@ -22,9 +22,12 @@ public class DatabaseUserDetailsService implements UserDetailsService {
     @Override
     @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        // Emails are stored lower-cased at registration; normalize the lookup so login and
+        // subsequent requests resolve regardless of the casing the client sends.
+        String email = username == null ? null : username.trim().toLowerCase(java.util.Locale.ROOT);
         User user =
                 userRepository
-                        .findByEmail(username)
+                        .findByEmail(email)
                         .orElseThrow(
                                 () -> new UsernameNotFoundException("User not found: " + username));
 

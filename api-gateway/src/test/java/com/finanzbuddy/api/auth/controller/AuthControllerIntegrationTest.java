@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finanzbuddy.api.auth.dto.AuthResponse;
 import com.finanzbuddy.api.auth.dto.LoginRequest;
@@ -61,11 +62,15 @@ class AuthControllerIntegrationTest {
                                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(
-                        post("/auth/register")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isConflict());
+        MvcResult conflict =
+                mockMvc.perform(
+                                post("/auth/register")
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsString(request)))
+                        .andExpect(status().isConflict())
+                        .andReturn();
+        JsonNode body = objectMapper.readTree(conflict.getResponse().getContentAsString());
+        assertThat(body.get("detail").asText()).isEqualTo("Email already registered");
     }
 
     @Test
@@ -97,10 +102,14 @@ class AuthControllerIntegrationTest {
     void loginReturns401ForInvalidCredentials() throws Exception {
         LoginRequest loginRequest = new LoginRequest("unknown@example.com", "wrongpassword");
 
-        mockMvc.perform(
-                        post("/auth/login")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(loginRequest)))
-                .andExpect(status().isUnauthorized());
+        MvcResult result =
+                mockMvc.perform(
+                                post("/auth/login")
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsString(loginRequest)))
+                        .andExpect(status().isUnauthorized())
+                        .andReturn();
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        assertThat(body.get("detail").asText()).isEqualTo("Invalid credentials");
     }
 }

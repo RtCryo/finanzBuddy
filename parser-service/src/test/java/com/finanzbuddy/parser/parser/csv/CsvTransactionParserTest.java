@@ -229,6 +229,22 @@ class CsvTransactionParserTest {
     }
 
     @Test
+    void normalizesOverlongCurrencyToNullInsteadOfFailing() {
+        // A stray label like "Euro" is longer than the 3-char currency column; it must be dropped
+        // (kept in raw_data) rather than blow up the insert and FAIL the whole document.
+        String csv =
+                "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"
+                        + "15.03.24;15.03.24;-12.50;Euro;Supermarket;Weekly groceries;Food";
+        DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
+
+        List<Transaction> transactions = parser.parse(toStream(csv), event, Locale.GERMANY);
+
+        assertThat(transactions).hasSize(1);
+        assertThat(transactions.get(0).getCurrency()).isNull();
+        assertThat(transactions.get(0).getRawData()).contains("Euro");
+    }
+
+    @Test
     void parsesIsoDateFormat() {
         String csv =
                 "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"

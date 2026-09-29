@@ -172,12 +172,27 @@ public class CsvTransactionParser implements DocumentParser {
                 CsvDateParser.parse(
                         getColumnValue(row, CsvColumn.VALUE_DATE), locale, "valueDate"));
         transaction.setAmount(CsvAmountParser.parse(getColumnValue(row, CsvColumn.AMOUNT), locale));
-        transaction.setCurrency(getColumnValue(row, CsvColumn.CURRENCY));
+        transaction.setCurrency(normalizeCurrency(getColumnValue(row, CsvColumn.CURRENCY)));
         transaction.setCounterparty(getColumnValue(row, CsvColumn.COUNTERPARTY));
         transaction.setDescription(getColumnValue(row, CsvColumn.DESCRIPTION));
         transaction.setCategory(getColumnValue(row, CsvColumn.CATEGORY));
         transaction.setRawData(serializeRawData(row));
         return transaction;
+    }
+
+    private String normalizeCurrency(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        // The currency column is a 3-char code (VARCHAR(3)). Anything longer is not a valid ISO
+        // 4217 code (e.g. a stray label like "Euro"); store null rather than let an oversized value
+        // blow up the batch insert and FAIL the whole document. The original stays in raw_data.
+        String upper = trimmed.toUpperCase(Locale.ROOT);
+        return upper.length() > 3 ? null : upper;
     }
 
     private String getColumnValue(Map<String, String> row, CsvColumn column) {

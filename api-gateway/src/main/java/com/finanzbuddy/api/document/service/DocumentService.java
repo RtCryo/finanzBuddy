@@ -4,8 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finanzbuddy.api.document.DocumentStorage;
 import com.finanzbuddy.api.document.DocumentType;
+import com.finanzbuddy.api.document.dto.DocumentListResponse;
 import com.finanzbuddy.api.document.dto.DocumentResponse;
 import com.finanzbuddy.api.document.dto.DocumentStatusUpdateRequest;
+import com.finanzbuddy.api.document.dto.DownloadedFile;
+import com.finanzbuddy.api.document.dto.TransactionResponse;
 import com.finanzbuddy.api.entity.Document;
 import com.finanzbuddy.api.entity.DocumentStatus;
 import com.finanzbuddy.api.entity.OutboxEvent;
@@ -13,12 +16,16 @@ import com.finanzbuddy.api.entity.User;
 import com.finanzbuddy.api.event.DocumentUploadedEvent;
 import com.finanzbuddy.api.repository.DocumentRepository;
 import com.finanzbuddy.api.repository.OutboxEventRepository;
+import com.finanzbuddy.api.repository.TransactionReadRepository;
 import com.finanzbuddy.api.repository.UserRepository;
+import io.minio.GetObjectArgs;
+import io.minio.GetObjectResponse;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.List;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +58,7 @@ public class DocumentService {
     private final DocumentRepository documentRepository;
     private final UserRepository userRepository;
     private final OutboxEventRepository outboxEventRepository;
+    private final TransactionReadRepository transactionReadRepository;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate txTemplate;
     private final String bucket;
@@ -62,6 +70,7 @@ public class DocumentService {
             DocumentRepository documentRepository,
             UserRepository userRepository,
             OutboxEventRepository outboxEventRepository,
+            TransactionReadRepository transactionReadRepository,
             ObjectMapper objectMapper,
             PlatformTransactionManager txManager,
             @Value("${app.minio.bucket}") String bucket,
@@ -71,6 +80,7 @@ public class DocumentService {
         this.documentRepository = documentRepository;
         this.userRepository = userRepository;
         this.outboxEventRepository = outboxEventRepository;
+        this.transactionReadRepository = transactionReadRepository;
         this.objectMapper = objectMapper;
         this.txTemplate = new TransactionTemplate(txManager);
         this.bucket = bucket;
@@ -174,9 +184,26 @@ public class DocumentService {
     }
 
     @Transactional(readOnly = true)
-    public Page<DocumentResponse> listDocuments(String userEmail, Pageable pageable) {
+    public DocumentListResponse listDocuments(
+            String userEmail, Pageable pageable, String filename) {
         User user = getUser(userEmail);
-        return documentRepository.findByUserId(user.getId(), pageable).map(this::toResponse);
+        String query = filename == null ? "" : filename.trim();
+        Page<Document> page =
+                query.isEmpty()
+                        ? documentRepository.findByUserId(user.getId(), pageable)
+                        : documentRepository.findByUserIdAndOriginalFilenameContainingIgnoreCase(
+                                user.getId(), query, pageable);
+        long userId = user.getId();
+        return new DocumentListResponse(
+                page.getContent().stream().map(this::toResponse).toList(),
+                page.getTotalElements(),
+                page.getTotalPages(),
+                page.getNumber(),
+                page.getSize(),
+                documentRepository.countByUserId(userId),
+                documentRepository.countByUserIdAndStatus(userId, DocumentStatus.PROCESSED),
+                documentRepository.countByUserIdAndStatusIn(
+                        userId, List.of(DocumentStatus.PENDING, DocumentStatus.PROCESSING)));
     }
 
     @Transactional(readOnly = true)
@@ -191,6 +218,61 @@ public class DocumentService {
                                                 HttpStatus.NOT_FOUND, "Document not found"));
         return toResponse(document);
     }
+
+    @Transactional(readOnly = true)
+    public List<TransactionResponse> getTransactions(String userEmail, Long documentId) {
+        User user = getUser(userEmail);
+        // Ownership guard: only surface transactions for a document the caller owns.
+        documentRepository
+                .findByIdAndUserId(documentId, user.getId())
+                .orElseThrow(
+                        () ->
+                                new ResponseStatusException(
+                                        HttpStatus.NOT_FOUND, "Document not found"));
+        return transactionReadRepository.findByDocumentId(documentId);
+    }
+
+    /**
+     * Streams the owner's original uploaded file from object storage. Ownership is verified in a
+     * short transaction; the object-storage I/O then runs without holding a DB connection.
+     */
+    public DownloadedFile downloadOriginalFile(String userEmail, Long documentId) {
+        StoredObject stored =
+                txTemplate.execute(
+                        status -> {
+                            User user = getUser(userEmail);
+                            Document document =
+                                    documentRepository
+                                            .findByIdAndUserId(documentId, user.getId())
+                                            .orElseThrow(
+                                                    () ->
+                                                            new ResponseStatusException(
+                                                                    HttpStatus.NOT_FOUND,
+                                                                    "Document not found"));
+                            String path = document.getStoragePath();
+                            if (path == null || path.isBlank()) {
+                                throw new ResponseStatusException(
+                                        HttpStatus.NOT_FOUND, "Original file is not available");
+                            }
+                            return new StoredObject(path, document.getOriginalFilename());
+                        });
+
+        try (GetObjectResponse object =
+                minioClient.getObject(
+                        GetObjectArgs.builder().bucket(bucket).object(stored.path()).build())) {
+            return new DownloadedFile(object.readAllBytes(), stored.filename());
+        } catch (Exception e) {
+            log.error(
+                    "Failed to read stored object {} for document {}",
+                    stored.path(),
+                    documentId,
+                    e);
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR, "Failed to read the original file");
+        }
+    }
+
+    private record StoredObject(String path, String filename) {}
 
     /**
      * Updates a document's status on behalf of an internal parser service. Unlike the user-facing
@@ -336,6 +418,7 @@ public class DocumentService {
                 document.getOriginalFilename(),
                 document.getType(),
                 document.getStatus(),
-                document.getCreatedAt());
+                document.getCreatedAt(),
+                document.getStatus() == DocumentStatus.FAILED ? document.getErrorMessage() : null);
     }
 }
