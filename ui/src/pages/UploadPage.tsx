@@ -103,6 +103,7 @@ export function UploadPage() {
       setType('')
       if (fileInput.current) fileInput.current.value = ''
     } catch (requestError) {
+      setProgress(null)
       setError(getErrorMessage(requestError, 'The upload failed. Please try again.'))
     } finally {
       setIsUploading(false)

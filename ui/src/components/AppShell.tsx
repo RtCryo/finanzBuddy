@@ -1,5 +1,6 @@
-import { Link, NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
+import { clearSession, getEmail } from '../auth/storage'
 
 type AppShellProps = {
   children: ReactNode
@@ -40,7 +41,8 @@ function pageLabel(pathname: string) {
 
 export function AppShell({ children }: AppShellProps) {
   const location = useLocation()
-  const email = localStorage.getItem('finanzbuddy.email') || 'Your account'
+  const navigate = useNavigate()
+  const email = getEmail() || 'Your account'
   const initials = email === 'Your account'
     ? 'FB'
     : email.split('@')[0].split(/[._-]/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
@@ -73,6 +75,16 @@ export function AppShell({ children }: AppShellProps) {
           <div className="profile" aria-label={`Signed in as ${email}`}>
             <span className="profile-avatar" aria-hidden="true">{initials || 'FB'}</span>
             <span className="profile-email">{email}</span>
+            <button
+              className="sign-out"
+              type="button"
+              onClick={() => {
+                clearSession()
+                navigate('/login', { replace: true })
+              }}
+            >
+              Sign out
+            </button>
           </div>
         </header>
         <main className="main-content">{children}</main>

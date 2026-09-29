@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { getErrorMessage } from '../api/errors'
+import { returnPathFromLocation } from '../auth/returnPath'
 import { setSession } from '../auth/storage'
 import { AuthLayout } from '../components/AuthLayout'
 
@@ -27,10 +28,7 @@ export function LoginPage() {
       const response = await api.post<LoginResponse>('/auth/login', { email, password })
       if (!response.data.token) throw new Error('The server did not return an access token.')
       setSession(response.data.token, email)
-      const destination = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname
-      const requestedPath = new URLSearchParams(location.search).get('next')
-      const returnPath = destination ?? requestedPath
-      navigate(returnPath?.startsWith('/documents') ? returnPath : '/documents', { replace: true })
+      navigate(returnPathFromLocation(location.state, location.search), { replace: true })
     } catch (requestError) {
       setError(getErrorMessage(requestError, 'We could not sign you in. Please check your details.'))
     } finally {

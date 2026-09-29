@@ -34,6 +34,7 @@ The Vite dev server starts on `http://localhost:5173` and proxies all `/api` req
 | `npm run build` | Type-check and build the production bundle to `dist/`. |
 | `npm run preview` | Preview the production build locally. |
 | `npm run lint` | Run Oxlint. |
+| `npm run test` | Run the Vitest suite. |
 
 ## Environment variables
 

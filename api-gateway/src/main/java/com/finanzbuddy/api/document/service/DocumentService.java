@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finanzbuddy.api.document.DocumentStorage;
 import com.finanzbuddy.api.document.DocumentType;
+import com.finanzbuddy.api.document.dto.DocumentListResponse;
 import com.finanzbuddy.api.document.dto.DocumentResponse;
 import com.finanzbuddy.api.document.dto.DocumentStatusUpdateRequest;
 import com.finanzbuddy.api.entity.Document;
@@ -19,6 +20,7 @@ import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.List;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -174,9 +176,26 @@ public class DocumentService {
     }
 
     @Transactional(readOnly = true)
-    public Page<DocumentResponse> listDocuments(String userEmail, Pageable pageable) {
+    public DocumentListResponse listDocuments(
+            String userEmail, Pageable pageable, String filename) {
         User user = getUser(userEmail);
-        return documentRepository.findByUserId(user.getId(), pageable).map(this::toResponse);
+        String query = filename == null ? "" : filename.trim();
+        Page<Document> page =
+                query.isEmpty()
+                        ? documentRepository.findByUserId(user.getId(), pageable)
+                        : documentRepository.findByUserIdAndOriginalFilenameContainingIgnoreCase(
+                                user.getId(), query, pageable);
+        long userId = user.getId();
+        return new DocumentListResponse(
+                page.getContent().stream().map(this::toResponse).toList(),
+                page.getTotalElements(),
+                page.getTotalPages(),
+                page.getNumber(),
+                page.getSize(),
+                documentRepository.countByUserId(userId),
+                documentRepository.countByUserIdAndStatus(userId, DocumentStatus.PROCESSED),
+                documentRepository.countByUserIdAndStatusIn(
+                        userId, List.of(DocumentStatus.PENDING, DocumentStatus.PROCESSING)));
     }
 
     @Transactional(readOnly = true)

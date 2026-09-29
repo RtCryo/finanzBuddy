@@ -3,6 +3,7 @@ package com.finanzbuddy.api.repository;
 import com.finanzbuddy.api.entity.Document;
 import com.finanzbuddy.api.entity.DocumentStatus;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -17,6 +18,15 @@ import org.springframework.stereotype.Repository;
 public interface DocumentRepository extends JpaRepository<Document, Long> {
 
     Page<Document> findByUserId(Long userId, Pageable pageable);
+
+    Page<Document> findByUserIdAndOriginalFilenameContainingIgnoreCase(
+            Long userId, String originalFilename, Pageable pageable);
+
+    long countByUserId(Long userId);
+
+    long countByUserIdAndStatus(Long userId, DocumentStatus status);
+
+    long countByUserIdAndStatusIn(Long userId, Collection<DocumentStatus> statuses);
 
     Optional<Document> findByIdAndUserId(Long id, Long userId);
 

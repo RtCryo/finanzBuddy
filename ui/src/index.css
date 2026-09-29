@@ -236,6 +236,26 @@ button {
   white-space: nowrap;
 }
 
+.sign-out {
+  border: 0;
+  background: transparent;
+  color: #167d68;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+}
+
+.sign-out:hover {
+  color: #116653;
+  text-decoration: underline;
+}
+
+.sign-out:focus-visible {
+  outline: 3px solid rgb(22 125 104 / 25%);
+  outline-offset: 2px;
+}
+
 .main-content {
   width: 100%;
   max-width: 1440px;
@@ -753,6 +773,11 @@ button {
   background: #f7fbf9;
 }
 
+.button-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .supported-formats {
   margin: -13px 0 0;
 }
@@ -1182,6 +1207,17 @@ button {
   font-size: 11px;
 }
 
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px solid #eef1f5;
+  padding: 14px 24px;
+  color: #718096;
+  font-size: 12px;
+}
+
 .back-link {
   display: inline-flex;
   margin: 0 0 25px;
@@ -1260,6 +1296,13 @@ button {
 .download-button svg {
   width: 20px;
   height: 20px;
+}
+
+.detail-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
 }
 
 .detail-information {

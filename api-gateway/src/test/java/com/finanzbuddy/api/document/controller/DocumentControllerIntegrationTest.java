@@ -150,6 +150,47 @@ class DocumentControllerIntegrationTest {
     }
 
     @Test
+    void listSupportsPagingAndFilenameSearch() throws Exception {
+        String token = registerAndLogin("paging@example.com", "password123");
+        uploadDocument(
+                token,
+                new MockMultipartFile("file", "alpha.csv", "text/csv", "a,b\n1,2".getBytes()),
+                "CSV");
+        uploadDocument(
+                token,
+                new MockMultipartFile("file", "beta.csv", "text/csv", "a,b\n1,2".getBytes()),
+                "CSV");
+
+        MvcResult page =
+                mockMvc.perform(
+                                get("/documents")
+                                        .param("page", "0")
+                                        .param("size", "1")
+                                        .header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode body = objectMapper.readTree(page.getResponse().getContentAsString());
+        assertThat(body.get("totalElements").asLong()).isEqualTo(2);
+        assertThat(body.get("totalPages").asInt()).isEqualTo(2);
+        assertThat(body.get("content").size()).isEqualTo(1);
+        assertThat(body.get("totalDocuments").asLong()).isEqualTo(2);
+        assertThat(body.get("inProgressCount").asLong()).isEqualTo(2);
+
+        MvcResult search =
+                mockMvc.perform(
+                                get("/documents")
+                                        .param("filename", "alpha")
+                                        .header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode filtered = objectMapper.readTree(search.getResponse().getContentAsString());
+        assertThat(filtered.get("totalElements").asLong()).isEqualTo(1);
+        assertThat(filtered.get("content").get(0).get("originalFilename").asText())
+                .isEqualTo("alpha.csv");
+        assertThat(filtered.get("totalDocuments").asLong()).isEqualTo(2);
+    }
+
+    @Test
     void transactionEndpointReturnsStubbedListAndChecksDocumentOwner() throws Exception {
         String ownerToken = registerAndLogin("transaction-owner@example.com", "password123");
         String otherToken = registerAndLogin("transaction-other@example.com", "password123");

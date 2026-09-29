@@ -1,10 +1,10 @@
 package com.finanzbuddy.api.document.controller;
 
+import com.finanzbuddy.api.document.dto.DocumentListResponse;
 import com.finanzbuddy.api.document.dto.DocumentResponse;
 import com.finanzbuddy.api.document.dto.TransactionResponse;
 import com.finanzbuddy.api.document.service.DocumentService;
 import java.util.List;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -41,10 +41,12 @@ public class DocumentController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<DocumentResponse>> listDocuments(
-            @AuthenticationPrincipal UserDetails userDetails, Pageable pageable) {
+    public ResponseEntity<DocumentListResponse> listDocuments(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam(required = false) String filename,
+            Pageable pageable) {
         return ResponseEntity.ok(
-                documentService.listDocuments(userDetails.getUsername(), pageable));
+                documentService.listDocuments(userDetails.getUsername(), pageable, filename));
     }
 
     @GetMapping("/{id}")

@@ -2,32 +2,27 @@ import { api } from './client'
 import type { DocumentRecord } from '../types/document'
 import type { TransactionRecord } from '../types/transaction'
 
-type PageResponse<T> = {
-  content: T[]
+export type DocumentPage = {
+  content: DocumentRecord[]
   totalElements: number
+  totalPages: number
+  number: number
+  size: number
+  totalDocuments: number
+  processedCount: number
+  inProgressCount: number
 }
 
-const pageSize = 100
-
-async function fetchDocumentPage(page: number) {
-  const response = await api.get<PageResponse<DocumentRecord>>('/documents', {
-    params: { page, size: pageSize, sort: 'createdAt,desc' },
+export async function getDocuments(page = 0, filename = '') {
+  const response = await api.get<DocumentPage>('/documents', {
+    params: {
+      page,
+      size: 20,
+      sort: 'createdAt,desc',
+      ...(filename ? { filename } : {}),
+    },
   })
   return response.data
-}
-
-export async function getDocuments() {
-  const first = await fetchDocumentPage(0)
-  if (first.content.length >= first.totalElements) return first
-
-  const remainingPages = Math.ceil(first.totalElements / pageSize) - 1
-  const rest = await Promise.all(
-    Array.from({ length: remainingPages }, (_, index) => fetchDocumentPage(index + 1)),
-  )
-  return {
-    content: [...first.content, ...rest.flatMap((page) => page.content)],
-    totalElements: first.totalElements,
-  }
 }
 
 export async function getDocument(id: string) {
