@@ -1,6 +1,6 @@
 # finanzBuddy UI
 
-The finanzBuddy web interface. A React 18 + TypeScript single-page application built with Vite and styled with Tailwind CSS.
+The finanzBuddy web interface. A React 19 + TypeScript single-page application built with Vite and styled with Tailwind CSS.
 
 ## What it does
 
