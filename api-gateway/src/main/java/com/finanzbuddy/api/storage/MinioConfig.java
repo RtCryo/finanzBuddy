@@ -7,6 +7,7 @@ import java.net.URI;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,21 +37,23 @@ public class MinioConfig {
             name = "create-bucket",
             havingValue = "true",
             matchIfMissing = true)
-    public void documentsBucket(
+    public ApplicationRunner documentsBucket(
             MinioClient minioClient, @Value("${app.minio.bucket}") String bucket) {
-        try {
-            boolean exists =
-                    minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
-            if (!exists) {
-                minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
-                log.info("Created MinIO bucket: {}", bucket);
+        return args -> {
+            try {
+                boolean exists =
+                        minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
+                if (!exists) {
+                    minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
+                    log.info("Created MinIO bucket: {}", bucket);
+                }
+            } catch (Exception e) {
+                log.warn(
+                        "Could not verify or create MinIO bucket {} at startup; MinioHealthIndicator"
+                                + " will report availability at runtime",
+                        bucket,
+                        e);
             }
-        } catch (Exception e) {
-            log.warn(
-                    "Could not verify or create MinIO bucket {} at startup; MinioHealthIndicator"
-                            + " will report availability at runtime",
-                    bucket,
-                    e);
-        }
+        };
     }
 }
