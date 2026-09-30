@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: traefik:v3.3
+    image: traefik:v3.7.13
     container_name: finanzbuddy-traefik
     profiles:
       - production
@@ -33,7 +33,7 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
       interval: 5s
@@ -41,7 +41,7 @@ services:
       retries: 5
 
   kafka:
-    image: apache/kafka:3.9.1
+    image: apache/kafka:3.9.2
     container_name: finanzbuddy-kafka
     environment:
       KAFKA_NODE_ID: 1
@@ -65,14 +65,16 @@ services:
       start_period: 20s
 
   minio:
-    image: minio/minio:RELEASE.2024-03-03T17-50-39Z
+    # MinIO community edition is now source-only (no official minio/minio images), so we use
+    # Bitnami's distribution. Broadcom froze the free Bitnami catalog under the bitnamilegacy
+    # namespace in 2025; this is the last publicly pullable tag. Revisit for a maintained store.
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5
     container_name: finanzbuddy-minio
-    command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
-      - minio-data:/data
+      - minio-data:/bitnami/minio/data
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
       interval: 5s
