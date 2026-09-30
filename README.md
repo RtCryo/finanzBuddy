@@ -65,8 +65,10 @@ Prerequisites:
 - A public DNS `A`/`AAAA` record for your domain resolving to the deployment host.
 - Inbound TCP ports 80 and 443 reachable from the internet (port 80 is required for ACME
   HTTP-01 validation and the HTTP→HTTPS redirect).
-- `.env` populated with `JWT_SECRET`, `INTERNAL_API_KEY`, and the production values for
-  `TRAEFIK_DOMAIN` (your real domain) and `TRAEFIK_ACME_EMAIL` (a real contact email).
+- `.env` populated with `JWT_SECRET`, `INTERNAL_API_KEY`, strong unique values for
+  `DB_PASSWORD` and `MINIO_ROOT_PASSWORD` (do not keep the local defaults in production),
+  and the production values for `TRAEFIK_DOMAIN` (your real domain) and
+  `TRAEFIK_ACME_EMAIL` (a real contact email).
 
 Start the production stack from the repository root:
 
