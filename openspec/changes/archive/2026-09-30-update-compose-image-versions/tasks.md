@@ -53,4 +53,4 @@ Bringing up a truly fresh stack surfaced a chain of pre-existing bugs, all roote
 ## 5. Docs and wrap-up
 
 - [x] 5.1 Update `README.md` / any docs that reference specific image versions — no doc pins specific image versions (README/ARCHITECTURE reference MinIO/Postgres/Kafka only conceptually, still accurate). Added a `docker-compose.yml` comment explaining the non-obvious `bitnamilegacy/minio` choice.
-- [ ] 5.2 Commit the changes on the feature branch with an English commit message summarizing the bumps
+- [x] 5.2 Commit the changes on the feature branch with an English commit message summarizing the bumps — committed as two commits: `f09b1c2` (image/compose + openspec change) and `f3713a8` (Spring Boot 4 app-startup fixes)
