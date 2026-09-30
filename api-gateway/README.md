@@ -1,6 +1,6 @@
 # API Gateway
 
-Spring Boot 4.1 API Gateway for the finanzBuddy platform. Provides JWT authentication, document upload to MinIO, Kafka event publishing, and document query endpoints.
+Spring Boot 4.1 API Gateway for the finanzBuddy platform. Provides JWT authentication, document upload to S3-compatible object storage (SeaweedFS), Kafka event publishing, and document query endpoints.
 
 ## Requirements
 
@@ -22,7 +22,7 @@ From the repository root:
 docker-compose up --build
 ```
 
-This starts PostgreSQL, Kafka (with Zookeeper), MinIO, and the API Gateway.
+This starts PostgreSQL, Kafka, SeaweedFS (S3-compatible object storage), and the API Gateway.
 
 ## Environment Variables
 
@@ -35,10 +35,10 @@ This starts PostgreSQL, Kafka (with Zookeeper), MinIO, and the API Gateway.
 | `DB_USER` | PostgreSQL user | `finanzbuddy` |
 | `DB_PASSWORD` | PostgreSQL password | `finanzbuddy` |
 | `KAFKA_BOOTSTRAP_SERVERS` | Kafka bootstrap servers | `localhost:29092` |
-| `MINIO_ENDPOINT` | MinIO endpoint | `http://localhost:9000` |
-| `MINIO_ACCESS_KEY` | MinIO access key | `minioadmin` |
-| `MINIO_SECRET_KEY` | MinIO secret key | `minioadmin` |
-| `MINIO_BUCKET` | MinIO bucket for documents | `finanzbuddy-documents` |
+| `MINIO_ENDPOINT` | S3 object-storage endpoint (SeaweedFS) | `http://localhost:9000` |
+| `MINIO_ACCESS_KEY` | S3 access key | `minioadmin` |
+| `MINIO_SECRET_KEY` | S3 secret key | `minioadmin` |
+| `MINIO_BUCKET` | Object-storage bucket for documents | `finanzbuddy-documents` |
 | `JWT_SECRET` | Base64-encoded JWT signing secret | **required, no default** — set in `.env` (`openssl rand -base64 32`) |
 | `JWT_EXPIRATION_MS` | JWT expiration in milliseconds | `86400000` |
 | `INTERNAL_API_KEY` | Shared key for internal service endpoints (`/internal/**`) | **required, no default** — `/internal/**` is locked until set |
@@ -164,9 +164,12 @@ is never lost if the broker is unavailable at upload time — it is retried unti
 A separate reconciler removes documents left in `PENDING` with no stored file (uploads interrupted
 before completion).
 
-## MinIO Storage
+## Object Storage
 
-Uploaded files are stored under `users/{userId}/{documentId}-{originalFilename}`.
+Uploaded files are stored in S3-compatible object storage (SeaweedFS) under
+`users/{userId}/{documentId}-{originalFilename}`. Access is via the `io.minio` S3 client, so the
+`MINIO_*` variable names are retained even though the backend is SeaweedFS. The bucket is created at
+startup if it does not exist (`app.minio.create-bucket`, default `true`).
 
 ## Design decisions & accepted limitations
 
