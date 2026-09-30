@@ -1,4 +1,30 @@
 services:
+  traefik:
+    image: traefik:v3.3
+    container_name: finanzbuddy-traefik
+    profiles:
+      - production
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=${TRAEFIK_ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-acme:/letsencrypt
+    depends_on:
+      ui:
+        condition: service_started
+
   postgres:
     image: postgres:18-alpine
     container_name: finanzbuddy-postgres
@@ -72,8 +98,6 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    ports:
-      - "8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: local
       DB_HOST: postgres
@@ -130,8 +154,12 @@ services:
     depends_on:
       api-gateway:
         condition: service_started
-    ports:
-      - "3000:80"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ui.rule=Host(`${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.ui.entrypoints=websecure"
+      - "traefik.http.routers.ui.tls.certresolver=letsencrypt"
+      - "traefik.http.services.ui.loadbalancer.server.port=80"
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1/" ]
       interval: 30s
@@ -142,3 +170,4 @@ services:
 volumes:
   postgres-data:
   minio-data:
+  traefik-acme:

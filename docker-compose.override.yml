@@ -1,0 +1,11 @@
+# Local-development overrides, loaded automatically by `docker compose`.
+# Restores direct localhost host ports for the UI and API Gateway.
+# The production deployment intentionally omits this file (see README).
+services:
+  api-gateway:
+    ports:
+      - "8080:8080"
+
+  ui:
+    ports:
+      - "3000:80"
