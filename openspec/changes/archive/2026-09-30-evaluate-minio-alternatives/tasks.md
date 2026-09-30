@@ -36,4 +36,4 @@
 ## 6. Docs and wrap-up
 
 - [x] 6.1 Update `docker-compose.yml` comments, README, and `docs/ARCHITECTURE.md` to reflect the decision (chosen replacement, or why MinIO is retained for now)
-- [ ] 6.2 Commit the changes on the feature branch with an English commit message summarizing the decision and any replacement
+- [x] 6.2 Commit the changes on the feature branch with an English commit message summarizing the decision and any replacement
