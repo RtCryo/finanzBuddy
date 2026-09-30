@@ -1,6 +1,6 @@
 # Parser Service
 
-Consumes `DocumentUploadedEvent` messages from Kafka, downloads the referenced file from MinIO, parses it, and persists normalized transactions to PostgreSQL. Reports processing status back to the API Gateway.
+Consumes `DocumentUploadedEvent` messages from Kafka, downloads the referenced file from S3-compatible object storage (SeaweedFS), parses it, and persists normalized transactions to PostgreSQL. Reports processing status back to the API Gateway.
 
 ## Supported Formats
 
@@ -22,10 +22,10 @@ Configuration is read from `application.yml` and can be overridden with environm
 | `DB_USER` | PostgreSQL user | `finanzbuddy` |
 | `DB_PASSWORD` | PostgreSQL password | `finanzbuddy` |
 | `KAFKA_BOOTSTRAP_SERVERS` | Kafka bootstrap servers | `localhost:29092` |
-| `MINIO_ENDPOINT` | MinIO URL | `http://localhost:9000` |
-| `MINIO_ACCESS_KEY` | MinIO access key | `minioadmin` |
-| `MINIO_SECRET_KEY` | MinIO secret key | `minioadmin` |
-| `MINIO_BUCKET` | MinIO bucket | `finanzbuddy-documents` |
+| `MINIO_ENDPOINT` | S3 object-storage endpoint (SeaweedFS) | `http://localhost:9000` |
+| `MINIO_ACCESS_KEY` | S3 access key | `minioadmin` |
+| `MINIO_SECRET_KEY` | S3 secret key | `minioadmin` |
+| `MINIO_BUCKET` | Object-storage bucket | `finanzbuddy-documents` |
 | `GATEWAY_BASE_URL` | API Gateway base URL | `http://localhost:8080` |
 | `INTERNAL_API_KEY` | Shared internal API key | (empty) |
 | `GATEWAY_CONNECT_TIMEOUT` | HTTP connect timeout | `5s` |

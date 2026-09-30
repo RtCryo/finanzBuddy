@@ -11,21 +11,21 @@ finanzBuddy is a personal finance document processing platform. Users upload ban
 UI (React) → API Gateway (Spring Boot) → Kafka → Parser Service (Spring Boot)
                      │                                      │
                      ├── PostgreSQL (users, documents, transactions, outbox)
-                     └── MinIO (original files)
+                     └── SeaweedFS (S3-compatible object storage, original files)
 ```
 
-The gateway and parser service share one PostgreSQL database and one MinIO bucket. The gateway owns
+The gateway and parser service share one PostgreSQL database and one object-storage bucket. The gateway owns
 users/documents/outbox and reads the parser-owned `transactions` table to serve it back to the UI.
 
 ## Key capabilities
 
-- **Secure document upload** — authenticated users upload financial documents to object storage (MinIO). CSV is accepted in the MVP (`PDF`/`XML` are recognised but not yet parsed).
+- **Secure document upload** — authenticated users upload financial documents to S3-compatible object storage (SeaweedFS). CSV is accepted in the MVP (`PDF`/`XML` are recognised but not yet parsed).
 - **Transaction extraction** — the parser service consumes upload events, parses the file, and persists normalized transactions.
 - **Document tracking** — every document is tracked in PostgreSQL with statuses (`PENDING`, `PROCESSING`, `PROCESSED`, `FAILED`); the UI polls for status.
 - **Transaction viewing & file download** — processed documents expose their transactions and let the owner download the original file.
 - **Kafka event bus** — successful uploads emit `documents.{type}` events via a transactional outbox.
 - **JWT authentication** — stateless auth with registration and login endpoints.
-- **Containerized deployment** — Docker Compose stack with Postgres, Kafka, Zookeeper, MinIO, the API Gateway, the parser service, and the UI.
+- **Containerized deployment** — Docker Compose stack with Postgres, Kafka, SeaweedFS (S3-compatible object storage), the API Gateway, the parser service, and the UI.
 
 ## Repository structure
 

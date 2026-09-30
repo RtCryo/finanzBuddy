@@ -14,8 +14,8 @@ services:
 
   minio:
     ports:
+      # SeaweedFS S3 gateway. (The old MinIO console on 9001 no longer exists.)
       - "9000:9000"
-      - "9001:9001"
 
   api-gateway:
     ports:

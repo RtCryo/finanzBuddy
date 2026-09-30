@@ -2,7 +2,7 @@
 
 ## Overview
 
-finanzBuddy is a financial document processing platform. Authenticated users upload financial documents (CSV, PDF, XML) through a web UI. Each document is tagged by type, stored in object storage, and announced via Apache Kafka. A downstream parser service consumes the event, parses the file, normalizes the extracted data into transactions, and persists the results in PostgreSQL.
+finanzBuddy is a financial document processing platform. Authenticated users upload financial documents (CSV, PDF, XML) through a web UI. Each document is tagged by type, stored in S3-compatible object storage, and announced via Apache Kafka. A downstream parser service consumes the event, parses the file, normalizes the extracted data into transactions, and persists the results in PostgreSQL.
 
 The project is organized as a **monorepo** containing independent microservices:
 
@@ -15,7 +15,7 @@ The project is organized as a **monorepo** containing independent microservices:
 ```
 +--------+      +-------------+      +---------------------+
 |   UI   |----->| API Gateway |----->|   Document Upload   |
-+--------+      |  (Spring)   |      |  MinIO + PostgreSQL |
++--------+      |  (Spring)   |      | SeaweedFS+PostgreSQL|
                 +-------------+      +----------+----------+
                             |
                             | Kafka Producer
@@ -53,7 +53,7 @@ The project is organized as a **monorepo** containing independent microservices:
 | API Gateway | Spring Boot 4.1, Spring Web MVC, Spring Security, JWT, Spring Data JPA, Spring Kafka |
 | Parser Service | Spring Boot 4.1, Spring Kafka, Spring Data JPA, OpenCSV, Apache PDFBox, Jackson XML |
 | Database | PostgreSQL 16 |
-| Object Storage | MinIO (S3-compatible) |
+| Object Storage | SeaweedFS (S3-compatible, accessed via the `io.minio` client) |
 | Message Bus | Apache Kafka |
 | Containerization | Docker, Docker Compose |
 | Build | Maven (parent POM + per-service modules) |
@@ -82,7 +82,7 @@ finanzBuddy/
   - User registration and login with JWT
   - Authenticated multipart document upload
   - Document type validation (`CSV`, `PDF`, `XML`)
-  - File storage in MinIO under `users/{userId}/{documentId}-{filename}`
+  - File storage in object storage (SeaweedFS) under `users/{userId}/{documentId}-{filename}`
   - Document metadata persistence in PostgreSQL with status `PENDING`
   - Kafka event publishing to `documents.{type}`
   - REST endpoints for listing documents and updating status
@@ -99,7 +99,7 @@ finanzBuddy/
 
 - **Responsibilities**
   - Consume `DocumentUploadedEvent` messages from configured Kafka topics
-  - Download the referenced file from MinIO
+  - Download the referenced file from object storage (SeaweedFS)
   - Parse the file using a format-specific strategy
   - Normalize extracted data into a unified `Transaction` model
   - Persist transactions in PostgreSQL
@@ -200,7 +200,7 @@ finanzBuddy/
 - Passwords are hashed with BCrypt.
 - JWT access tokens protect all document endpoints.
 - Service-to-service status updates use an internal API key.
-- MinIO files are stored under user-scoped paths.
+- Object-storage files are stored under user-scoped paths.
 - Users can only access documents they own.
 
 ## Local Development
@@ -208,8 +208,8 @@ finanzBuddy/
 All infrastructure runs locally with Docker Compose:
 
 - PostgreSQL
-- Kafka + Zookeeper
-- MinIO
+- Kafka
+- SeaweedFS (S3-compatible object storage)
 - API Gateway
 - Parser Service
 - UI
