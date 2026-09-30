@@ -4,7 +4,7 @@ Spring Boot 4.1 API Gateway for the finanzBuddy platform. Provides JWT authentic
 
 ## Requirements
 
-- Java 21
+- Java 25
 - Maven 3.9+
 - Docker & Docker Compose (for local infrastructure)
 
