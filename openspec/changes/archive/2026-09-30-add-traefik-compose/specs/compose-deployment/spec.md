@@ -32,12 +32,23 @@ The production Compose deployment SHALL route requests for the configured applic
 - **WHEN** the production Compose deployment is running
 - **THEN** public application traffic enters through the reverse proxy rather than directly through published UI or API Gateway ports
 
+### Requirement: Keep infrastructure services private in production
+The production Compose deployment SHALL NOT publish host ports for internal infrastructure services (PostgreSQL, Kafka, and MinIO). These services SHALL be reachable only over the internal Compose network so that the reverse proxy on ports 80 and 443 is the only externally published entry point.
+
+#### Scenario: Production stack is running
+- **WHEN** the production Compose deployment is running
+- **THEN** the PostgreSQL, Kafka, and MinIO services are not published on host ports and are reachable only by other containers on the internal network
+
+#### Scenario: Application service reaches infrastructure
+- **WHEN** the API Gateway or parser service connects to PostgreSQL, Kafka, or MinIO in production
+- **THEN** the connection uses the internal Compose network hostnames without any published host port
+
 ### Requirement: Preserve local Compose development access
-The local-development Compose workflow SHALL retain localhost access to the UI and API Gateway without requiring a public DNS name or ACME certificate.
+The local-development Compose workflow SHALL retain localhost access to the UI, API Gateway, and infrastructure services (PostgreSQL, Kafka, MinIO) without requiring a public DNS name or ACME certificate.
 
 #### Scenario: Developer starts the local stack
 - **WHEN** a developer starts the local-development Compose workflow
-- **THEN** the UI and API Gateway remain reachable on their documented localhost ports without ACME configuration
+- **THEN** the UI, API Gateway, and infrastructure services remain reachable on their documented localhost ports without ACME configuration
 
 ### Requirement: Persist ACME certificate state
 The production Compose deployment SHALL persist ACME certificate state across container recreation so that valid certificates are retained and renewal state is not discarded during routine restarts.

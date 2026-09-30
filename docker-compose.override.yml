@@ -1,7 +1,22 @@
 # Local-development overrides, loaded automatically by `docker compose`.
-# Restores direct localhost host ports for the UI and API Gateway.
-# The production deployment intentionally omits this file (see README).
+# Restores direct localhost host ports for the application and infrastructure
+# services so they can be reached from the host during development. The
+# production deployment intentionally omits this file (see README), so those
+# services stay on the internal Docker network and only Traefik is published.
 services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  kafka:
+    ports:
+      - "29092:29092"
+
+  minio:
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
   api-gateway:
     ports:
       - "8080:8080"
