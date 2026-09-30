@@ -34,7 +34,7 @@ This starts PostgreSQL, Kafka (with Zookeeper), MinIO, and the API Gateway.
 | `DB_NAME` | PostgreSQL database | `finanzbuddy` |
 | `DB_USER` | PostgreSQL user | `finanzbuddy` |
 | `DB_PASSWORD` | PostgreSQL password | `finanzbuddy` |
-| `KAFKA_BOOTSTRAP_SERVERS` | Kafka bootstrap servers | `localhost:9092` |
+| `KAFKA_BOOTSTRAP_SERVERS` | Kafka bootstrap servers | `localhost:29092` |
 | `MINIO_ENDPOINT` | MinIO endpoint | `http://localhost:9000` |
 | `MINIO_ACCESS_KEY` | MinIO access key | `minioadmin` |
 | `MINIO_SECRET_KEY` | MinIO secret key | `minioadmin` |
