@@ -71,7 +71,7 @@ services:
     # gateway is bound to port 9000 to preserve MINIO_ENDPOINT. Credentials are injected from the
     # MINIO_ROOT_* env vars into the SeaweedFS -s3.config identities file at startup; buckets are
     # created on demand (the api-gateway creates its bucket at startup via the S3 API).
-    image: chrislusf/seaweedfs:3.99
+    image: chrislusf/seaweedfs:4.48
     container_name: finanzbuddy-minio
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
