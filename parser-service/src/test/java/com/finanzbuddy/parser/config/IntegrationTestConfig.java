@@ -1,9 +1,8 @@
 package com.finanzbuddy.parser.config;
 
-import com.finanzbuddy.parser.storage.MinioStorageService;
-import com.finanzbuddy.parser.storage.StorageException;
+import com.finanzbuddy.parser.processing.domain.exception.FileFetchException;
+import com.finanzbuddy.parser.processing.port.out.FileFetchPort;
 import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -42,15 +41,12 @@ public class IntegrationTestConfig {
 
     @Bean
     @Primary
-    public MinioStorageService testMinioStorageService() {
-        return new MinioStorageService(null, null) {
-            @Override
-            public InputStream download(String storagePath) {
-                if (storagePath == null || !storagePath.startsWith("csv/")) {
-                    throw new StorageException("Unexpected storage path: " + storagePath, null);
-                }
-                return new ByteArrayInputStream(SAMPLE_CSV.getBytes(StandardCharsets.UTF_8));
+    public FileFetchPort testFileFetchPort() {
+        return storagePath -> {
+            if (storagePath == null || !storagePath.startsWith("csv/")) {
+                throw new FileFetchException(storagePath, null);
             }
+            return new ByteArrayInputStream(SAMPLE_CSV.getBytes(StandardCharsets.UTF_8));
         };
     }
 

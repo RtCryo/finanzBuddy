@@ -1,7 +1,7 @@
 package com.finanzbuddy.api.security;
 
-import com.finanzbuddy.api.security.apikey.InternalApiKeyAuthFilter;
-import com.finanzbuddy.api.security.jwt.JwtAuthenticationFilter;
+import com.finanzbuddy.api.security.adapter.in.web.InternalApiKeyAuthFilter;
+import com.finanzbuddy.api.security.adapter.in.web.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;

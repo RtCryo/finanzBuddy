@@ -95,6 +95,37 @@ finanzBuddy/
   - `GET /documents/{id}`
   - `PUT /internal/documents/{id}/status` (service-to-service)
 
+- **Internal structure (hexagonal)**
+  The gateway is being migrated slice-by-slice to a ports-and-adapters (hexagonal) layout. The
+  `document` slice was the pilot; `auth`, `cleanup`, and `security` followed; all share the shape. A
+  framework-free `domain` holds the business rules behind inbound use-case ports and reaches
+  infrastructure only through outbound ports; the concrete frameworks (Spring Security/Data, MinIO,
+  Jackson, Kafka, web transport, `@Scheduled`) live only in `adapter/in/*` and `adapter/out/*`,
+  never in the domain.
+  - `document`: inbound ports for upload/list/get/transactions/download/status; outbound ports
+    `DocumentRepositoryPort`, `TransactionReadPort`, `FileStoragePort`, `DocumentEventPort`,
+    `TransactionRunnerPort`. `MultipartFile`/`Page`/`Pageable` are converted to domain types at the
+    web edge; the transactional outbox lives in the messaging adapter.
+  - `auth`: inbound ports `RegisterUserUseCase`/`LoginUseCase`; outbound ports `UserRepositoryPort`,
+    `PasswordHasherPort`, `CredentialAuthenticatorPort`, `AccessTokenIssuerPort`,
+    `TransactionRunnerPort`.
+  - `cleanup`: inbound port `ReconcileStalePendingUseCase` (one stale-PENDING reconciliation pass),
+    driven by a thin `@Scheduled` trigger adapter. Reuses the `document` outbound ports
+    (`DocumentRepositoryPort` with the stale finder + conditional delete, `FileStoragePort`,
+    `TransactionRunnerPort`) and adds `ClockPort` so the staleness window is testable without
+    wall-clock time.
+  - `security`: inbound ports `AuthenticateRequestUseCase` (bearer token → principal) and
+    `AuthenticateInternalUseCase` (api-key → service principal); outbound ports `AccessTokenPort`
+    (issue/validate), `ApiKeyPort` (constant-time compare), `PrincipalLookupPort` (backed by the
+    auth slice's `UserRepositoryPort`). The servlet filters are thin inbound adapters; the JWT
+    library is confined to the token adapter and `AccessTokenPort` is reused by the `auth` slice to
+    issue tokens. Token failures are domain results/exceptions mapped to 401 at the filter edge.
+
+  Each slice ships an ArchUnit test (`DocumentArchitectureTest`, `AuthArchitectureTest`,
+  `CleanupArchitectureTest`, `SecurityArchitectureTest`) that fails the build if the domain imports
+  a forbidden framework package or bypasses a port. The parser-service applies the same pattern in
+  its own `processing` and `parsing` slices (see below).
+
 ### Parser Service
 
 - **Responsibilities**
@@ -125,6 +156,24 @@ finanzBuddy/
     ├── PdfTransactionParser (MVP stub)
     └── XmlTransactionParser (MVP stub)
   ```
+
+- **Internal structure (hexagonal)**
+  The parser-service follows the same ports-and-adapters shape as the gateway, split into two
+  framework-free domain slices under `com.finanzbuddy.parser`:
+  - `processing`: inbound port `ProcessDocumentUseCase` (handle one `DocumentUploadedEvent`),
+    implemented by the `DocumentProcessor` orchestrator; outbound ports `FileFetchPort`,
+    `TransactionParserPort`, `TransactionWriterPort` (idempotent dedupe+insert), `StatusReporterPort`,
+    `ProcessingMetricsPort`. The Kafka consumer is a thin `@KafkaListener` adapter; MinIO, the
+    `RestClient`, Spring Data + the JPA entities, and Micrometer live only in `adapter/out/*`;
+    framework exceptions are translated to domain exceptions at the adapter edge.
+  - `parsing`: port `DocumentParser` with a framework-free `DocumentParserRouter`; OpenCSV/PDFBox/
+    Jackson format libraries are confined to the per-format adapters. Both slices share one
+    framework-free domain `Transaction`.
+
+  Each slice ships an ArchUnit test (`ProcessingArchitectureTest`, `ParsingArchitectureTest`) that
+  fails the build if the domain imports a forbidden framework package or bypasses a port. Kafka
+  topics, idempotency, gateway status callbacks, and emitted metric names are unchanged by the
+  refactor.
 
 ### User Interface
 

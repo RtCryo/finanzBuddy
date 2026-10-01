@@ -1,12 +1,12 @@
 package com.finanzbuddy.parser.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.finanzbuddy.parser.client.GatewayStatusClient;
 import com.finanzbuddy.parser.document.DocumentStatus;
 import com.finanzbuddy.parser.document.ErrorMessageTruncator;
 import com.finanzbuddy.parser.event.DocumentUploadedEvent;
-import com.finanzbuddy.parser.event.DocumentUploadedEventDeserializer;
-import com.finanzbuddy.parser.service.TransactionPersistenceService;
+import com.finanzbuddy.parser.processing.adapter.in.kafka.DocumentUploadedEventDeserializer;
+import com.finanzbuddy.parser.processing.port.out.StatusReporterPort;
+import com.finanzbuddy.parser.processing.port.out.TransactionWriterPort;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -85,8 +85,8 @@ public class KafkaConfig {
     @Bean
     public DeadLetterPublishingRecoverer deadLetterPublishingRecoverer(
             KafkaTemplate<String, Object> kafkaTemplate,
-            GatewayStatusClient gatewayStatusClient,
-            TransactionPersistenceService transactionPersistenceService) {
+            StatusReporterPort statusReporter,
+            TransactionWriterPort transactionWriter) {
         return new DeadLetterPublishingRecoverer(
                 kafkaTemplate,
                 (record, exception) -> {
@@ -101,9 +101,8 @@ public class KafkaConfig {
                         try {
                             if (event.documentId() != null) {
                                 boolean alreadyProcessed =
-                                        transactionPersistenceService.isProcessed(
-                                                event.documentId());
-                                gatewayStatusClient.reportStatus(
+                                        transactionWriter.isAlreadyProcessed(event.documentId());
+                                statusReporter.report(
                                         event.documentId(),
                                         alreadyProcessed
                                                 ? DocumentStatus.PROCESSED

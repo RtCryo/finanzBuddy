@@ -9,9 +9,9 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.finanzbuddy.parser.config.IntegrationTestConfig;
-import com.finanzbuddy.parser.entity.Transaction;
 import com.finanzbuddy.parser.event.DocumentUploadedEvent;
-import com.finanzbuddy.parser.repository.TransactionRepository;
+import com.finanzbuddy.parser.processing.adapter.out.persistence.TransactionEntity;
+import com.finanzbuddy.parser.processing.adapter.out.persistence.TransactionRepository;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -99,7 +99,7 @@ class ParserServiceIntegrationTest {
                 .pollInterval(Duration.ofMillis(200))
                 .untilAsserted(
                         () -> {
-                            List<Transaction> transactions =
+                            List<TransactionEntity> transactions =
                                     transactionRepository.findByDocumentId(documentId);
                             assertThat(transactions).hasSize(2);
                             assertThat(transactions).allMatch(tx -> tx.getUserId().equals(userId));

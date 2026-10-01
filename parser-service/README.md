@@ -10,6 +10,74 @@ Consumes `DocumentUploadedEvent` messages from Kafka, downloads the referenced f
 | PDF    | Stub (MVP)  | disabled |
 | XML    | Stub (MVP)  | disabled |
 
+## Architecture
+
+The service is organized into two hexagonal (ports & adapters) vertical slices under
+`com.finanzbuddy.parser`.
+
+### Processing slice (`processing/`)
+
+Orchestrates the consume → fetch → parse → persist → report flow:
+
+```
+processing/
+  domain/
+    DocumentProcessor              implements ProcessDocumentUseCase; framework-free orchestration
+    model/      ProcessingOutcome  terminal result (PROCESSED | DUPLICATE); failures are exceptions
+                WriteResult        idempotent-write result (WRITTEN | DUPLICATE)
+    exception/  FileFetchException, TransactionPersistenceException
+  port/
+    in/   ProcessDocumentUseCase   handle one DocumentUploadedEvent
+    out/  FileFetchPort            fetch the stored object by key
+          TransactionParserPort    route + parse to domain transactions
+          TransactionWriterPort    idempotent dedupe + insert
+          StatusReporterPort       report PROCESSING/PROCESSED/FAILED to the gateway
+          ProcessingMetricsPort    processed/failed/duplicate counters + processing timer
+  adapter/
+    in/kafka/        KafkaDocumentEventAdapter (@KafkaListener) + DocumentUploadedEventDeserializer
+    out/storage/     MinioFileFetchAdapter          MinIO client
+    out/parsing/     RoutingTransactionParserAdapter delegates to the parsing slice router
+    out/persistence/ JpaTransactionWriterAdapter    @Transactional dedupe+insert; TransactionEntity, ProcessedDocument, repositories
+    out/status/      RestClientStatusReporterAdapter @Retryable RestClient
+    out/metrics/     MicrometerProcessingMetricsAdapter preserves exact metric names
+  config/
+    ProcessingConfiguration        wires the framework-free orchestrator as a Spring bean
+```
+
+The processing domain depends only on `java.*`, `org.slf4j`, and project domain types.
+Micrometer, Spring, MinIO, Kafka, and Jackson are confined to adapters; framework
+exceptions (`DataAccessException`, `RestClientException`) are translated to domain
+exceptions inside the adapters. The Kafka consumer is a thin adapter that only invokes
+the inbound port. These boundaries are enforced by `ProcessingArchitectureTest` (ArchUnit).
+
+### Parsing slice (`parsing/`)
+
+Turns a raw document into normalized domain transactions:
+
+```
+parsing/
+  domain/
+    DocumentParserRouter          selects a parser by document type (framework-free)
+    model/        Transaction      framework-free transaction extracted from a document
+    normalization/ CsvRowMapper    row -> domain Transaction (column aliasing, currency rules)
+                   CsvAmountParser  locale-aware amount normalization
+                   CsvDateParser    locale-aware date normalization
+  port/
+    DocumentParser                 supports(type) + parse(...) -> domain transactions
+  adapter/
+    csv/  CsvParserAdapter          OpenCSV / commons-io / Jackson; reads rows, delegates mapping
+    pdf/  PdfParserAdapter          MVP stub (future PDFBox home)
+    xml/  XmlParserAdapter          MVP stub (future Jackson-XML home)
+  config/
+    ParsingConfiguration           wires the framework-free router as a Spring bean
+```
+
+The normalization domain depends only on `java.*` and project domain types — format
+libraries (OpenCSV, commons-io, Jackson) are confined to the adapters. The
+`DocumentParser` port returns the domain `Transaction`, which both slices share; mapping
+to the JPA entity happens in the processing persistence adapter. These boundaries are
+enforced by `ParsingArchitectureTest` (ArchUnit).
+
 ## Configuration
 
 Configuration is read from `application.yml` and can be overridden with environment variables:

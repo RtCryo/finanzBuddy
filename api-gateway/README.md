@@ -161,8 +161,8 @@ Documents are published to topics named `documents.<type>` (e.g., `documents.csv
 Events are written to a transactional outbox (`outbox_events`) in the same database transaction
 that finalizes the upload, then delivered to Kafka by a background relay. This guarantees an event
 is never lost if the broker is unavailable at upload time — it is retried until delivery succeeds.
-A separate reconciler removes documents left in `PENDING` with no stored file (uploads interrupted
-before completion).
+A separate scheduled reconciler (the `cleanup` slice) removes documents left in `PENDING` with no
+stored file (uploads interrupted before completion).
 
 ## Object Storage
 
@@ -170,6 +170,115 @@ Uploaded files are stored in S3-compatible object storage (SeaweedFS) under
 `users/{userId}/{documentId}-{originalFilename}`. Access is via the `io.minio` S3 client, so the
 `MINIO_*` variable names are retained even though the backend is SeaweedFS. The bucket is created at
 startup if it does not exist (`app.minio.create-bucket`, default `true`).
+
+## Internal structure (hexagonal)
+
+The `document`, `auth`, `cleanup`, and `security` slices are organized as ports-and-adapters
+(hexagonal): business rules live in a framework-free domain and reach infrastructure only through
+ports. `document` was the pilot for the pattern; `auth`, `cleanup`, and `security` followed.
+
+The `document` slice:
+
+```
+com.finanzbuddy.api.document/
+├── domain/            DocumentService (upload/list/get/transactions/download/status), model,
+│                      domain exceptions — no Spring, JPA, MinIO, Jackson, or web types
+├── port/
+│   ├── in/            UploadDocumentUseCase, ListDocumentsUseCase, GetDocumentUseCase,
+│   │                  ListTransactionsUseCase, DownloadOriginalFileUseCase,
+│   │                  UpdateDocumentStatusUseCase
+│   └── out/           DocumentRepositoryPort, TransactionReadPort, FileStoragePort,
+│                      DocumentEventPort, TransactionRunnerPort
+├── adapter/
+│   ├── in/web/        DocumentController, InternalDocumentController, DTOs, DTO↔domain mapper
+│   └── out/
+│       ├── persistence/  JPA entities + Spring Data repositories + repository adapters
+│       ├── storage/      MinIO/S3 file-storage adapter (the only io.minio imports)
+│       ├── messaging/    outbox event adapter (Jackson), relay, retention, metrics
+│       └── tx/           Spring transaction-runner adapter
+└── config/            Spring wiring that constructs the domain DocumentService from port beans
+```
+
+`MultipartFile` and Spring Data `Page`/`Pageable` never cross the domain boundary — the web adapter
+converts them to an `UploadDocumentCommand` and a domain `PageRequest`/`PageResult`. Domain errors
+are domain exceptions mapped to HTTP in `ApiExceptionHandler`. `DocumentArchitectureTest` (ArchUnit)
+fails the build on any boundary violation.
+
+The `auth` slice follows the same shape. Business rules for registration and login live in a
+framework-free domain and reach infrastructure only through ports:
+
+```
+com.finanzbuddy.api.auth/
+├── domain/            AuthService (register + login), domain model, domain exceptions — no Spring
+├── port/
+│   ├── in/            RegisterUserUseCase, LoginUseCase (driven by the web adapter)
+│   └── out/           UserRepositoryPort, PasswordHasherPort, CredentialAuthenticatorPort,
+│                      AccessTokenIssuerPort, TransactionRunnerPort
+├── adapter/
+│   ├── in/web/        AuthController + request/response DTOs + ByteLength validation
+│   └── out/
+│       ├── security/      Spring Security adapters (PasswordEncoder, AuthenticationManager,
+│       │                  UserDetailsService) and the JWT token issuer
+│       └── persistence/   Spring Data user repository + transaction runner
+└── config/            Spring wiring that constructs the domain AuthService from port beans
+```
+
+The domain never imports `org.springframework.*`, JPA, Jackson, or web types; Spring Security and
+Spring Data appear only inside `adapter/out/*`. These boundaries are enforced at build time by
+`AuthArchitectureTest` (ArchUnit), which fails the build on any violation.
+
+The `cleanup` slice holds the stale-`PENDING` reconciliation rule. It is a thin slice that reuses
+the `document` slice's outbound ports (`DocumentRepositoryPort` — including the stale-PENDING finder
+and the conditional `deleteByIdIfStale` — plus `FileStoragePort` and `TransactionRunnerPort`) and
+adds a `ClockPort` so the staleness window is unit-testable without wall-clock time:
+
+```
+com.finanzbuddy.api.cleanup/
+├── domain/            StalePendingReconciliation — select stale PENDING docs with no storage path,
+│                      conditionally delete each row while still stale, then remove the orphaned
+│                      object best-effort; reads time via ClockPort — no Spring, JPA, or MinIO
+├── port/
+│   ├── in/            ReconcileStalePendingUseCase (one reconciliation pass)
+│   └── out/           ClockPort (reuses document DocumentRepositoryPort, FileStoragePort,
+│                      TransactionRunnerPort)
+├── adapter/
+│   ├── in/scheduler/  ScheduledReconcilerTrigger (@Scheduled → calls the use case, no logic)
+│   └── out/clock/     SystemClockAdapter
+└── config/            Spring wiring that constructs the domain reconciliation from port beans
+```
+
+`@Scheduled`, Spring Data `PageRequest`, and MinIO never appear in the cleanup domain; the scheduler
+is a thin trigger. `CleanupArchitectureTest` (ArchUnit) enforces these boundaries.
+
+The `security` slice holds the authentication *decisions* — validate a bearer token and resolve its
+principal, and verify the internal api-key — behind ports, so the JWT library and the servlet stack
+become replaceable details. The servlet filters are thin inbound adapters that delegate to the
+inbound ports and populate the `SecurityContext`; `SecurityConfig` remains the Spring Security
+wiring:
+
+```
+com.finanzbuddy.api.security/
+├── domain/            RequestAuthenticator (bearer token → principal), InternalAuthenticator
+│                      (api-key → service principal), model (Principal, TokenValidationResult),
+│                      exceptions (InvalidTokenException, ExpiredTokenException) — no Spring,
+│                      servlet, or io.jsonwebtoken types
+├── port/
+│   ├── in/            AuthenticateRequestUseCase, AuthenticateInternalUseCase (driven by filters)
+│   └── out/           AccessTokenPort (issue/validate), ApiKeyPort (constant-time compare),
+│                      PrincipalLookupPort (backed by the auth slice's UserRepositoryPort)
+├── adapter/
+│   ├── in/web/        JwtAuthenticationFilter, InternalApiKeyAuthFilter (thin servlet adapters)
+│   └── out/
+│       ├── token/     JwtAccessTokenAdapter (the only io.jsonwebtoken imports)
+│       ├── apikey/    ApiKeyMatcherAdapter (constant-time comparison of the configured key)
+│       └── user/      PrincipalLookupAdapter (loads the principal via UserRepositoryPort)
+└── SecurityConfig     Spring Security filter chain + wiring of the domain authenticators
+```
+
+`AccessTokenPort` is the reusable token contract: the `auth` slice issues login/registration tokens
+through it. Library exceptions never leave the token adapter — token failures are domain results
+(`TokenValidationResult`) or domain exceptions, mapped to the existing 401 behavior at the filter
+edge. `SecurityArchitectureTest` (ArchUnit) enforces these boundaries.
 
 ## Design decisions & accepted limitations
 
