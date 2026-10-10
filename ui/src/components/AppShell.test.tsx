@@ -23,4 +23,18 @@ describe('AppShell', () => {
     expect(getToken()).toBeNull()
     expect(screen.getByText('login-screen')).toBeInTheDocument()
   })
+
+  it('links to transaction history and labels the workspace page', () => {
+    render(
+      <MemoryRouter initialEntries={['/transactions']}>
+        <Routes>
+          <Route path="/transactions" element={<AppShell><div>history</div></AppShell>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('link', { name: 'Transaction history' }))
+      .toHaveAttribute('href', '/transactions')
+    expect(screen.getByLabelText('Breadcrumb')).toHaveTextContent('Transaction history')
+  })
 })

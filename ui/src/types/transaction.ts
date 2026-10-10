@@ -8,3 +8,22 @@ export type TransactionRecord = {
   description: string | null
   category: string | null
 }
+
+export type TransactionHistoryPage = {
+  content: TransactionRecord[]
+  totalElements: number
+  totalPages: number
+  number: number
+  size: number
+  categories: string[]
+  hasUncategorized: boolean
+}
+
+export type TransactionHistoryParams = {
+  page?: number
+  size?: number
+  query?: string
+  from?: string
+  to?: string
+  category?: string
+}
