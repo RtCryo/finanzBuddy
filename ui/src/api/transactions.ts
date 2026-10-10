@@ -12,6 +12,8 @@ export async function getTransactionHistory(params: TransactionHistoryParams = {
       ...(params.from ? { from: params.from } : {}),
       ...(params.to ? { to: params.to } : {}),
       ...(params.category ? { category: params.category } : {}),
+      ...(params.sortField ? { sortField: params.sortField } : {}),
+      ...(params.sortDirection ? { sortDirection: params.sortDirection } : {}),
     },
   })
   return response.data

@@ -1,11 +1,13 @@
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { getToken, setSession } from '../auth/storage'
 import { AppShell } from './AppShell'
 
 describe('AppShell', () => {
+  afterEach(cleanup)
+
   it('signs the user out', async () => {
     setSession('token', 'alex@example.com')
 
@@ -36,5 +38,19 @@ describe('AppShell', () => {
     expect(screen.getByRole('link', { name: 'Transaction history' }))
       .toHaveAttribute('href', '/transactions')
     expect(screen.getByLabelText('Breadcrumb')).toHaveTextContent('Transaction history')
+  })
+
+  it('keeps workspace navigation focused and shows privacy reassurance once', () => {
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <AppShell><div>docs</div></AppShell>
+      </MemoryRouter>,
+    )
+
+    const navigation = screen.getByRole('navigation', { name: 'Workspace' })
+    expect(within(navigation).getByRole('link', { name: 'Documents' })).toHaveAttribute('href', '/documents')
+    expect(within(navigation).getByRole('link', { name: 'Transaction history' })).toHaveAttribute('href', '/transactions')
+    expect(within(navigation).queryByRole('link', { name: 'Upload a file' })).not.toBeInTheDocument()
+    expect(screen.getAllByText('Your financial data is secure and only accessible to you.')).toHaveLength(1)
   })
 })

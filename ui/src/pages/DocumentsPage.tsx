@@ -26,13 +26,11 @@ export function DocumentsPage() {
   const [processingCount, setProcessingCount] = useState(0)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const requestId = useRef(0)
   const searchTimer = useRef<number | null>(null)
 
-  const refresh = useCallback(async (showLoading = false) => {
+  const refresh = useCallback(async () => {
     const current = ++requestId.current
-    if (showLoading) setIsRefreshing(true)
     try {
       const result = await getDocuments(page, appliedSearch)
       if (current !== requestId.current) return
@@ -49,7 +47,6 @@ export function DocumentsPage() {
     } finally {
       if (current === requestId.current) {
         setIsLoading(false)
-        setIsRefreshing(false)
       }
     }
   }, [appliedSearch, page])
@@ -104,10 +101,6 @@ export function DocumentsPage() {
               <span className="visually-hidden">Search documents</span>
               <input value={search} onChange={(event) => updateSearch(event.target.value)} placeholder="Search documents" />
             </label>
-            <button className="button button-secondary refresh-button" type="button" onClick={() => void refresh(true)} disabled={isRefreshing}>
-              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M16.5 8A6.7 6.7 0 0 0 4.8 5.3L3.5 6.7M3.5 6.7V3.8M3.5 6.7h2.9M3.5 12a6.7 6.7 0 0 0 11.7 2.7l1.3-1.4m0 0v2.9m0-2.9h-2.9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              {isRefreshing ? 'Refreshing' : 'Refresh'}
-            </button>
           </div>
         </div>
 

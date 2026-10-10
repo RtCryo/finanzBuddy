@@ -47,13 +47,15 @@ describe('TransactionHistoryPage', () => {
 
   afterEach(cleanup)
 
-  it('renders normalized transaction fields and available category choices', async () => {
+  it('renders Value date without a Booking date column and available category choices', async () => {
     renderPage()
 
     expect(await screen.findByRole('table', { name: 'Transaction history' })).toBeInTheDocument()
     const row = screen.getByRole('row', { name: /Monthly rent/ })
-    expect(within(row).getByText('Jan 31, 2024')).toBeInTheDocument()
     expect(within(row).getByText('Feb 1, 2024')).toBeInTheDocument()
+    expect(within(row).queryByText('Jan 31, 2024')).not.toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: /Value date/ })).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: /Booking date/ })).not.toBeInTheDocument()
     expect(within(row).getByText('123.45')).toBeInTheDocument()
     expect(within(row).getByText('EUR')).toBeInTheDocument()
     expect(within(row).getByText('ACME GmbH')).toBeInTheDocument()
@@ -78,8 +80,8 @@ describe('TransactionHistoryPage', () => {
 
     await screen.findByRole('table', { name: 'Transaction history' })
     await user.type(screen.getByRole('textbox', { name: 'Search description or counterparty' }), 'rent')
-    fireEvent.change(screen.getByLabelText('Booking date from'), { target: { value: '2024-01-01' } })
-    fireEvent.change(screen.getByLabelText('Booking date to'), { target: { value: '2024-01-31' } })
+    fireEvent.change(screen.getByLabelText('Value date from'), { target: { value: '2024-01-01' } })
+    fireEvent.change(screen.getByLabelText('Value date to'), { target: { value: '2024-01-31' } })
     await user.selectOptions(screen.getByRole('combobox', { name: 'Filter by category' }), 'Housing')
 
     await waitFor(() => {
@@ -90,6 +92,8 @@ describe('TransactionHistoryPage', () => {
         from: '2024-01-01',
         to: '2024-01-31',
         category: 'Housing',
+        sortField: 'valueDate',
+        sortDirection: 'DESC',
       })
     })
   })
@@ -101,13 +105,29 @@ describe('TransactionHistoryPage', () => {
 
     await screen.findByRole('table', { name: 'Transaction history' })
     await user.click(screen.getByRole('button', { name: 'Page 2' }))
-    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith({ page: 1, size: 20 }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith({
+      page: 1,
+      size: 20,
+      sortField: 'valueDate',
+      sortDirection: 'DESC',
+    }))
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Filter by category' }), 'Housing')
-    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith({ page: 0, size: 20, category: 'Housing' }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith({
+      page: 0,
+      size: 20,
+      category: 'Housing',
+      sortField: 'valueDate',
+      sortDirection: 'DESC',
+    }))
 
     await user.click(screen.getByRole('button', { name: 'Clear filters' }))
-    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith({ page: 0, size: 20 }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith({
+      page: 0,
+      size: 20,
+      sortField: 'valueDate',
+      sortDirection: 'DESC',
+    }))
     expect(screen.getByRole('combobox', { name: 'Filter by category' })).toHaveValue('')
   })
 
@@ -123,14 +143,74 @@ describe('TransactionHistoryPage', () => {
     expect(screen.getByRole('button', { name: 'Page 1' })).toHaveAttribute('aria-current', 'page')
 
     await user.click(screen.getByRole('button', { name: 'Page 10' }))
-    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith({ page: 9, size: 20 }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith({
+      page: 9,
+      size: 20,
+      sortField: 'valueDate',
+      sortDirection: 'DESC',
+    }))
     expect(screen.getByRole('button', { name: 'Page 10' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled()
 
     await user.click(screen.getByRole('button', { name: 'Page 1' }))
-    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith({ page: 0, size: 20 }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith({
+      page: 0,
+      size: 20,
+      sortField: 'valueDate',
+      sortDirection: 'DESC',
+    }))
     expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled()
+  })
+
+  it('sorts columns accessibly and resets pagination when sorting changes', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getTransactionHistory).mockResolvedValue(result({ totalElements: 200, totalPages: 10 }))
+    renderPage()
+
+    await screen.findByRole('table', { name: 'Transaction history' })
+    expect(screen.getByRole('columnheader', { name: /Value date/ })).toHaveAttribute('aria-sort', 'descending')
+    await user.click(screen.getByRole('button', { name: 'Page 2' }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 })))
+
+    await user.click(screen.getByRole('button', { name: /Counterparty/ }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({
+      page: 0,
+      sortField: 'counterparty',
+      sortDirection: 'ASC',
+    })))
+    expect(screen.getByRole('columnheader', { name: /Counterparty/ })).toHaveAttribute('aria-sort', 'ascending')
+
+    await user.click(screen.getByRole('button', { name: /Counterparty/ }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({
+      page: 0,
+      sortField: 'counterparty',
+      sortDirection: 'DESC',
+    })))
+    expect(screen.getByRole('columnheader', { name: /Counterparty/ })).toHaveAttribute('aria-sort', 'descending')
+  })
+
+  it('styles signed amounts semantically while preserving their text', async () => {
+    vi.mocked(getTransactionHistory).mockResolvedValue(result({
+      content: [
+        transaction,
+        { ...transaction, id: 8, amount: '-9.50', description: 'Debit' },
+        { ...transaction, id: 9, amount: '0', description: 'Zero' },
+        { ...transaction, id: 10, amount: null, description: 'Missing' },
+      ],
+      totalElements: 4,
+    }))
+    renderPage()
+
+    expect(await screen.findByRole('row', { name: /Monthly rent/ })).toHaveTextContent('123.45')
+    expect(screen.getByRole('row', { name: /Monthly rent/ }).querySelector('.transaction-amount'))
+      .toHaveClass('amount-positive')
+    expect(screen.getByRole('row', { name: /Debit/ }).querySelector('.transaction-amount'))
+      .toHaveClass('amount-negative')
+    expect(screen.getByRole('row', { name: /Zero/ }).querySelector('.transaction-amount'))
+      .toHaveClass('amount-neutral')
+    expect(screen.getByRole('row', { name: /Missing/ }).querySelector('.transaction-amount'))
+      .toHaveClass('amount-neutral')
   })
 
   it('shows empty, loading and error states', async () => {

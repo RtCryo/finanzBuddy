@@ -5,6 +5,7 @@ import java.sql.Date;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -21,6 +22,14 @@ import org.springframework.stereotype.Repository;
 public class TransactionReadRepository {
 
     public static final String UNCATEGORIZED = "__uncategorized__";
+    private static final Map<String, String> HISTORY_SORT_COLUMNS =
+            Map.of(
+                    "valueDate", "t.value_date",
+                    "amount", "t.amount",
+                    "currency", "t.currency",
+                    "counterparty", "t.counterparty",
+                    "description", "t.description",
+                    "category", "t.category");
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -42,6 +51,8 @@ public class TransactionReadRepository {
             LocalDate from,
             LocalDate to,
             String category,
+            String sortField,
+            String sortDirection,
             Pageable pageable) {
         StringBuilder where = new StringBuilder(baseHistoryQuery());
         List<Object> parameters = new ArrayList<>();
@@ -57,11 +68,11 @@ public class TransactionReadRepository {
             parameters.add(text);
         }
         if (from != null) {
-            where.append(" AND t.booking_date >= ?");
+            where.append(" AND t.value_date >= ?");
             parameters.add(Date.valueOf(from));
         }
         if (to != null) {
-            where.append(" AND t.booking_date <= ?");
+            where.append(" AND t.value_date <= ?");
             parameters.add(Date.valueOf(to));
         }
         if (category != null && !category.isBlank()) {
@@ -79,13 +90,31 @@ public class TransactionReadRepository {
         List<Object> pageParameters = new ArrayList<>(parameters);
         pageParameters.add(pageable.getPageSize());
         pageParameters.add(pageable.getOffset());
+        String sortColumn = HISTORY_SORT_COLUMNS.get(sortField);
+        if (sortColumn == null) {
+            throw new IllegalArgumentException("Unsupported transaction sort field");
+        }
+        String direction =
+                switch (sortDirection) {
+                    case "ASC" -> "ASC";
+                    case "DESC" -> "DESC";
+                    default ->
+                            throw new IllegalArgumentException(
+                                    "Unsupported transaction sort direction");
+                };
         List<TransactionResponse> content =
                 jdbcTemplate.query(
                         "SELECT t.id, t.booking_date, t.value_date, t.amount, t.currency,"
                                 + " t.counterparty, t.description, t.category"
                                 + where
-                                + " ORDER BY CASE WHEN t.booking_date IS NULL THEN 1 ELSE 0 END,"
-                                + " t.booking_date DESC, t.id DESC LIMIT ? OFFSET ?",
+                                + " ORDER BY CASE WHEN "
+                                + sortColumn
+                                + " IS NULL THEN 1 ELSE 0 END,"
+                                + " "
+                                + sortColumn
+                                + " "
+                                + direction
+                                + ", t.id ASC LIMIT ? OFFSET ?",
                         TransactionReadRepository::toTransaction,
                         pageParameters.toArray());
         return new PageImpl<>(content, pageable, total == null ? 0 : total);

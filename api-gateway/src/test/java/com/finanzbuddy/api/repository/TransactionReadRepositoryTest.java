@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,6 +66,8 @@ class TransactionReadRepositoryTest {
                         LocalDate.parse("2024-03-20"),
                         LocalDate.parse("2024-03-20"),
                         "Income",
+                        "valueDate",
+                        "DESC",
                         PageRequest.of(0, 10));
 
         assertThat(page.getTotalElements()).isEqualTo(1);
@@ -79,9 +82,11 @@ class TransactionReadRepositoryTest {
     @Test
     void scopesToProcessedOwnerRowsSortsUndatedLastAndHonorsPageBoundaries() {
         Page<com.finanzbuddy.api.document.dto.TransactionResponse> first =
-                repository.findHistory(7L, null, null, null, null, PageRequest.of(0, 2));
+                repository.findHistory(
+                        7L, null, null, null, null, "valueDate", "DESC", PageRequest.of(0, 2));
         Page<com.finanzbuddy.api.document.dto.TransactionResponse> last =
-                repository.findHistory(7L, null, null, null, null, PageRequest.of(1, 2));
+                repository.findHistory(
+                        7L, null, null, null, null, "valueDate", "DESC", PageRequest.of(1, 2));
 
         assertThat(first.getTotalElements()).isEqualTo(3);
         assertThat(first.getTotalPages()).isEqualTo(2);
@@ -99,6 +104,8 @@ class TransactionReadRepositoryTest {
                         null,
                         null,
                         TransactionReadRepository.UNCATEGORIZED,
+                        "valueDate",
+                        "DESC",
                         PageRequest.of(0, 10));
 
         assertThat(uncategorized.getTotalElements()).isEqualTo(1);
@@ -111,9 +118,66 @@ class TransactionReadRepositoryTest {
     @Test
     void ignoresBlankTextAndCategoryFilters() {
         Page<com.finanzbuddy.api.document.dto.TransactionResponse> page =
-                repository.findHistory(7L, "   ", null, null, "   ", PageRequest.of(0, 10));
+                repository.findHistory(
+                        7L, "   ", null, null, "   ", "valueDate", "DESC", PageRequest.of(0, 10));
 
         assertThat(page.getTotalElements()).isEqualTo(3);
+    }
+
+    @Test
+    void filtersInclusiveValueDateBoundsInsteadOfBookingDate() {
+        jdbcTemplate.update(
+                "INSERT INTO transactions (id, document_id, user_id, booking_date, value_date, amount,"
+                        + " currency, counterparty, description, category)"
+                        + " VALUES (6, 1, 7, DATE '2024-01-01', DATE '2024-03-20', 5, 'EUR',"
+                        + " 'Value date match', 'At upper bound', 'Income')");
+
+        Page<com.finanzbuddy.api.document.dto.TransactionResponse> page =
+                repository.findHistory(
+                        7L,
+                        null,
+                        LocalDate.parse("2024-03-20"),
+                        LocalDate.parse("2024-03-20"),
+                        null,
+                        "valueDate",
+                        "ASC",
+                        PageRequest.of(0, 10));
+
+        assertThat(page.getContent()).extracting("id").containsExactly(2L, 6L);
+    }
+
+    @Test
+    void appliesAllowlistedSortAcrossPageBoundariesAndSupportsEveryField() {
+        jdbcTemplate.update("UPDATE transactions SET amount = id * 10 WHERE id <= 3");
+        Page<com.finanzbuddy.api.document.dto.TransactionResponse> first =
+                repository.findHistory(
+                        7L, null, null, null, null, "amount", "ASC", PageRequest.of(0, 2));
+        Page<com.finanzbuddy.api.document.dto.TransactionResponse> last =
+                repository.findHistory(
+                        7L, null, null, null, null, "amount", "ASC", PageRequest.of(1, 2));
+
+        assertThat(first.getContent()).extracting("id").containsExactly(1L, 2L);
+        assertThat(last.getContent()).extracting("id").containsExactly(3L);
+        for (String sortField :
+                List.of(
+                        "valueDate",
+                        "amount",
+                        "currency",
+                        "counterparty",
+                        "description",
+                        "category")) {
+            assertThat(
+                            repository.findHistory(
+                                    7L,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    sortField,
+                                    "DESC",
+                                    PageRequest.of(0, 10)))
+                    .isNotNull();
+        }
     }
 
     private void insertTransaction(
@@ -125,12 +189,13 @@ class TransactionReadRepositoryTest {
             String description,
             String category) {
         jdbcTemplate.update(
-                "INSERT INTO transactions (id, document_id, user_id, booking_date, amount,"
-                        + " currency, counterparty, description, category) VALUES (?, ?, ?, ?, ?,"
+                "INSERT INTO transactions (id, document_id, user_id, booking_date, value_date, amount,"
+                        + " currency, counterparty, description, category) VALUES (?, ?, ?, ?, ?, ?,"
                         + " 'EUR', ?, ?, ?)",
                 id,
                 documentId,
                 userId,
+                bookingDate,
                 bookingDate,
                 new BigDecimal("12.50"),
                 counterparty,

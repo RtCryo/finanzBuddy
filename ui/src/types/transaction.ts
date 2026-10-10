@@ -19,6 +19,16 @@ export type TransactionHistoryPage = {
   hasUncategorized: boolean
 }
 
+export type TransactionHistorySortField =
+  | 'valueDate'
+  | 'amount'
+  | 'currency'
+  | 'counterparty'
+  | 'description'
+  | 'category'
+
+export type TransactionHistorySortDirection = 'ASC' | 'DESC'
+
 export type TransactionHistoryParams = {
   page?: number
   size?: number
@@ -26,4 +36,6 @@ export type TransactionHistoryParams = {
   from?: string
   to?: string
   category?: string
+  sortField?: TransactionHistorySortField
+  sortDirection?: TransactionHistorySortDirection
 }
