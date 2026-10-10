@@ -159,10 +159,22 @@ Custom metrics:
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `parser.documents.processed` | Counter | Successfully processed documents |
-| `parser.documents.failed` | Counter | Failed document processing attempts |
-| `parser.documents.duplicate` | Counter | Duplicate document events ignored |
-| `parser.documents.processing.duration` | Timer | Document processing duration |
+| `parser.documents.processed` | Counter (`type`) | Successfully processed documents by file type (`CSV`, `PDF`, `XML`, `OTHER`) |
+| `parser.documents.failed` | Counter (`type`) | Failed processing attempts by file type |
+| `parser.documents.duplicate` | Counter (`type`) | Duplicate document events ignored by file type |
+| `parser.documents.processing.duration` | Timer (`type`) | Document processing duration by file type |
+| `parser.transactions.parsed` | Counter (`type`) | Transactions included in successfully persisted documents, by file type |
+
+Use `sum by (type) (rate(parser_transactions_parsed_total[5m]))` for parsed transaction volume per
+second and `sum by (type) (rate(parser_documents_processed_total[5m]))` /
+`sum by (type) (rate(parser_documents_failed_total[5m]))` for document outcome rates. The
+processing-duration timer is cumulative; calculate per-type mean duration as
+`sum by (type) (rate(parser_documents_processing_duration_seconds_sum[5m])) / sum by (type)
+(rate(parser_documents_processing_duration_seconds_count[5m]))`. Transaction volume counts rows,
+not distinct transactions or monetary value. File type is normalized to the bounded values `CSV`,
+`PDF`, `XML`, or `OTHER`; metrics have no transaction-, user-, or document-specific labels.
+
+Spring Boot also exposes `http.server.requests` for request rate, duration, and response status.
 
 ## Performance
 

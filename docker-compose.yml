@@ -64,6 +64,17 @@ services:
       retries: 10
       start_period: 20s
 
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.10.0
+    container_name: finanzbuddy-kafka-exporter
+    command:
+      - "--kafka.server=kafka:9092"
+      - "--kafka.version=4.3.1"
+      - "--kafka.labels=cluster=finanzbuddy-local"
+    depends_on:
+      kafka:
+        condition: service_healthy
+
   minio:
     # S3-compatible object storage. Replaced the unmaintained bitnamilegacy/minio image with
     # SeaweedFS (Apache-2.0, actively maintained). The service keeps the "minio" name and MINIO_*
@@ -152,6 +163,30 @@ services:
       PARSER_FORMAT_PDF: "false"
       PARSER_FORMAT_XML: "false"
 
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    container_name: finanzbuddy-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    container_name: finanzbuddy-grafana
+    depends_on:
+      prometheus:
+        condition: service_started
+    environment:
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/finanzbuddy-health.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+
   ui:
     build:
       context: ./ui
@@ -177,3 +212,5 @@ volumes:
   postgres-data:
   minio-data:
   traefik-acme:
+  prometheus-data:
+  grafana-data:
