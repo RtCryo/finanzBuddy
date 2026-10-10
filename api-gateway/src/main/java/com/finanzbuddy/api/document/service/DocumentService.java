@@ -10,6 +10,7 @@ import com.finanzbuddy.api.document.dto.DocumentStatusUpdateRequest;
 import com.finanzbuddy.api.document.dto.DownloadedFile;
 import com.finanzbuddy.api.document.dto.TransactionHistoryResponse;
 import com.finanzbuddy.api.document.dto.TransactionResponse;
+import com.finanzbuddy.api.document.metrics.DocumentUploadMetrics;
 import com.finanzbuddy.api.entity.Document;
 import com.finanzbuddy.api.entity.DocumentStatus;
 import com.finanzbuddy.api.entity.OutboxEvent;
@@ -61,6 +62,7 @@ public class DocumentService {
     private final UserRepository userRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final TransactionReadRepository transactionReadRepository;
+    private final DocumentUploadMetrics documentUploadMetrics;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate txTemplate;
     private final String bucket;
@@ -73,6 +75,7 @@ public class DocumentService {
             UserRepository userRepository,
             OutboxEventRepository outboxEventRepository,
             TransactionReadRepository transactionReadRepository,
+            DocumentUploadMetrics documentUploadMetrics,
             ObjectMapper objectMapper,
             PlatformTransactionManager txManager,
             @Value("${app.minio.bucket}") String bucket,
@@ -83,6 +86,7 @@ public class DocumentService {
         this.userRepository = userRepository;
         this.outboxEventRepository = outboxEventRepository;
         this.transactionReadRepository = transactionReadRepository;
+        this.documentUploadMetrics = documentUploadMetrics;
         this.objectMapper = objectMapper;
         this.txTemplate = new TransactionTemplate(txManager);
         this.bucket = bucket;
@@ -91,6 +95,17 @@ public class DocumentService {
     }
 
     public DocumentResponse uploadDocument(String userEmail, MultipartFile file, String type) {
+        try {
+            DocumentResponse response = uploadDocumentInternal(userEmail, file, type);
+            documentUploadMetrics.recordSuccess(type);
+            return response;
+        } catch (RuntimeException exception) {
+            documentUploadMetrics.recordFailure(type);
+            throw exception;
+        }
+    }
+
+    private DocumentResponse uploadDocumentInternal(String userEmail, MultipartFile file, String type) {
         DocumentType documentType = parseAndValidateType(type);
 
         if (file.isEmpty()) {

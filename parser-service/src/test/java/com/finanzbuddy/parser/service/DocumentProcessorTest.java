@@ -10,10 +10,12 @@ import static org.mockito.Mockito.when;
 
 import com.finanzbuddy.parser.client.GatewayStatusClient;
 import com.finanzbuddy.parser.document.DocumentStatus;
+import com.finanzbuddy.parser.entity.Transaction;
 import com.finanzbuddy.parser.event.DocumentUploadedEvent;
 import com.finanzbuddy.parser.parser.DocumentParser;
 import com.finanzbuddy.parser.parser.DocumentParserRouter;
 import com.finanzbuddy.parser.storage.MinioStorageService;
+import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -53,6 +55,49 @@ class DocumentProcessorTest {
     }
 
     @Test
+    void countsTransactionsFromSuccessfullyProcessedDocuments() {
+        DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
+        when(minioStorageService.download("csv/1"))
+                .thenReturn(new ByteArrayInputStream("data".getBytes(StandardCharsets.UTF_8)));
+        when(parserRouter.route("CSV")).thenReturn(parser);
+        when(parser.parse(any(InputStream.class), any(), any()))
+                .thenReturn(List.of(new Transaction(), new Transaction()));
+        when(transactionPersistenceService.saveIfNotProcessed(any(), any())).thenReturn(true);
+
+        processor.process(event);
+
+        org.assertj.core.api.Assertions.assertThat(
+                        meterRegistry
+                                .get("parser.transactions.parsed")
+                                .tag("type", "CSV")
+                                .counter()
+                                .count())
+                .isEqualTo(2.0);
+        org.assertj.core.api.Assertions.assertThat(
+                        meterRegistry
+                                .get("parser.transactions.parsed")
+                                .tag("type", "CSV")
+                                .counter()
+                                .getId()
+                                .getTags())
+                .containsExactly(Tag.of("type", "CSV"));
+        org.assertj.core.api.Assertions.assertThat(
+                        meterRegistry
+                                .get("parser.documents.processed")
+                                .tag("type", "CSV")
+                                .counter()
+                                .count())
+                .isEqualTo(1.0);
+        org.assertj.core.api.Assertions.assertThat(
+                        meterRegistry
+                                .get("parser.documents.processing.duration")
+                                .tag("type", "CSV")
+                                .timer()
+                                .count())
+                .isEqualTo(1L);
+    }
+
+    @Test
     void reportsFailureWhenProcessingThrows() {
         DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
         when(minioStorageService.download("csv/1"))
@@ -85,6 +130,35 @@ class DocumentProcessorTest {
         verify(gatewayStatusClient).reportStatus(1L, DocumentStatus.PROCESSING, null);
         verify(gatewayStatusClient, never()).reportStatus(1L, DocumentStatus.FAILED, null);
         verify(transactionPersistenceService, never()).saveIfNotProcessed(any(), any());
+        org.assertj.core.api.Assertions.assertThat(
+                        meterRegistry
+                                .get("parser.documents.failed")
+                                .tag("type", "CSV")
+                                .counter()
+                                .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    void mapsUnsupportedDocumentTypesToOtherMetricLabel() {
+        DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "TXT", "text/1");
+        when(minioStorageService.download("text/1"))
+                .thenReturn(new ByteArrayInputStream("data".getBytes(StandardCharsets.UTF_8)));
+        when(parserRouter.route("TXT"))
+                .thenThrow(new IllegalArgumentException("unsupported document type"));
+
+        assertThatThrownBy(() -> processor.process(event))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("unsupported document type");
+
+        org.assertj.core.api.Assertions.assertThat(
+                        meterRegistry
+                                .get("parser.documents.failed")
+                                .tag("type", "OTHER")
+                                .counter()
+                                .getId()
+                                .getTags())
+                .containsExactly(Tag.of("type", "OTHER"));
     }
 
     @Test

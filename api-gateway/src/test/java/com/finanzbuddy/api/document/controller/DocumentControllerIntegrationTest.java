@@ -25,6 +25,8 @@ import com.finanzbuddy.api.entity.DocumentStatus;
 import com.finanzbuddy.api.entity.OutboxEvent;
 import com.finanzbuddy.api.repository.OutboxEventRepository;
 import com.finanzbuddy.api.security.apikey.InternalApiKeyAuthFilter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tag;
 import io.minio.GetObjectArgs;
 import io.minio.GetObjectResponse;
 import io.minio.MinioClient;
@@ -66,6 +68,8 @@ class DocumentControllerIntegrationTest {
     @Autowired private MinioClient minioClient;
 
     @Autowired private JdbcTemplate jdbcTemplate;
+
+    @Autowired private MeterRegistry meterRegistry;
 
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -113,6 +117,16 @@ class DocumentControllerIntegrationTest {
 
         verify(kafkaTemplate, atLeastOnce()).send(any(), any(), any());
         assertThat(findOutboxEvent(documentId).getPublishedAt()).isNotNull();
+        assertThat(uploadCount("CSV", "success")).isGreaterThanOrEqualTo(1.0);
+        assertThat(
+                        meterRegistry
+                                .get("api.documents.uploads")
+                                .tag("type", "CSV")
+                                .tag("outcome", "success")
+                                .counter()
+                                .getId()
+                                .getTags())
+                .containsExactlyInAnyOrder(Tag.of("type", "CSV"), Tag.of("outcome", "success"));
     }
 
     @Test
@@ -620,6 +634,42 @@ class DocumentControllerIntegrationTest {
                         .andReturn();
         JsonNode page = objectMapper.readTree(listResult.getResponse().getContentAsString());
         assertThat(page.get("totalElements").asInt()).isZero();
+        assertThat(uploadCount("CSV", "failure")).isGreaterThanOrEqualTo(1.0);
+        assertThat(
+                        meterRegistry
+                                .get("api.documents.uploads")
+                                .tag("type", "CSV")
+                                .tag("outcome", "failure")
+                                .counter()
+                                .getId()
+                                .getTags())
+                .containsExactlyInAnyOrder(Tag.of("type", "CSV"), Tag.of("outcome", "failure"));
+    }
+
+    @Test
+    void rejectedUnknownUploadTypeUsesBoundedOtherMetricLabel() throws Exception {
+        String token = registerAndLogin("unknown-type@example.com", "password123");
+        MockMultipartFile file =
+                new MockMultipartFile("file", "report.txt", "text/plain", "content".getBytes());
+
+        mockMvc.perform(
+                        multipart("/documents")
+                                .file(file)
+                                .param("type", "TXT")
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+
+        assertThat(uploadCount("OTHER", "failure")).isGreaterThanOrEqualTo(1.0);
+        assertThat(
+                        meterRegistry
+                                .get("api.documents.uploads")
+                                .tag("type", "OTHER")
+                                .tag("outcome", "failure")
+                                .counter()
+                                .getId()
+                                .getTags())
+                .containsExactlyInAnyOrder(
+                        Tag.of("type", "OTHER"), Tag.of("outcome", "failure"));
     }
 
     @Test
@@ -698,6 +748,15 @@ class DocumentControllerIntegrationTest {
                 .filter(e -> e.getAggregateId().equals(documentId))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private double uploadCount(String type, String outcome) {
+        return meterRegistry
+                .get("api.documents.uploads")
+                .tag("type", type)
+                .tag("outcome", outcome)
+                .counter()
+                .count();
     }
 
     private long uploadDocument(String token, MockMultipartFile file, String type)

@@ -154,6 +154,19 @@ Prometheus metrics are exposed publicly at `/actuator/prometheus`:
 curl http://localhost:8080/actuator/prometheus
 ```
 
+Custom document and outbox metrics:
+
+| Metric | Type | Description | Aggregation notes |
+|--------|------|-------------|-------------------|
+| `api.documents.uploads` | Counter (`type`, `outcome`) | Upload attempts by file type (`CSV`, `PDF`, `XML`, `OTHER`) and outcome (`success`, `failure`) | Use `sum by (type, outcome) (rate(api_documents_uploads_total[5m]))` to compare format volume. Both labels are bounded. |
+| `outbox.events.pending` | Gauge | Undelivered, non-dead-lettered outbox events | Current backlog size; may briefly lag by the 15-second refresh interval. |
+| `outbox.events.oldest_pending_age` | Gauge (seconds) | Age of the oldest undelivered event | Resets to zero when there are no pending events; use alongside the pending count. |
+| `outbox.events.dead_lettered` | Counter | Events moved to the dead-letter state after retries | Process-local since startup; use `rate(outbox_events_dead_lettered_total[5m])` for recent failures. |
+
+Spring Boot also exposes `http.server.requests` for request rate, duration, and response status.
+Counters should be queried with `rate()`/`increase()`; gauges are point-in-time values. No custom
+metric labels contain user IDs, document IDs, filenames, or financial values.
+
 ## Kafka Topics
 
 Documents are published to topics named `documents.<type>` (e.g., `documents.csv`, `documents.pdf`, `documents.xml`).

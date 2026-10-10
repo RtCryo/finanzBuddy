@@ -24,3 +24,11 @@ services:
   ui:
     ports:
       - "3000:80"
+
+  prometheus:
+    ports:
+      - "9090:9090"
+
+  grafana:
+    ports:
+      - "3001:3000"

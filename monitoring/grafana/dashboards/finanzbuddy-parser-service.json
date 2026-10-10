@@ -1,0 +1,81 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}], "noValue": "No samples", "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "up{job=\"parser-service\"}", "legendFormat": "Parser Service", "refId": "A"}],
+      "title": "Parser Service status",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"noValue": "No samples", "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 0},
+      "id": 2,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "process_uptime_seconds{job=\"parser-service\"}", "legendFormat": "process uptime", "refId": "A"}],
+      "title": "Parser process uptime",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"noValue": "No samples", "unit": "reqps"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 3,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum(rate(http_server_requests_seconds_count{job=\"parser-service\",uri!~\"/actuator.*\"}[5m]))", "legendFormat": "requests/sec", "refId": "A"}],
+      "title": "HTTP request rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"noValue": "No samples", "unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5},
+      "id": 4,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(parser_documents_processed_total[5m])", "legendFormat": "{{type}} processed", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(parser_documents_failed_total[5m])", "legendFormat": "{{type}} failed", "refId": "B"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(parser_documents_duplicate_total[5m])", "legendFormat": "{{type}} duplicate", "refId": "C"}
+      ],
+      "title": "Document outcomes by file type",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"noValue": "No samples", "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5},
+      "id": 5,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "sum by (type) (rate(parser_documents_processing_duration_seconds_sum[5m])) / (sum by (type) (rate(parser_documents_processing_duration_seconds_count[5m])) > 0)", "legendFormat": "{{type}} mean", "refId": "A"}],
+      "title": "Mean document processing duration by file type",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"noValue": "No samples", "unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 13},
+      "id": 6,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(parser_transactions_parsed_total[5m])", "legendFormat": "{{type}} transactions/sec", "refId": "A"}],
+      "title": "Parsed transaction volume by file type",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 39,
+  "tags": ["finanzBuddy", "parser-service"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "browser",
+  "title": "finanzBuddy Parser Service",
+  "uid": "finanzbuddy-parser-service",
+  "version": 1
+}

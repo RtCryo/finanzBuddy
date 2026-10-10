@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 public class DocumentProcessor {
 
     private static final Logger logger = LoggerFactory.getLogger(DocumentProcessor.class);
+    private static final List<String> METRIC_DOCUMENT_TYPES = List.of("CSV", "PDF", "XML", "OTHER");
 
     private final TransactionPersistenceService transactionPersistenceService;
     private final MinioStorageService minioStorageService;
@@ -31,10 +32,6 @@ public class DocumentProcessor {
     private final GatewayStatusClient gatewayStatusClient;
     private final MeterRegistry meterRegistry;
     private final Locale defaultLocale;
-    private final Counter processedCounter;
-    private final Counter failedCounter;
-    private final Counter duplicateCounter;
-    private final Timer processingTimer;
 
     public DocumentProcessor(
             TransactionPersistenceService transactionPersistenceService,
@@ -49,35 +46,31 @@ public class DocumentProcessor {
         this.gatewayStatusClient = gatewayStatusClient;
         this.meterRegistry = meterRegistry;
         this.defaultLocale = defaultLocale;
-        this.processedCounter =
-                Counter.builder("parser.documents.processed")
-                        .description("Number of successfully processed documents")
-                        .register(meterRegistry);
-        this.failedCounter =
-                Counter.builder("parser.documents.failed")
-                        .description("Number of failed document processing attempts")
-                        .register(meterRegistry);
-        this.duplicateCounter =
-                Counter.builder("parser.documents.duplicate")
-                        .description("Number of duplicate document events ignored")
-                        .register(meterRegistry);
-        this.processingTimer =
-                Timer.builder("parser.documents.processing.duration")
-                        .description("Document processing duration")
-                        .register(meterRegistry);
+        for (String type : METRIC_DOCUMENT_TYPES) {
+            documentCounter("parser.documents.processed", type);
+            documentCounter("parser.documents.failed", type);
+            documentCounter("parser.documents.duplicate", type);
+            Counter.builder("parser.transactions.parsed")
+                    .description("Total number of transactions parsed from successful documents")
+                    .tag("type", type)
+                    .register(meterRegistry);
+            processingTimer(type);
+        }
     }
 
     public void process(DocumentUploadedEvent event) {
         validate(event);
+        String type = metricDocumentType(event.type());
         logger.info(
                 "Processing document: documentId={}, type={}", event.documentId(), event.type());
 
         Timer.Sample sample = Timer.start(meterRegistry);
+        Timer processingTimer = processingTimer(type);
         try {
             if (transactionPersistenceService.isProcessed(event.documentId())) {
                 logger.info("Duplicate event ignored for documentId={}", event.documentId());
                 reportStatus(event.documentId(), DocumentStatus.PROCESSED, null);
-                duplicateCounter.increment();
+                documentCounter("parser.documents.duplicate", type).increment();
                 return;
             }
 
@@ -92,8 +85,14 @@ public class DocumentProcessor {
                 }
 
                 transactionPersistenceService.saveIfNotProcessed(event.documentId(), transactions);
+                Counter.builder("parser.transactions.parsed")
+                        .description(
+                                "Total number of transactions parsed from successful documents")
+                        .tag("type", type)
+                        .register(meterRegistry)
+                        .increment(transactions.size());
                 reportStatus(event.documentId(), DocumentStatus.PROCESSED, null);
-                processedCounter.increment();
+                documentCounter("parser.documents.processed", type).increment();
                 logger.info(
                         "Document processed successfully: documentId={}, transactions={}",
                         event.documentId(),
@@ -102,19 +101,19 @@ public class DocumentProcessor {
         } catch (DuplicateDocumentException e) {
             logger.info("Duplicate event ignored for documentId={}", event.documentId());
             reportStatus(event.documentId(), DocumentStatus.PROCESSED, null);
-            duplicateCounter.increment();
+            documentCounter("parser.documents.duplicate", type).increment();
         } catch (IllegalArgumentException | UnsupportedOperationException e) {
-            failedCounter.increment();
+            documentCounter("parser.documents.failed", type).increment();
             throw e;
         } catch (StorageException | DataAccessException e) {
             logger.error(
                     "Transient failure processing document: documentId={}", event.documentId(), e);
-            failedCounter.increment();
+            documentCounter("parser.documents.failed", type).increment();
             throw e;
         } catch (Exception e) {
             logger.error(
                     "Unexpected failure processing document: documentId={}", event.documentId(), e);
-            failedCounter.increment();
+            documentCounter("parser.documents.failed", type).increment();
             throw new IllegalStateException("Failed to process document " + event.documentId(), e);
         } finally {
             sample.stop(processingTimer);
@@ -141,5 +140,36 @@ public class DocumentProcessor {
 
     private void reportStatus(Long documentId, DocumentStatus status, String message) {
         gatewayStatusClient.reportStatus(documentId, status, message);
+    }
+
+    private Counter documentCounter(String name, String type) {
+        return Counter.builder(name)
+                .description(
+                        switch (name) {
+                            case "parser.documents.processed" ->
+                                    "Number of successfully processed documents by type";
+                            case "parser.documents.failed" ->
+                                    "Number of failed document processing attempts by type";
+                            case "parser.documents.duplicate" ->
+                                    "Number of duplicate document events ignored by type";
+                            default -> throw new IllegalArgumentException(
+                                    "Unknown parser document counter: " + name);
+                        })
+                .tag("type", type)
+                .register(meterRegistry);
+    }
+
+    private Timer processingTimer(String type) {
+        return Timer.builder("parser.documents.processing.duration")
+                .description("Document processing duration by document type")
+                .tag("type", type)
+                .register(meterRegistry);
+    }
+
+    private String metricDocumentType(String type) {
+        return switch (type.toUpperCase(Locale.ROOT)) {
+            case "CSV", "PDF", "XML" -> type.toUpperCase(Locale.ROOT);
+            default -> "OTHER";
+        };
     }
 }
