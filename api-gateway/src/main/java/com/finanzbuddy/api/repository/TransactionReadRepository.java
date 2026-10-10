@@ -94,18 +94,27 @@ public class TransactionReadRepository {
         if (sortColumn == null) {
             throw new IllegalArgumentException("Unsupported transaction sort field");
         }
-        String direction = switch (sortDirection) {
-            case "ASC" -> "ASC";
-            case "DESC" -> "DESC";
-            default -> throw new IllegalArgumentException("Unsupported transaction sort direction");
-        };
+        String direction =
+                switch (sortDirection) {
+                    case "ASC" -> "ASC";
+                    case "DESC" -> "DESC";
+                    default ->
+                            throw new IllegalArgumentException(
+                                    "Unsupported transaction sort direction");
+                };
         List<TransactionResponse> content =
                 jdbcTemplate.query(
                         "SELECT t.id, t.booking_date, t.value_date, t.amount, t.currency,"
                                 + " t.counterparty, t.description, t.category"
                                 + where
-                                + " ORDER BY CASE WHEN " + sortColumn + " IS NULL THEN 1 ELSE 0 END,"
-                                + " " + sortColumn + " " + direction + ", t.id ASC LIMIT ? OFFSET ?",
+                                + " ORDER BY CASE WHEN "
+                                + sortColumn
+                                + " IS NULL THEN 1 ELSE 0 END,"
+                                + " "
+                                + sortColumn
+                                + " "
+                                + direction
+                                + ", t.id ASC LIMIT ? OFFSET ?",
                         TransactionReadRepository::toTransaction,
                         pageParameters.toArray());
         return new PageImpl<>(content, pageable, total == null ? 0 : total);

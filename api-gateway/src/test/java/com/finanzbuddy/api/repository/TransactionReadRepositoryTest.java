@@ -159,7 +159,13 @@ class TransactionReadRepositoryTest {
         assertThat(first.getContent()).extracting("id").containsExactly(1L, 2L);
         assertThat(last.getContent()).extracting("id").containsExactly(3L);
         for (String sortField :
-                List.of("valueDate", "amount", "currency", "counterparty", "description", "category")) {
+                List.of(
+                        "valueDate",
+                        "amount",
+                        "currency",
+                        "counterparty",
+                        "description",
+                        "category")) {
             assertThat(
                             repository.findHistory(
                                     7L,

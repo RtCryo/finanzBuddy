@@ -251,7 +251,14 @@ public class DocumentService {
         User user = getUser(userEmail);
         Page<TransactionResponse> page =
                 transactionReadRepository.findHistory(
-                        user.getId(), query, from, to, category, sortField, sortDirection, pageable);
+                        user.getId(),
+                        query,
+                        from,
+                        to,
+                        category,
+                        sortField,
+                        sortDirection,
+                        pageable);
         return new TransactionHistoryResponse(
                 page.getContent(),
                 page.getTotalElements(),

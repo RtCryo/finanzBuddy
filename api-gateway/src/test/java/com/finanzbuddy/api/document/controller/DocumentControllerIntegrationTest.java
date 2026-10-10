@@ -418,12 +418,11 @@ class DocumentControllerIntegrationTest {
         insertHistoryTransaction(documentId, "2024-03-11", "Alpha", "First", "Food");
 
         MvcResult defaultSort =
-                mockMvc.perform(
-                                get("/transactions")
-                                        .header("Authorization", "Bearer " + token))
+                mockMvc.perform(get("/transactions").header("Authorization", "Bearer " + token))
                         .andExpect(status().isOk())
                         .andReturn();
-        JsonNode defaultBody = objectMapper.readTree(defaultSort.getResponse().getContentAsString());
+        JsonNode defaultBody =
+                objectMapper.readTree(defaultSort.getResponse().getContentAsString());
         assertThat(defaultBody.get("content").get(0).get("counterparty").asText())
                 .isEqualTo("Charlie");
 
