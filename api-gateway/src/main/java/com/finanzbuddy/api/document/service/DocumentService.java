@@ -105,7 +105,8 @@ public class DocumentService {
         }
     }
 
-    private DocumentResponse uploadDocumentInternal(String userEmail, MultipartFile file, String type) {
+    private DocumentResponse uploadDocumentInternal(
+            String userEmail, MultipartFile file, String type) {
         DocumentType documentType = parseAndValidateType(type);
 
         if (file.isEmpty()) {

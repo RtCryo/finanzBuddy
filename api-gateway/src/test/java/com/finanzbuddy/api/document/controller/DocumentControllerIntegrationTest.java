@@ -668,8 +668,7 @@ class DocumentControllerIntegrationTest {
                                 .counter()
                                 .getId()
                                 .getTags())
-                .containsExactlyInAnyOrder(
-                        Tag.of("type", "OTHER"), Tag.of("outcome", "failure"));
+                .containsExactlyInAnyOrder(Tag.of("type", "OTHER"), Tag.of("outcome", "failure"));
     }
 
     @Test

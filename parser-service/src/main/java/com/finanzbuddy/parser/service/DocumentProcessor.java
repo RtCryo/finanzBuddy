@@ -14,6 +14,7 @@ import io.micrometer.core.instrument.Timer;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,6 +26,14 @@ public class DocumentProcessor {
 
     private static final Logger logger = LoggerFactory.getLogger(DocumentProcessor.class);
     private static final List<String> METRIC_DOCUMENT_TYPES = List.of("CSV", "PDF", "XML", "OTHER");
+    private static final Map<String, String> DOCUMENT_COUNTER_DESCRIPTIONS =
+            Map.of(
+                    "parser.documents.processed",
+                    "Number of successfully processed documents by type",
+                    "parser.documents.failed",
+                    "Number of failed document processing attempts by type",
+                    "parser.documents.duplicate",
+                    "Number of duplicate document events ignored by type");
 
     private final TransactionPersistenceService transactionPersistenceService;
     private final MinioStorageService minioStorageService;
@@ -144,17 +153,7 @@ public class DocumentProcessor {
 
     private Counter documentCounter(String name, String type) {
         return Counter.builder(name)
-                .description(
-                        switch (name) {
-                            case "parser.documents.processed" ->
-                                    "Number of successfully processed documents by type";
-                            case "parser.documents.failed" ->
-                                    "Number of failed document processing attempts by type";
-                            case "parser.documents.duplicate" ->
-                                    "Number of duplicate document events ignored by type";
-                            default -> throw new IllegalArgumentException(
-                                    "Unknown parser document counter: " + name);
-                        })
+                .description(DOCUMENT_COUNTER_DESCRIPTIONS.get(name))
                 .tag("type", type)
                 .register(meterRegistry);
     }
