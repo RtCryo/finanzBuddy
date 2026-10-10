@@ -31,6 +31,8 @@ describe('getTransactionHistory', () => {
       from: '2024-01-01',
       to: '2024-01-31',
       category: 'Food',
+      sortField: 'amount',
+      sortDirection: 'ASC',
     })
 
     expect(api.get).toHaveBeenCalledWith('/transactions', {
@@ -41,6 +43,8 @@ describe('getTransactionHistory', () => {
         from: '2024-01-01',
         to: '2024-01-31',
         category: 'Food',
+        sortField: 'amount',
+        sortDirection: 'ASC',
       },
     })
     expect(result).toEqual(response)

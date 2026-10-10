@@ -19,14 +19,12 @@ export function DocumentDetailPage() {
   const [loadedId, setLoadedId] = useState<string | null>(null)
   const [areTransactionsLoading, setAreTransactionsLoading] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const requestId = useRef(0)
   const isLoading = loadedId !== id
   const isOpen = document?.status === 'PENDING' || document?.status === 'PROCESSING'
 
-  const load = useCallback(async (manual = false) => {
+  const load = useCallback(async () => {
     const current = ++requestId.current
-    if (manual) setIsRefreshing(true)
 
     try {
       const result = await getDocument(id)
@@ -59,7 +57,6 @@ export function DocumentDetailPage() {
     } finally {
       if (current === requestId.current) {
         setLoadedId(id)
-        setIsRefreshing(false)
       }
     }
   }, [id])
@@ -134,9 +131,6 @@ export function DocumentDetailPage() {
                 <DocumentStatusBadge status={document.status} />
               </div>
               <div className="detail-actions">
-                <button className="button button-secondary" type="button" onClick={() => void load(true)} disabled={isRefreshing}>
-                  {isRefreshing ? 'Refreshing' : 'Refresh'}
-                </button>
                 <button
                   className="download-button"
                   type="button"

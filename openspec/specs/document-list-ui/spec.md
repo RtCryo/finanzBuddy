@@ -21,11 +21,11 @@ The system SHALL show a text badge with status-specific color for `PENDING`, `PR
 - **THEN** the UI shows the error message on request
 
 ### Requirement: User can refresh the list
-The system SHALL allow manual refresh and optionally poll for status updates.
+The system SHALL automatically poll the document list for status updates and SHALL NOT provide a separate manual Refresh control on the documents list page.
 
 #### Scenario: Status update
-- **WHEN** a document transitions from `PROCESSING` to `PROCESSED`
-- **THEN** the UI reflects the new status after refresh or poll
+- **WHEN** a document transitions from `PROCESSING` to `PROCESSED` while the documents page is open
+- **THEN** the UI reflects the new status through automatic polling without requiring a manual refresh control
 
 ### Requirement: Selecting a document row opens its details
 The system SHALL make each document row a navigation target and SHALL NOT require a separate action column.

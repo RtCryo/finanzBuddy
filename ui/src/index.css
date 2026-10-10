@@ -151,13 +151,6 @@ button {
   color: #167d68;
 }
 
-.sidebar-note {
-  margin: auto 12px 0;
-  color: #718096;
-  font-size: 11px;
-  line-height: 1.5;
-}
-
 .workspace {
   display: flex;
   min-height: 100vh;
@@ -1013,16 +1006,6 @@ button {
   color: #8b97a7;
 }
 
-.refresh-button {
-  min-height: 38px;
-  padding: 0 12px;
-}
-
-.refresh-button svg {
-  width: 16px;
-  height: 16px;
-}
-
 .document-table-wrap {
   overflow-x: auto;
 }
@@ -1473,21 +1456,22 @@ button {
 }
 
 .history-filters {
-  display: flex;
+  display: grid;
   width: 100%;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  grid-template-columns: minmax(200px, 1.7fr) repeat(2, minmax(170px, 1fr)) minmax(155px, 1fr) auto;
+  gap: 12px;
 }
 
 .history-search-field {
-  width: min(270px, 100%);
+  width: 100%;
+  min-width: 0;
 }
 
 .history-date-field {
   display: grid;
   min-height: 38px;
-  grid-template-columns: auto minmax(120px, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   border: 1px solid #dce3eb;
@@ -1496,6 +1480,10 @@ button {
   padding: 0 9px;
   color: #718096;
   font-size: 11px;
+}
+
+.history-date-field input {
+  width: 100%;
 }
 
 .history-date-field:focus-within,
@@ -1526,7 +1514,8 @@ button {
 }
 
 .history-category-field {
-  min-width: 155px;
+  width: 100%;
+  min-width: 0;
 }
 
 .clear-filters-button {
@@ -1544,6 +1533,10 @@ button {
 
 .history-transaction-table {
   min-width: 1120px;
+}
+
+.history-transaction-table .transaction-row {
+  grid-template-columns: 110px 110px 75px minmax(140px, 1fr) minmax(190px, 1.4fr) minmax(130px, 0.8fr);
 }
 
 .history-pagination {
@@ -1685,10 +1678,44 @@ button {
   text-transform: uppercase;
 }
 
+.history-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+  white-space: nowrap;
+}
+
+.history-sort-button:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid #167d68;
+  outline-offset: 3px;
+}
+
 .transaction-amount {
   color: #172b4d;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.history-transaction-table .amount-positive {
+  color: #167d68;
+}
+
+.history-transaction-table .amount-negative {
+  color: #b54747;
+}
+
+.history-transaction-table .amount-neutral {
+  color: #172b4d;
 }
 
 .category-chip {
@@ -1760,6 +1787,12 @@ button {
 
   .story-caption {
     left: 28px;
+  }
+}
+
+@media (max-width: 1280px) {
+  .history-filters {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
   }
 }
 
@@ -1854,15 +1887,14 @@ button {
     padding: 0 2px 12px;
   }
 
-  .nav-caption,
-  .sidebar-note {
-    display: none;
-  }
-
   .workspace-nav {
     display: flex;
     overflow-x: auto;
     gap: 6px;
+  }
+
+  .nav-caption {
+    display: none;
   }
 
   .nav-link {
@@ -1918,11 +1950,15 @@ button {
     width: 100%;
   }
 
+  .history-filters {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  }
+
   .history-date-field {
-    flex: 1 1 140px;
+    min-width: 0;
   }
 
   .history-category-field {
-    flex: 1 1 155px;
+    min-width: 0;
   }
 }

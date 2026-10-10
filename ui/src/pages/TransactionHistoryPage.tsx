@@ -3,7 +3,12 @@ import { getTransactionHistory, UNCATEGORIZED_CATEGORY } from '../api/transactio
 import { getErrorMessage } from '../api/errors'
 import { AppShell } from '../components/AppShell'
 import { formatDateOnly } from '../format'
-import type { TransactionHistoryPage as TransactionHistoryResult, TransactionRecord } from '../types/transaction'
+import type {
+  TransactionHistoryPage as TransactionHistoryResult,
+  TransactionHistorySortDirection,
+  TransactionHistorySortField,
+  TransactionRecord,
+} from '../types/transaction'
 
 const PAGE_SIZE = 20
 
@@ -21,13 +26,14 @@ export function TransactionHistoryPage() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [category, setCategory] = useState('')
+  const [sortField, setSortField] = useState<TransactionHistorySortField>('valueDate')
+  const [sortDirection, setSortDirection] = useState<TransactionHistorySortDirection>('DESC')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const requestId = useRef(0)
 
   const loadTransactions = useCallback(async () => {
     const currentRequest = ++requestId.current
-    setIsLoading(true)
     try {
       const result: TransactionHistoryResult = await getTransactionHistory({
         page,
@@ -36,6 +42,8 @@ export function TransactionHistoryPage() {
         ...(from ? { from } : {}),
         ...(to ? { to } : {}),
         ...(category ? { category } : {}),
+        sortField,
+        sortDirection,
       })
       if (currentRequest !== requestId.current) return
       setTransactions(result.content)
@@ -50,26 +58,70 @@ export function TransactionHistoryPage() {
     } finally {
       if (currentRequest === requestId.current) setIsLoading(false)
     }
-  }, [appliedQuery, category, from, page, to])
+  }, [appliedQuery, category, from, page, sortDirection, sortField, to])
 
   useEffect(() => {
-    void loadTransactions()
+    const initialLoad = window.setTimeout(() => void loadTransactions(), 0)
+    return () => window.clearTimeout(initialLoad)
   }, [loadTransactions])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setAppliedQuery(query.trim())
-      setPage(0)
+      const nextQuery = query.trim()
+      if (nextQuery !== appliedQuery) {
+        setIsLoading(true)
+        setAppliedQuery(nextQuery)
+        setPage(0)
+      }
     }, 300)
     return () => window.clearTimeout(timer)
-  }, [query])
+  }, [appliedQuery, query])
 
   function clearFilters() {
+    setIsLoading(true)
     setQuery('')
     setAppliedQuery('')
     setFrom('')
     setTo('')
     setCategory('')
+    setPage(0)
+  }
+
+  function changeSort(field: TransactionHistorySortField) {
+    setIsLoading(true)
+    if (field === sortField) {
+      setSortDirection((current) => current === 'ASC' ? 'DESC' : 'ASC')
+    } else {
+      setSortField(field)
+      setSortDirection('ASC')
+    }
+    setPage(0)
+  }
+
+  function changePage(nextPage: number) {
+    if (nextPage === page) return
+    setIsLoading(true)
+    setPage(nextPage)
+  }
+
+  function changeFrom(value: string) {
+    if (value === from) return
+    setIsLoading(true)
+    setFrom(value)
+    setPage(0)
+  }
+
+  function changeTo(value: string) {
+    if (value === to) return
+    setIsLoading(true)
+    setTo(value)
+    setPage(0)
+  }
+
+  function changeCategory(value: string) {
+    if (value === category) return
+    setIsLoading(true)
+    setCategory(value)
     setPage(0)
   }
 
@@ -106,15 +158,15 @@ export function TransactionHistoryPage() {
             </label>
             <label className="history-date-field">
               <span>From</span>
-              <input aria-label="Booking date from" type="date" value={from} onChange={(event) => { setFrom(event.target.value); setPage(0) }} />
+              <input aria-label="Value date from" type="date" value={from} onChange={(event) => changeFrom(event.target.value)} />
             </label>
             <label className="history-date-field">
               <span>To</span>
-              <input aria-label="Booking date to" type="date" value={to} onChange={(event) => { setTo(event.target.value); setPage(0) }} />
+              <input aria-label="Value date to" type="date" value={to} onChange={(event) => changeTo(event.target.value)} />
             </label>
             <label className="history-category-field">
               <span className="visually-hidden">Filter by category</span>
-              <select aria-label="Filter by category" value={category} onChange={(event) => { setCategory(event.target.value); setPage(0) }}>
+              <select aria-label="Filter by category" value={category} onChange={(event) => changeCategory(event.target.value)}>
                 <option value="">All categories</option>
                 {categories.map((value) => <option key={value} value={value}>{value}</option>)}
                 {hasUncategorized && <option value={UNCATEGORIZED_CATEGORY}>Uncategorized</option>}
@@ -140,13 +192,12 @@ export function TransactionHistoryPage() {
           <div className="transaction-table-wrap">
             <div className="transaction-table history-transaction-table" role="table" aria-label="Transaction history">
               <div className="transaction-row transaction-header" role="row">
-                <span role="columnheader">Booking date</span>
-                <span role="columnheader">Value date</span>
-                <span role="columnheader">Amount</span>
-                <span role="columnheader">Currency</span>
-                <span role="columnheader">Counterparty</span>
-                <span role="columnheader">Description</span>
-                <span role="columnheader">Category</span>
+                <SortHeader field="valueDate" label="Value date" activeField={sortField} direction={sortDirection} onSort={changeSort} />
+                <SortHeader field="amount" label="Amount" activeField={sortField} direction={sortDirection} onSort={changeSort} />
+                <SortHeader field="currency" label="Currency" activeField={sortField} direction={sortDirection} onSort={changeSort} />
+                <SortHeader field="counterparty" label="Counterparty" activeField={sortField} direction={sortDirection} onSort={changeSort} />
+                <SortHeader field="description" label="Description" activeField={sortField} direction={sortDirection} onSort={changeSort} />
+                <SortHeader field="category" label="Category" activeField={sortField} direction={sortDirection} onSort={changeSort} />
               </div>
               {transactions.map((transaction) => <HistoryRow key={transaction.id} transaction={transaction} />)}
             </div>
@@ -161,7 +212,7 @@ export function TransactionHistoryPage() {
                 className="page-arrow"
                 type="button"
                 aria-label="Previous page"
-                onClick={() => setPage((current) => Math.max(0, current - 1))}
+                onClick={() => changePage(Math.max(0, page - 1))}
                 disabled={page === 0}
               >
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m12 4-6 6 6 6" /></svg>
@@ -173,7 +224,7 @@ export function TransactionHistoryPage() {
                   key={item}
                   aria-label={`Page ${item + 1}`}
                   aria-current={item === page ? 'page' : undefined}
-                  onClick={() => setPage(item)}
+                  onClick={() => changePage(item)}
                 >
                   {item + 1}
                 </button>
@@ -184,7 +235,7 @@ export function TransactionHistoryPage() {
                 className="page-arrow"
                 type="button"
                 aria-label="Next page"
-                onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))}
+                onClick={() => changePage(Math.min(totalPages - 1, page + 1))}
                 disabled={page >= totalPages - 1}
               >
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 4 6 6-6 6" /></svg>
@@ -202,15 +253,46 @@ function HistoryRow({ transaction }: { transaction: TransactionRecord }) {
 
   return (
     <div className="transaction-row" role="row">
-      <span role="cell">{formatDateOnly(transaction.bookingDate)}</span>
       <span role="cell">{formatDateOnly(transaction.valueDate)}</span>
-      <span className="transaction-amount" role="cell">{formatAmount(transaction.amount)}</span>
+      <span className={`transaction-amount ${amountPolarityClass(transaction.amount)}`} role="cell">{formatAmount(transaction.amount)}</span>
       <span role="cell">{transaction.currency || '—'}</span>
       <span role="cell">{transaction.counterparty || '—'}</span>
       <span role="cell">{transaction.description || '—'}</span>
       <span role="cell"><span className="category-chip">{category}</span></span>
     </div>
   )
+}
+
+function SortHeader({
+  field,
+  label,
+  activeField,
+  direction,
+  onSort,
+}: {
+  field: TransactionHistorySortField
+  label: string
+  activeField: TransactionHistorySortField
+  direction: TransactionHistorySortDirection
+  onSort: (field: TransactionHistorySortField) => void
+}) {
+  const isActive = activeField === field
+  const ariaSort = isActive ? direction === 'ASC' ? 'ascending' : 'descending' : 'none'
+
+  return (
+    <span role="columnheader" aria-sort={ariaSort}>
+      <button className="history-sort-button" type="button" onClick={() => onSort(field)}>
+        {label}<span aria-hidden="true">{isActive ? direction === 'ASC' ? ' ↑' : ' ↓' : ' ↕'}</span>
+      </button>
+    </span>
+  )
+}
+
+function amountPolarityClass(amount: number | string | null) {
+  if (amount === null || amount === '') return 'amount-neutral'
+  const value = Number(amount)
+  if (!Number.isFinite(value) || value === 0) return 'amount-neutral'
+  return value > 0 ? 'amount-positive' : 'amount-negative'
 }
 
 function getPaginationItems(total: number, current: number): PaginationItem[] {

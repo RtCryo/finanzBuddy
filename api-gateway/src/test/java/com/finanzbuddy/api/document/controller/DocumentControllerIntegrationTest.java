@@ -408,6 +408,51 @@ class DocumentControllerIntegrationTest {
     }
 
     @Test
+    void aggregateTransactionsSupportValidatedSorting() throws Exception {
+        String token = registerAndLogin("history-sorting@example.com", "password123");
+        ensureTransactionsTable();
+        long documentId = uploadDocument(token, csvFile("sorted-history.csv"), "CSV");
+        markProcessed(documentId);
+        insertHistoryTransaction(documentId, "2024-03-10", "Bravo", "Third", "Food");
+        insertHistoryTransaction(documentId, "2024-03-12", "Charlie", "Second", "Food");
+        insertHistoryTransaction(documentId, "2024-03-11", "Alpha", "First", "Food");
+
+        MvcResult defaultSort =
+                mockMvc.perform(
+                                get("/transactions")
+                                        .header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode defaultBody = objectMapper.readTree(defaultSort.getResponse().getContentAsString());
+        assertThat(defaultBody.get("content").get(0).get("counterparty").asText())
+                .isEqualTo("Charlie");
+
+        MvcResult explicitSort =
+                mockMvc.perform(
+                                get("/transactions")
+                                        .param("sortField", "counterparty")
+                                        .param("sortDirection", "ASC")
+                                        .header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode explicitBody =
+                objectMapper.readTree(explicitSort.getResponse().getContentAsString());
+        assertThat(explicitBody.get("content").get(0).get("counterparty").asText())
+                .isEqualTo("Alpha");
+
+        mockMvc.perform(
+                        get("/transactions")
+                                .param("sortField", "amount; DROP TABLE transactions")
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(
+                        get("/transactions")
+                                .param("sortDirection", "sideways")
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void downloadReturnsOwnersFileAndIsOwnerScoped() throws Exception {
         String ownerToken = registerAndLogin("download-owner@example.com", "password123");
         String otherToken = registerAndLogin("download-other@example.com", "password123");
@@ -620,10 +665,11 @@ class DocumentControllerIntegrationTest {
                         "SELECT user_id FROM documents WHERE id = ?", Long.class, documentId);
         jdbcTemplate.update(
                 "INSERT INTO transactions (document_id, user_id, booking_date, value_date, amount,"
-                        + " currency, counterparty, description, category) VALUES (?, ?, ?, NULL,"
+                        + " currency, counterparty, description, category) VALUES (?, ?, ?, ?,"
                         + " ?, 'EUR', ?, ?, ?)",
                 documentId,
                 userId,
+                bookingDate == null ? null : Date.valueOf(bookingDate),
                 bookingDate == null ? null : Date.valueOf(bookingDate),
                 new BigDecimal("42.5000"),
                 counterparty,

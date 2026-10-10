@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -39,12 +39,16 @@ describe('DocumentDetailPage', () => {
   })
 
   afterEach(() => {
+    cleanup()
     vi.useRealTimers()
   })
 
-  it('refreshes a processing document', async () => {
+  it('polls a processing document automatically without a manual refresh control', async () => {
     vi.useFakeTimers()
-    vi.mocked(getDocument).mockResolvedValue(processingDocument)
+    vi.mocked(getDocument)
+      .mockResolvedValueOnce(processingDocument)
+      .mockResolvedValue({ ...processingDocument, status: 'PROCESSED' })
+    vi.mocked(getDocumentTransactions).mockResolvedValue([])
 
     renderDetail()
     await act(async () => {
@@ -52,11 +56,27 @@ describe('DocumentDetailPage', () => {
     })
 
     expect(screen.getByText('Your document is being processed')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument()
     expect(getDocument).toHaveBeenCalledTimes(1)
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5000)
     })
+    expect(getDocument).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('No transactions are available for this document yet.')).toBeInTheDocument()
+  })
+
+  it('fetches the current document and its transactions again when details are reopened', async () => {
+    vi.mocked(getDocument).mockResolvedValue({ ...processingDocument, status: 'PROCESSED' })
+    vi.mocked(getDocumentTransactions).mockResolvedValue([])
+
+    const firstVisit = renderDetail()
+    await waitFor(() => expect(getDocumentTransactions).toHaveBeenCalledTimes(1))
+    expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument()
+
+    firstVisit.unmount()
+    renderDetail()
+    await waitFor(() => expect(getDocumentTransactions).toHaveBeenCalledTimes(2))
     expect(getDocument).toHaveBeenCalledTimes(2)
   })
 
