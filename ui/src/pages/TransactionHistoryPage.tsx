@@ -198,6 +198,8 @@ export function TransactionHistoryPage() {
 }
 
 function HistoryRow({ transaction }: { transaction: TransactionRecord }) {
+  const category = transaction.category?.trim() || 'Uncategorized'
+
   return (
     <div className="transaction-row" role="row">
       <span role="cell">{formatDateOnly(transaction.bookingDate)}</span>
@@ -206,7 +208,7 @@ function HistoryRow({ transaction }: { transaction: TransactionRecord }) {
       <span role="cell">{transaction.currency || '—'}</span>
       <span role="cell">{transaction.counterparty || '—'}</span>
       <span role="cell">{transaction.description || '—'}</span>
-      <span role="cell"><span className="category-chip">{transaction.category || 'Uncategorized'}</span></span>
+      <span role="cell"><span className="category-chip">{category}</span></span>
     </div>
   )
 }

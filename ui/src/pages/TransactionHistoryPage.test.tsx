@@ -62,6 +62,16 @@ describe('TransactionHistoryPage', () => {
     expect(screen.getByRole('option', { name: 'Uncategorized' })).toBeInTheDocument()
   })
 
+  it('renders whitespace-only categories as Uncategorized', async () => {
+    vi.mocked(getTransactionHistory).mockResolvedValue(
+      result({ content: [{ ...transaction, category: '   ' }] }),
+    )
+    renderPage()
+
+    const row = await screen.findByRole('row', { name: /Monthly rent/ })
+    expect(within(row).getByText('Uncategorized')).toBeInTheDocument()
+  })
+
   it('combines text, inclusive date and category filters in the aggregate request', async () => {
     const user = userEvent.setup()
     renderPage()
