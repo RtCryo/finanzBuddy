@@ -150,7 +150,8 @@ class TransactionReadRepositoryTest {
     void aggregatesDashboardTransactionsForProcessedOwnerDocumentsAndIgnoresBlankValues() {
         insertTransaction(6, 1, 7, DateValue.of("2024-03-21"), "Coffee shop", "Repeated", "Food");
         insertTransaction(7, 1, 7, DateValue.of("2024-03-22"), "   ", "Blank values", " ");
-        insertTransaction(8, 1, 8, DateValue.of("2024-03-23"), "Wrong transaction owner", "", "Other");
+        insertTransaction(
+                8, 1, 8, DateValue.of("2024-03-23"), "Wrong transaction owner", "", "Other");
         insertTransaction(9, 3, 7, DateValue.of("2024-03-24"), "Wrong document owner", "", "Other");
 
         TransactionReadRepository.DashboardTransactionMetrics metrics =

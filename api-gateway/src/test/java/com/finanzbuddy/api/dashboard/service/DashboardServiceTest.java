@@ -43,8 +43,7 @@ class DashboardServiceTest {
 
         DashboardResponse response = dashboardService.getDashboard("owner@example.com");
 
-        assertThat(response)
-                .isEqualTo(new DashboardResponse(5, 2, 2, 7, 3, 4));
+        assertThat(response).isEqualTo(new DashboardResponse(5, 2, 2, 7, 3, 4));
         verify(documentRepository).countByUserId(42L);
         verify(documentRepository).countByUserIdAndStatus(42L, DocumentStatus.PROCESSED);
         verify(documentRepository)
