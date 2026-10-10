@@ -268,6 +268,146 @@ class DocumentControllerIntegrationTest {
     }
 
     @Test
+    void aggregateTransactionEndpointRequiresAuthenticationAndScopesProcessedRowsToOwner()
+            throws Exception {
+        String ownerToken = registerAndLogin("history-owner@example.com", "password123");
+        String otherToken = registerAndLogin("history-other@example.com", "password123");
+        ensureTransactionsTable();
+        long processedDocument = uploadDocument(ownerToken, csvFile("history.csv"), "CSV");
+        long pendingDocument = uploadDocument(ownerToken, csvFile("pending-history.csv"), "CSV");
+        long foreignDocument = uploadDocument(otherToken, csvFile("foreign-history.csv"), "CSV");
+        markProcessed(processedDocument);
+        markProcessed(foreignDocument);
+
+        insertHistoryTransaction(
+                processedDocument, "2024-03-12", "Owner shop", "Owner purchase", "Food");
+        insertHistoryTransaction(
+                pendingDocument, "2024-03-13", "Pending shop", "Pending row", "Food");
+        insertHistoryTransaction(
+                foreignDocument, "2024-03-14", "Foreign shop", "Foreign row", "Food");
+
+        mockMvc.perform(get("/transactions")).andExpect(status().isUnauthorized());
+
+        MvcResult ownerResult =
+                mockMvc.perform(
+                                get("/transactions")
+                                        .header("Authorization", "Bearer " + ownerToken))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode ownerBody = objectMapper.readTree(ownerResult.getResponse().getContentAsString());
+        assertThat(ownerBody.get("totalElements").asLong()).isEqualTo(1);
+        assertThat(ownerBody.get("content").get(0).get("description").asText())
+                .isEqualTo("Owner purchase");
+        assertThat(ownerBody.get("categories").get(0).asText()).isEqualTo("Food");
+
+        MvcResult otherResult =
+                mockMvc.perform(
+                                get("/transactions")
+                                        .header("Authorization", "Bearer " + otherToken))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode otherBody = objectMapper.readTree(otherResult.getResponse().getContentAsString());
+        assertThat(otherBody.get("totalElements").asLong()).isEqualTo(1);
+        assertThat(otherBody.get("content").get(0).get("description").asText())
+                .isEqualTo("Foreign row");
+    }
+
+    @Test
+    void aggregateTransactionsSupportEmptyResultsInclusiveDatesTextAndCategoryFilters()
+            throws Exception {
+        String token = registerAndLogin("history-filters@example.com", "password123");
+        String emptyToken = registerAndLogin("history-empty@example.com", "password123");
+        ensureTransactionsTable();
+        long documentId = uploadDocument(token, csvFile("filtered-history.csv"), "CSV");
+        markProcessed(documentId);
+        insertHistoryTransaction(
+                documentId, "2024-01-01", "ACME GmbH", "Starting balance", "Income");
+        insertHistoryTransaction(documentId, "2024-01-31", "ACME GmbH", "Monthly rent", "Income");
+        insertHistoryTransaction(documentId, "2024-02-01", "Market", "Rent adjustment", "Expense");
+        insertHistoryTransaction(documentId, null, "No date", "No booking date", null);
+
+        MvcResult emptyResult =
+                mockMvc.perform(
+                                get("/transactions")
+                                        .header("Authorization", "Bearer " + emptyToken))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode emptyBody = objectMapper.readTree(emptyResult.getResponse().getContentAsString());
+        assertThat(emptyBody.get("content").size()).isZero();
+        assertThat(emptyBody.get("totalElements").asLong()).isZero();
+
+        mockMvc.perform(
+                        get("/transactions")
+                                .param("page", "-1")
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(
+                        get("/transactions")
+                                .param("size", "0")
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(
+                        get("/transactions")
+                                .param("from", "2024-02-01")
+                                .param("to", "2024-01-01")
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+
+        MvcResult cappedPage =
+                mockMvc.perform(
+                                get("/transactions")
+                                        .param("size", "101")
+                                        .header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        assertThat(
+                        objectMapper
+                                .readTree(cappedPage.getResponse().getContentAsString())
+                                .get("size")
+                                .asInt())
+                .isEqualTo(100);
+
+        MvcResult combined =
+                mockMvc.perform(
+                                get("/transactions")
+                                        .param("query", "aCmE")
+                                        .param("from", "2024-01-31")
+                                        .param("to", "2024-01-31")
+                                        .param("category", "Income")
+                                        .header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode combinedBody = objectMapper.readTree(combined.getResponse().getContentAsString());
+        assertThat(combinedBody.get("totalElements").asLong()).isEqualTo(1);
+        assertThat(combinedBody.get("content").get(0).get("bookingDate").asText())
+                .isEqualTo("2024-01-31");
+
+        MvcResult descriptionSearch =
+                mockMvc.perform(
+                                get("/transactions")
+                                        .param("query", "rEnT")
+                                        .header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode descriptionBody =
+                objectMapper.readTree(descriptionSearch.getResponse().getContentAsString());
+        assertThat(descriptionBody.get("totalElements").asLong()).isEqualTo(2);
+
+        MvcResult categoryFilter =
+                mockMvc.perform(
+                                get("/transactions")
+                                        .param("category", "Expense")
+                                        .header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode categoryBody =
+                objectMapper.readTree(categoryFilter.getResponse().getContentAsString());
+        assertThat(categoryBody.get("totalElements").asLong()).isEqualTo(1);
+        assertThat(categoryBody.get("categories").toString()).contains("Expense", "Income");
+        assertThat(categoryBody.get("hasUncategorized").asBoolean()).isTrue();
+    }
+
+    @Test
     void downloadReturnsOwnersFileAndIsOwnerScoped() throws Exception {
         String ownerToken = registerAndLogin("download-owner@example.com", "password123");
         String otherToken = registerAndLogin("download-other@example.com", "password123");
@@ -449,6 +589,46 @@ class DocumentControllerIntegrationTest {
         // Redelivery of the same status from an at-least-once parser must be a no-op 200, not a
         // 400 that would push the parser into a retry loop.
         transition(documentId, DocumentStatus.PROCESSING, null);
+    }
+
+    private void ensureTransactionsTable() {
+        jdbcTemplate.execute(
+                "CREATE TABLE IF NOT EXISTS transactions (id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                        + " document_id BIGINT NOT NULL, user_id BIGINT, booking_date DATE,"
+                        + " value_date DATE, amount DECIMAL(19,4), currency VARCHAR(3),"
+                        + " counterparty VARCHAR(500), description CLOB, category VARCHAR(255),"
+                        + " raw_data CLOB, created_at TIMESTAMP)");
+    }
+
+    private MockMultipartFile csvFile(String name) {
+        return new MockMultipartFile("file", name, "text/csv", "a,b\n1,2".getBytes());
+    }
+
+    private void markProcessed(long documentId) throws Exception {
+        transition(documentId, DocumentStatus.PROCESSING, null);
+        transition(documentId, DocumentStatus.PROCESSED, null);
+    }
+
+    private void insertHistoryTransaction(
+            long documentId,
+            String bookingDate,
+            String counterparty,
+            String description,
+            String category) {
+        Long userId =
+                jdbcTemplate.queryForObject(
+                        "SELECT user_id FROM documents WHERE id = ?", Long.class, documentId);
+        jdbcTemplate.update(
+                "INSERT INTO transactions (document_id, user_id, booking_date, value_date, amount,"
+                        + " currency, counterparty, description, category) VALUES (?, ?, ?, NULL,"
+                        + " ?, 'EUR', ?, ?, ?)",
+                documentId,
+                userId,
+                bookingDate == null ? null : Date.valueOf(bookingDate),
+                new BigDecimal("42.5000"),
+                counterparty,
+                description,
+                category);
     }
 
     private void transition(long documentId, DocumentStatus status, String message)

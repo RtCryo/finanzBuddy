@@ -1463,6 +1463,162 @@ button {
   overflow: hidden;
 }
 
+.history-card {
+  margin-bottom: 20px;
+}
+
+.history-toolbar {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.history-filters {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.history-search-field {
+  width: min(270px, 100%);
+}
+
+.history-date-field {
+  display: grid;
+  min-height: 38px;
+  grid-template-columns: auto minmax(120px, 1fr);
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #dce3eb;
+  border-radius: 8px;
+  background: white;
+  padding: 0 9px;
+  color: #718096;
+  font-size: 11px;
+}
+
+.history-date-field:focus-within,
+.history-category-field select:focus {
+  border-color: #167d68;
+  box-shadow: 0 0 0 3px rgb(22 125 104 / 10%);
+  outline: 0;
+}
+
+.history-date-field input,
+.history-category-field select {
+  min-width: 0;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: #344054;
+  font-size: 12px;
+  outline: 0;
+}
+
+.history-category-field select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #dce3eb;
+  border-radius: 8px;
+  background: white;
+  padding: 0 30px 0 10px;
+}
+
+.history-category-field {
+  min-width: 155px;
+}
+
+.clear-filters-button {
+  min-height: 38px;
+}
+
+.clear-filters-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.history-notice {
+  margin: 0 24px 16px;
+}
+
+.history-transaction-table {
+  min-width: 1120px;
+}
+
+.history-pagination {
+  display: flex;
+  min-height: 68px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-top: 1px solid #eef1f5;
+  padding: 12px 24px;
+  color: #718096;
+  font-size: 12px;
+}
+
+.history-page-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.page-number,
+.page-arrow {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #42566f;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.page-number:hover:not(.current),
+.page-arrow:hover:not(:disabled) {
+  background: #f4f7f8;
+}
+
+.page-number.current {
+  border-color: #c5e5d9;
+  background: #eaf5f1;
+  color: #116653;
+  font-weight: 700;
+}
+
+.page-number:focus-visible,
+.page-arrow:focus-visible {
+  outline: 3px solid rgb(22 125 104 / 25%);
+  outline-offset: 2px;
+}
+
+.page-arrow:disabled {
+  cursor: not-allowed;
+  color: #aab3bf;
+}
+
+.page-arrow svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.page-ellipsis {
+  display: grid;
+  width: 24px;
+  place-items: center;
+  color: #8b97a7;
+}
+
 .transactions-heading {
   padding: 24px 26px 20px;
 }
@@ -1705,10 +1861,12 @@ button {
 
   .workspace-nav {
     display: flex;
+    overflow-x: auto;
     gap: 6px;
   }
 
   .nav-link {
+    flex: 0 0 auto;
     min-height: 40px;
     gap: 8px;
     padding: 0 10px;
@@ -1742,5 +1900,29 @@ button {
     flex-direction: column;
     gap: 18px;
     margin-bottom: 24px;
+  }
+
+  .history-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+  }
+
+  .history-page-controls {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .history-search-field {
+    width: 100%;
+  }
+
+  .history-date-field {
+    flex: 1 1 140px;
+  }
+
+  .history-category-field {
+    flex: 1 1 155px;
   }
 }

@@ -8,6 +8,7 @@ import com.finanzbuddy.api.document.dto.DocumentListResponse;
 import com.finanzbuddy.api.document.dto.DocumentResponse;
 import com.finanzbuddy.api.document.dto.DocumentStatusUpdateRequest;
 import com.finanzbuddy.api.document.dto.DownloadedFile;
+import com.finanzbuddy.api.document.dto.TransactionHistoryResponse;
 import com.finanzbuddy.api.document.dto.TransactionResponse;
 import com.finanzbuddy.api.entity.Document;
 import com.finanzbuddy.api.entity.DocumentStatus;
@@ -25,6 +26,7 @@ import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 import org.slf4j.Logger;
@@ -230,6 +232,32 @@ public class DocumentService {
                                 new ResponseStatusException(
                                         HttpStatus.NOT_FOUND, "Document not found"));
         return transactionReadRepository.findByDocumentId(documentId);
+    }
+
+    @Transactional(readOnly = true)
+    public TransactionHistoryResponse getTransactionHistory(
+            String userEmail,
+            Pageable pageable,
+            String query,
+            LocalDate from,
+            LocalDate to,
+            String category) {
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Start date must be on or before end date");
+        }
+        User user = getUser(userEmail);
+        Page<TransactionResponse> page =
+                transactionReadRepository.findHistory(
+                        user.getId(), query, from, to, category, pageable);
+        return new TransactionHistoryResponse(
+                page.getContent(),
+                page.getTotalElements(),
+                page.getTotalPages(),
+                page.getNumber(),
+                page.getSize(),
+                transactionReadRepository.findHistoryCategories(user.getId()),
+                transactionReadRepository.historyHasUncategorized(user.getId()));
     }
 
     /**

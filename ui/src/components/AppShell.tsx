@@ -19,11 +19,18 @@ function Brand() {
   )
 }
 
-function WorkspaceIcon({ upload = false }: { upload?: boolean }) {
+function WorkspaceIcon({ upload = false, transactions = false }: { upload?: boolean; transactions?: boolean }) {
   return upload ? (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
       <rect x="2.5" y="2.5" width="15" height="15" rx="4" stroke="currentColor" strokeWidth="1.6" />
       <path d="M10 5.5v9M5.5 10h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  ) : transactions ? (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <circle cx="6" cy="5.5" r="1" fill="currentColor" />
+      <circle cx="12" cy="10" r="1" fill="currentColor" />
+      <circle cx="8" cy="14.5" r="1" fill="currentColor" />
     </svg>
   ) : (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -35,6 +42,7 @@ function WorkspaceIcon({ upload = false }: { upload?: boolean }) {
 
 function pageLabel(pathname: string) {
   if (pathname === '/documents/upload') return 'Upload'
+  if (pathname === '/transactions') return 'Transaction history'
   if (pathname.startsWith('/documents/')) return 'Document details'
   return 'Documents'
 }
@@ -56,6 +64,10 @@ export function AppShell({ children }: AppShellProps) {
           <NavLink to="/documents" end className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
             <WorkspaceIcon />
             <span>Documents</span>
+          </NavLink>
+          <NavLink to="/transactions" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+            <WorkspaceIcon transactions />
+            <span>Transaction history</span>
           </NavLink>
           <NavLink to="/documents/upload" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
             <WorkspaceIcon upload />

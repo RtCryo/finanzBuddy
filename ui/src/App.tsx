@@ -5,6 +5,7 @@ import { RegisterPage } from './pages/RegisterPage'
 import { UploadPage } from './pages/UploadPage'
 import { DocumentsPage } from './pages/DocumentsPage'
 import { DocumentDetailPage } from './pages/DocumentDetailPage'
+import { TransactionHistoryPage } from './pages/TransactionHistoryPage'
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/documents/upload" element={<UploadPage />} />
           <Route path="/documents/:id" element={<DocumentDetailPage />} />
+          <Route path="/transactions" element={<TransactionHistoryPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/documents" replace />} />
       </Routes>
