@@ -8,12 +8,12 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabase;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 
 class TransactionReadRepositoryTest {
 
@@ -38,12 +38,17 @@ class TransactionReadRepositoryTest {
                         + " category VARCHAR(255))");
         repository = new TransactionReadRepository(jdbcTemplate);
 
-        jdbcTemplate.update("INSERT INTO documents VALUES (1, 7, 'PROCESSED'), (2, 7, 'PENDING'), (3, 8, 'PROCESSED')");
-        insertTransaction(1, 1, 7, DateValue.of("2024-03-10"), "Coffee shop", "Card purchase", "Food");
-        insertTransaction(2, 1, 7, DateValue.of("2024-03-20"), "ACME GmbH", "Invoice paid", "Income");
+        jdbcTemplate.update(
+                "INSERT INTO documents VALUES (1, 7, 'PROCESSED'), (2, 7, 'PENDING'), (3, 8, 'PROCESSED')");
+        insertTransaction(
+                1, 1, 7, DateValue.of("2024-03-10"), "Coffee shop", "Card purchase", "Food");
+        insertTransaction(
+                2, 1, 7, DateValue.of("2024-03-20"), "ACME GmbH", "Invoice paid", "Income");
         insertTransaction(3, 1, 7, null, "No date", "Missing booking date", null);
-        insertTransaction(4, 2, 7, DateValue.of("2024-03-15"), "Pending row", "Not processed", "Food");
-        insertTransaction(5, 3, 8, DateValue.of("2024-03-15"), "Foreign row", "Other owner", "Food");
+        insertTransaction(
+                4, 2, 7, DateValue.of("2024-03-15"), "Pending row", "Not processed", "Food");
+        insertTransaction(
+                5, 3, 8, DateValue.of("2024-03-15"), "Foreign row", "Other owner", "Food");
     }
 
     @AfterEach
@@ -64,7 +69,10 @@ class TransactionReadRepositoryTest {
 
         assertThat(page.getTotalElements()).isEqualTo(1);
         assertThat(page.getContent()).hasSize(1);
-        assertThat(((com.finanzbuddy.api.document.dto.TransactionResponse) page.getContent().get(0)).id())
+        assertThat(
+                        ((com.finanzbuddy.api.document.dto.TransactionResponse)
+                                        page.getContent().get(0))
+                                .id())
                 .isEqualTo(2L);
     }
 
@@ -97,6 +105,15 @@ class TransactionReadRepositoryTest {
         assertThat(repository.findHistoryCategories(7L)).containsExactly("Food", "Income");
         assertThat(repository.historyHasUncategorized(7L)).isTrue();
         assertThat(repository.findHistoryCategories(8L)).containsExactly("Food");
+        assertThat(repository.historyHasUncategorized(8L)).isFalse();
+    }
+
+    @Test
+    void ignoresBlankTextAndCategoryFilters() {
+        Page<com.finanzbuddy.api.document.dto.TransactionResponse> page =
+                repository.findHistory(7L, "   ", null, null, "   ", PageRequest.of(0, 10));
+
+        assertThat(page.getTotalElements()).isEqualTo(3);
     }
 
     private void insertTransaction(

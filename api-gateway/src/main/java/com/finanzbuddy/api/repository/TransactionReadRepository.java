@@ -73,7 +73,9 @@ public class TransactionReadRepository {
             }
         }
 
-        Long total = jdbcTemplate.queryForObject("SELECT COUNT(*)" + where, Long.class, parameters.toArray());
+        Long total =
+                jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*)" + where, Long.class, parameters.toArray());
         List<Object> pageParameters = new ArrayList<>(parameters);
         pageParameters.add(pageable.getPageSize());
         pageParameters.add(pageable.getOffset());
