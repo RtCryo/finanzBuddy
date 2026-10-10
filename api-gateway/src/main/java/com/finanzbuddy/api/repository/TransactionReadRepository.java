@@ -143,6 +143,24 @@ public class TransactionReadRepository {
         return count != null && count > 0;
     }
 
+    public DashboardTransactionMetrics findDashboardMetrics(Long userId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) AS saved_transactions,"
+                        + " COUNT(DISTINCT CASE WHEN t.category IS NOT NULL"
+                        + " AND TRIM(t.category) <> '' THEN t.category END) AS unique_categories,"
+                        + " COUNT(DISTINCT CASE WHEN t.counterparty IS NOT NULL"
+                        + " AND TRIM(t.counterparty) <> '' THEN t.counterparty END)"
+                        + " AS unique_counterparties"
+                        + baseHistoryQuery(),
+                (rs, rowNum) ->
+                        new DashboardTransactionMetrics(
+                                rs.getLong("saved_transactions"),
+                                rs.getLong("unique_categories"),
+                                rs.getLong("unique_counterparties")),
+                userId,
+                userId);
+    }
+
     private static String baseHistoryQuery() {
         return " FROM transactions t JOIN documents d ON d.id = t.document_id"
                 + " WHERE d.user_id = ? AND t.user_id = ? AND d.status = 'PROCESSED'";
@@ -164,4 +182,7 @@ public class TransactionReadRepository {
     private static LocalDate toLocalDate(Date date) {
         return date == null ? null : date.toLocalDate();
     }
+
+    public record DashboardTransactionMetrics(
+            long savedTransactions, long uniqueCategories, long uniqueCounterparties) {}
 }

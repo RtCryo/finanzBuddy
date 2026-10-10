@@ -40,7 +40,7 @@ describe('AppShell', () => {
     expect(screen.getByLabelText('Breadcrumb')).toHaveTextContent('Transaction history')
   })
 
-  it('keeps workspace navigation focused and shows privacy reassurance once', () => {
+  it('shows shared workspace destinations and privacy reassurance once', () => {
     render(
       <MemoryRouter initialEntries={['/documents']}>
         <AppShell><div>docs</div></AppShell>
@@ -48,6 +48,7 @@ describe('AppShell', () => {
     )
 
     const navigation = screen.getByRole('navigation', { name: 'Workspace' })
+    expect(within(navigation).getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/dashboard')
     expect(within(navigation).getByRole('link', { name: 'Documents' })).toHaveAttribute('href', '/documents')
     expect(within(navigation).getByRole('link', { name: 'Transaction history' })).toHaveAttribute('href', '/transactions')
     expect(within(navigation).queryByRole('link', { name: 'Upload a file' })).not.toBeInTheDocument()

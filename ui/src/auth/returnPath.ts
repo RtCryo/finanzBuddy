@@ -5,7 +5,7 @@ type FromLocation = {
 }
 
 export function safeReturnPath(path: string | null | undefined) {
-  if (!path || !isDocumentPath(path)) return '/documents'
+  if (!path || !isProtectedWorkspacePath(path)) return '/dashboard'
   return path
 }
 
@@ -18,9 +18,21 @@ export function returnPathFromLocation(state: unknown, search: string) {
   return safeReturnPath(destination ?? requestedPath)
 }
 
-function isDocumentPath(path: string) {
-  if (path.includes('\\') || path.includes('://') || path.startsWith('//')) return false
-  const pathname = path.split(/[?#]/)[0]
+function isProtectedWorkspacePath(path: string) {
+  if (
+    !path.startsWith('/')
+    || path.startsWith('//')
+    || path.includes('\\')
+    || path.includes('://')
+    || /[\u0000-\u001f\u007f]/.test(path)
+    || /%(?:2f|5c|2e)/i.test(path)
+  ) return false
+
+  const pathname = path.split(/[?#]/, 1)[0]
   if (pathname.split('/').includes('..')) return false
-  return pathname === '/documents' || pathname.startsWith('/documents/')
+  return pathname === '/dashboard'
+    || pathname === '/transactions'
+    || pathname === '/documents'
+    || pathname === '/documents/upload'
+    || /^\/documents\/\d+$/.test(pathname)
 }

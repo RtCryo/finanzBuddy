@@ -938,6 +938,21 @@ button {
   color: #c58421;
 }
 
+.summary-icon-blue {
+  background: #eaf2fb;
+  color: #3674ad;
+}
+
+.summary-icon-purple {
+  background: #f2edfb;
+  color: #7656a8;
+}
+
+.summary-icon-teal {
+  background: #e8f5f4;
+  color: #287c78;
+}
+
 .documents-card {
   overflow: hidden;
 }
