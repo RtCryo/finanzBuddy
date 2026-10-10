@@ -68,22 +68,19 @@ services:
     # S3-compatible object storage. Replaced the unmaintained bitnamilegacy/minio image with
     # SeaweedFS (Apache-2.0, actively maintained). The service keeps the "minio" name and MINIO_*
     # env vars so the api-gateway/parser-service S3 client (io.minio) works unchanged. The S3
-    # gateway is bound to port 9000 to preserve MINIO_ENDPOINT. Credentials are injected from the
-    # MINIO_ROOT_* env vars into the SeaweedFS -s3.config identities file at startup; buckets are
-    # created on demand (the api-gateway creates its bucket at startup via the S3 API).
+    # gateway is bound to port 9000 to preserve MINIO_ENDPOINT. AWS credential env vars configure
+    # SeaweedFS S3 auth; buckets are created on demand by the api-gateway at startup.
     image: chrislusf/seaweedfs:4.48
     container_name: finanzbuddy-minio
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    entrypoint:
-      - /bin/sh
-      - -ec
-      - |
-        cat > /tmp/s3.json <<EOF
-        {"identities":[{"name":"finanzbuddy","credentials":[{"accessKey":"$${MINIO_ROOT_USER}","secretKey":"$${MINIO_ROOT_PASSWORD}"}],"actions":["Admin","Read","Write","List","Tagging"]}]}
-        EOF
-        exec weed -logtostderr=true server -dir=/data -s3 -s3.port=9000 -s3.config=/tmp/s3.json
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+    command:
+      - server
+      - -s3
+      - -s3.port=9000
     volumes:
       - minio-data:/data
     healthcheck:
