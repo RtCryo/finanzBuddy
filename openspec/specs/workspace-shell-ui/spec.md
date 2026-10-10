@@ -7,7 +7,7 @@ Defines the shared authenticated workspace navigation and reassurance content so
 ## Requirements
 
 ### Requirement: Workspace navigation avoids a duplicate upload shortcut
-The authenticated workspace navigation SHALL provide links to Documents and Transaction history without a separate Upload a file item. Users SHALL be able to start an upload from the Documents page.
+The authenticated workspace navigation SHALL provide links to Dashboard, Documents, and Transaction history without a separate Upload a file item. The workspace root SHALL open the Dashboard. Users SHALL be able to start an upload from the Documents page.
 
 #### Scenario: Navigate to document upload
 - **WHEN** an authenticated user opens the Documents page
@@ -15,7 +15,15 @@ The authenticated workspace navigation SHALL provide links to Documents and Tran
 
 #### Scenario: View workspace navigation
 - **WHEN** an authenticated user views the workspace navigation
-- **THEN** it contains Documents and Transaction history links and no separate upload link
+- **THEN** it contains Dashboard, Documents, and Transaction history links and no separate upload link
+
+#### Scenario: Open the workspace root
+- **WHEN** a user opens the workspace root while authenticated
+- **THEN** the user is taken to the Dashboard
+
+#### Scenario: Sign in without a requested destination
+- **WHEN** a user signs in without first requesting another protected page
+- **THEN** the user is taken to the Dashboard
 
 ### Requirement: Privacy reassurance appears once in the workspace
 The authenticated workspace SHALL display the financial-data privacy reassurance in one shared location, without repeating the same statement in another workspace region.

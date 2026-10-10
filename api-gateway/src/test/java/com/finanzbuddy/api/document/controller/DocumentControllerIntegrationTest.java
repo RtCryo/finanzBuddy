@@ -327,6 +327,56 @@ class DocumentControllerIntegrationTest {
     }
 
     @Test
+    void dashboardRequiresAuthenticationAndReturnsAllOwnerScopedMetrics() throws Exception {
+        String ownerToken = registerAndLogin("dashboard-owner@example.com", "password123");
+        String otherToken = registerAndLogin("dashboard-other@example.com", "password123");
+        ensureTransactionsTable();
+
+        long pendingDocument = uploadDocument(ownerToken, csvFile("dashboard-pending.csv"), "CSV");
+        long processingDocument =
+                uploadDocument(ownerToken, csvFile("dashboard-processing.csv"), "CSV");
+        long processedDocument =
+                uploadDocument(ownerToken, csvFile("dashboard-processed.csv"), "CSV");
+        long failedDocument = uploadDocument(ownerToken, csvFile("dashboard-failed.csv"), "CSV");
+        long foreignDocument = uploadDocument(otherToken, csvFile("dashboard-foreign.csv"), "CSV");
+        transition(processingDocument, DocumentStatus.PROCESSING, null);
+        markProcessed(processedDocument);
+        transition(failedDocument, DocumentStatus.PROCESSING, null);
+        transition(failedDocument, DocumentStatus.FAILED, "Invalid statement");
+        markProcessed(foreignDocument);
+
+        insertHistoryTransaction(processedDocument, "2024-03-10", "Shop A", "First", "Food");
+        insertHistoryTransaction(processedDocument, "2024-03-11", "Shop A", "Repeated", "Food");
+        insertHistoryTransaction(processedDocument, "2024-03-12", "  ", "Blank", "   ");
+        insertHistoryTransaction(processedDocument, null, null, "Null values", null);
+        insertHistoryTransaction(foreignDocument, "2024-03-13", "Other shop", "Other", "Other");
+
+        mockMvc.perform(get("/dashboard")).andExpect(status().isUnauthorized());
+
+        MvcResult ownerResult =
+                mockMvc.perform(get("/dashboard").header("Authorization", "Bearer " + ownerToken))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode ownerBody = objectMapper.readTree(ownerResult.getResponse().getContentAsString());
+        assertThat(ownerBody.get("totalDocuments").asLong()).isEqualTo(4);
+        assertThat(ownerBody.get("processedDocuments").asLong()).isEqualTo(1);
+        assertThat(ownerBody.get("inProgressDocuments").asLong()).isEqualTo(2);
+        assertThat(ownerBody.get("savedTransactions").asLong()).isEqualTo(4);
+        assertThat(ownerBody.get("uniqueCategories").asLong()).isEqualTo(1);
+        assertThat(ownerBody.get("uniqueCounterparties").asLong()).isEqualTo(1);
+
+        MvcResult otherResult =
+                mockMvc.perform(get("/dashboard").header("Authorization", "Bearer " + otherToken))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode otherBody = objectMapper.readTree(otherResult.getResponse().getContentAsString());
+        assertThat(otherBody.get("totalDocuments").asLong()).isEqualTo(1);
+        assertThat(otherBody.get("savedTransactions").asLong()).isEqualTo(1);
+        assertThat(otherBody.get("uniqueCategories").asLong()).isEqualTo(1);
+        assertThat(otherBody.get("uniqueCounterparties").asLong()).isEqualTo(1);
+    }
+
+    @Test
     void aggregateTransactionsSupportEmptyResultsInclusiveDatesTextAndCategoryFilters()
             throws Exception {
         String token = registerAndLogin("history-filters@example.com", "password123");

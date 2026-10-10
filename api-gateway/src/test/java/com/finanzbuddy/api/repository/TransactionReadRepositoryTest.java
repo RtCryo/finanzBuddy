@@ -147,6 +147,24 @@ class TransactionReadRepositoryTest {
     }
 
     @Test
+    void aggregatesDashboardTransactionsForProcessedOwnerDocumentsAndIgnoresBlankValues() {
+        insertTransaction(6, 1, 7, DateValue.of("2024-03-21"), "Coffee shop", "Repeated", "Food");
+        insertTransaction(7, 1, 7, DateValue.of("2024-03-22"), "   ", "Blank values", " ");
+        insertTransaction(
+                8, 1, 8, DateValue.of("2024-03-23"), "Wrong transaction owner", "", "Other");
+        insertTransaction(9, 3, 7, DateValue.of("2024-03-24"), "Wrong document owner", "", "Other");
+
+        TransactionReadRepository.DashboardTransactionMetrics metrics =
+                repository.findDashboardMetrics(7L);
+
+        assertThat(metrics.savedTransactions()).isEqualTo(5);
+        assertThat(metrics.uniqueCategories()).isEqualTo(2);
+        assertThat(metrics.uniqueCounterparties()).isEqualTo(3);
+        assertThat(repository.findDashboardMetrics(99L))
+                .isEqualTo(new TransactionReadRepository.DashboardTransactionMetrics(0, 0, 0));
+    }
+
+    @Test
     void appliesAllowlistedSortAcrossPageBoundariesAndSupportsEveryField() {
         jdbcTemplate.update("UPDATE transactions SET amount = id * 10 WHERE id <= 3");
         Page<com.finanzbuddy.api.document.dto.TransactionResponse> first =

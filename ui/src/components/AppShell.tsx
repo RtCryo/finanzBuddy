@@ -8,7 +8,7 @@ type AppShellProps = {
 
 function Brand() {
   return (
-    <Link className="brand" to="/documents" aria-label="finanzBuddy home">
+    <Link className="brand" to="/dashboard" aria-label="finanzBuddy home">
       <span className="brand-mark" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none">
           <path d="m6.5 12.5 3.7 3.7 7.4-8" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -19,7 +19,18 @@ function Brand() {
   )
 }
 
-function WorkspaceIcon({ transactions = false }: { transactions?: boolean }) {
+function WorkspaceIcon({ transactions = false, dashboard = false }: { transactions?: boolean; dashboard?: boolean }) {
+  if (dashboard) {
+    return (
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="2.5" y="2.5" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="11.5" y="2.5" width="6" height="4" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="2.5" y="11.5" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="11.5" y="9.5" width="6" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+    )
+  }
+
   return transactions ? (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
       <path d="M3 5.5h14M3 10h14M3 14.5h14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -36,10 +47,12 @@ function WorkspaceIcon({ transactions = false }: { transactions?: boolean }) {
 }
 
 function pageLabel(pathname: string) {
+  if (pathname === '/dashboard') return 'Dashboard'
   if (pathname === '/documents/upload') return 'Upload'
   if (pathname === '/transactions') return 'Transaction history'
   if (pathname.startsWith('/documents/')) return 'Document details'
-  return 'Documents'
+  if (pathname === '/documents') return 'Documents'
+  return 'Dashboard'
 }
 
 export function AppShell({ children }: AppShellProps) {
@@ -56,6 +69,10 @@ export function AppShell({ children }: AppShellProps) {
         <Brand />
         <p className="nav-caption">Workspace</p>
         <nav className="workspace-nav" aria-label="Workspace">
+          <NavLink to="/dashboard" end className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+            <WorkspaceIcon dashboard />
+            <span>Dashboard</span>
+          </NavLink>
           <NavLink to="/documents" end className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
             <WorkspaceIcon />
             <span>Documents</span>
