@@ -1,0 +1,64 @@
+name: Docker Compose CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docker-compose.yml'
+      - '.github/workflows/docker-compose.yml'
+
+  push:
+    branches: [main]
+    paths:
+      - 'docker-compose.yml'
+      - '.github/workflows/docker-compose.yml'
+
+jobs:
+  compose-smoke-test:
+    name: Compose smoke test
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_PROJECT_NAME: finanzbuddy
+      DB_NAME: finanzbuddy
+      DB_USER: finanzbuddy
+      DB_PASSWORD: finanzbuddy
+      JWT_SECRET: ci-jwt-secret
+      INTERNAL_API_KEY: ci-internal-api-key
+      MINIO_ROOT_USER: ci-minio-user
+      MINIO_ROOT_PASSWORD: ci-minio-password
+      TRAEFIK_DOMAIN: app.example.com
+      TRAEFIK_ACME_EMAIL: ci@example.com
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+
+      - name: Seed a legacy SeaweedFS data volume
+        run: |
+          docker volume create finanzbuddy_minio-data
+          docker run --rm \
+            --entrypoint /bin/sh \
+            --volume finanzbuddy_minio-data:/data \
+            chrislusf/seaweedfs:3.99 \
+            -ec 'mkdir -p /data/legacy-volume-check && printf legacy > /data/legacy-volume-check/marker'
+
+      - name: Start SeaweedFS and wait for healthcheck
+        run: docker compose up --detach --wait --wait-timeout 120 minio
+
+      - name: Verify upgraded data volume permissions
+        run: |
+          docker compose exec --no-TTY minio sh -ec '
+            test "$(stat -c %u /data)" = "$(id -u seaweed)"
+            test "$(cat /data/legacy-volume-check/marker)" = legacy
+          '
+
+      - name: Show SeaweedFS logs on failure
+        if: failure()
+        run: docker compose logs minio
+
+      - name: Stop services and remove test volumes
+        if: always()
+        run: docker compose down --volumes --remove-orphans
