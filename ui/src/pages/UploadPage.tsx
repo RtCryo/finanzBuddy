@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { getErrorMessage } from '../api/errors'
 import { AppShell } from '../components/AppShell'
+import { PageHeading } from '../components/PageHeading'
 import type { DocumentRecord } from '../types/document'
 
 const extensionTypes: Record<string, string> = { '.csv': 'CSV' }
@@ -112,12 +113,7 @@ export function UploadPage() {
 
   return (
     <AppShell>
-      <section className="page-heading">
-        <div>
-          <h1>Upload a document</h1>
-          <p>Add a financial document to extract and organize its transactions.</p>
-        </div>
-      </section>
+      <PageHeading title="Upload a document" description="Add a financial document to extract and organize its transactions." />
 
       <div className="upload-layout">
         <form className="surface upload-card" onSubmit={handleSubmit}>

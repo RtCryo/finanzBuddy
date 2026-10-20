@@ -136,6 +136,21 @@ describe('DocumentDetailPage', () => {
     expect(dialog).toHaveTextContent('Shopping')
   })
 
+  it('uses positive, negative, and neutral amount treatments in the document table', async () => {
+    vi.mocked(getDocument).mockResolvedValue(processedDocument)
+    vi.mocked(getDocumentTransactions).mockResolvedValue([
+      transaction,
+      { ...transaction, id: 13, amount: '-9.5', description: 'Refund' },
+      { ...transaction, id: 14, amount: null, description: 'Unavailable amount' },
+    ])
+    renderDetail()
+
+    const rows = await screen.findAllByRole('row')
+    expect(within(rows[1]).getByText('42.75').closest('.transaction-amount')).toHaveClass('amount-positive')
+    expect(within(rows[2]).getByText('-9.5').closest('.transaction-amount')).toHaveClass('amount-negative')
+    expect(within(rows[3]).getByText('—').closest('.transaction-amount')).toHaveClass('amount-neutral')
+  })
+
   it('normalizes blank and padded transaction values the same in document rows and details', async () => {
     vi.mocked(getDocument).mockResolvedValue(processedDocument)
     const paddedTransaction = {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDateOnly, formatInstant } from './format'
+import { formatDateOnly, formatInstant, transactionAmountTone } from './format'
 
 describe('formatDateOnly', () => {
   it('keeps a date-only value on that calendar day', () => {
@@ -21,5 +21,15 @@ describe('formatDateOnly', () => {
 describe('formatInstant', () => {
   it('rejects an unparseable timestamp', () => {
     expect(formatInstant('not-a-date')).toBe('—')
+  })
+})
+
+describe('transactionAmountTone', () => {
+  it('keeps positive and negative amounts semantic and unavailable values neutral', () => {
+    expect(transactionAmountTone(12)).toBe('amount-positive')
+    expect(transactionAmountTone('-12')).toBe('amount-negative')
+    expect(transactionAmountTone(0)).toBe('amount-neutral')
+    expect(transactionAmountTone('invalid')).toBe('amount-neutral')
+    expect(transactionAmountTone(null)).toBe('amount-neutral')
   })
 })
