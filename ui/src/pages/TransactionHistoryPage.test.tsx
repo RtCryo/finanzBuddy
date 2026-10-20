@@ -2,12 +2,22 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getTransactionHistory } from '../api/transactions'
+import {
+  createPersonalTransactionCategory,
+  getTransactionCategories,
+  getTransactionHistory,
+  getTransactionVersions,
+  updateTransactionCategory,
+} from '../api/transactions'
 import type { TransactionHistoryPage as TransactionHistoryResult } from '../types/transaction'
 import { TransactionHistoryPage } from './TransactionHistoryPage'
 
 vi.mock('../api/transactions', () => ({
+  createPersonalTransactionCategory: vi.fn(),
+  getTransactionCategories: vi.fn(),
   getTransactionHistory: vi.fn(),
+  getTransactionVersions: vi.fn(),
+  updateTransactionCategory: vi.fn(),
   UNCATEGORIZED_CATEGORY: '__uncategorized__',
 }))
 
@@ -43,6 +53,15 @@ describe('TransactionHistoryPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(getTransactionHistory).mockResolvedValue(result())
+    vi.mocked(getTransactionCategories).mockResolvedValue(['Food', 'Housing'])
+    vi.mocked(getTransactionVersions).mockResolvedValue([
+      { versionNumber: 1, transaction, createdAt: null },
+    ])
+    vi.mocked(updateTransactionCategory).mockResolvedValue({ ...transaction, category: 'Food' })
+    vi.mocked(createPersonalTransactionCategory).mockResolvedValue({
+      name: 'Travel',
+      transaction: { ...transaction, category: 'Travel' },
+    })
   })
 
   afterEach(cleanup)
@@ -66,9 +85,11 @@ describe('TransactionHistoryPage', () => {
 
   it('normalizes padded text and whitespace-only categories the same in rows and details', async () => {
     const user = userEvent.setup()
+    const paddedTransaction = { ...transaction, counterparty: '  ACME GmbH  ', description: ' Monthly rent ', category: '   ' }
     vi.mocked(getTransactionHistory).mockResolvedValue(
-      result({ content: [{ ...transaction, counterparty: '  ACME GmbH  ', description: ' Monthly rent ', category: '   ' }] }),
+      result({ content: [paddedTransaction] }),
     )
+    vi.mocked(getTransactionVersions).mockResolvedValue([{ versionNumber: 1, transaction: paddedTransaction, createdAt: null }])
     renderPage()
 
     const row = await screen.findByRole('row', { name: /Monthly rent/ })
@@ -77,15 +98,16 @@ describe('TransactionHistoryPage', () => {
     expect(within(row).getByText('Uncategorized')).toBeInTheDocument()
 
     await user.click(within(row).getByText('Monthly rent'))
-    const dialog = screen.getByRole('dialog', { name: 'Selected transaction' })
-    expect(within(dialog).getByText('ACME GmbH')).toBeInTheDocument()
-    expect(within(dialog).getByText('Monthly rent')).toBeInTheDocument()
+    const dialog = screen.getByRole('dialog', { name: 'Transaction details' })
+    expect(within(dialog).getAllByText('ACME GmbH')).toHaveLength(1)
+    expect(within(dialog).getAllByText('Monthly rent')).toHaveLength(1)
     expect(within(dialog).getByText('Uncategorized')).toBeInTheDocument()
   })
 
   it('opens details for the keyboard-activated history transaction, including its booking date', async () => {
     const selected = { ...transaction, id: 8, counterparty: 'Example Bank', description: 'Savings deposit' }
     vi.mocked(getTransactionHistory).mockResolvedValue(result({ content: [transaction, selected], totalElements: 2 }))
+    vi.mocked(getTransactionVersions).mockResolvedValue([{ versionNumber: 1, transaction: selected, createdAt: null }])
     const user = userEvent.setup()
     renderPage()
 
@@ -94,7 +116,7 @@ describe('TransactionHistoryPage', () => {
     action.focus()
     await user.keyboard('{Enter}')
 
-    const dialog = screen.getByRole('dialog', { name: 'Selected transaction' })
+    const dialog = screen.getByRole('dialog', { name: 'Transaction details' })
     expect(dialog).toHaveTextContent('Jan 31, 2024')
     expect(dialog).toHaveTextContent('Feb 1, 2024')
     expect(dialog).toHaveTextContent('Example Bank')
@@ -137,6 +159,48 @@ describe('TransactionHistoryPage', () => {
     expect(screen.getByRole('button', { name: 'Page 2' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByText('Showing 21–40 of 200 transactions')).toBeInTheDocument()
     expect(window.scrollY).toBe(640)
+  })
+
+  it('refreshes the edited row without resetting history filters, page, sort, or scroll', async () => {
+    const user = userEvent.setup()
+    const updated = { ...transaction, category: 'Food' }
+    vi.mocked(getTransactionHistory)
+      .mockResolvedValueOnce(result({ totalElements: 200, totalPages: 10 }))
+      .mockResolvedValue(result({ content: [updated], totalElements: 200, totalPages: 10 }))
+    vi.mocked(updateTransactionCategory).mockResolvedValue(updated)
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 480 })
+    renderPage()
+
+    await screen.findByRole('table', { name: 'Transaction history' })
+    await user.type(screen.getByRole('textbox', { name: 'Search description or counterparty' }), 'rent')
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({ query: 'rent' })))
+    await user.click(screen.getByRole('button', { name: 'Page 2' }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 })))
+    await user.click(screen.getByRole('button', { name: /Counterparty/ }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({
+      page: 0,
+      sortField: 'counterparty',
+      sortDirection: 'ASC',
+    })))
+    await user.click(screen.getByRole('button', { name: 'Page 2' }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 })))
+
+    const row = screen.getByRole('row', { name: /Monthly rent/ })
+    await user.click(within(row).getByText('Monthly rent'))
+    await user.click(await screen.findByRole('button', { name: 'Edit transaction' }))
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Transaction category' }), 'Food')
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({
+      page: 1,
+      query: 'rent',
+      sortField: 'counterparty',
+      sortDirection: 'ASC',
+    })))
+    expect(await screen.findByRole('row', { name: /Food/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Page 2' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('textbox', { name: 'Search description or counterparty' })).toHaveValue('rent')
+    expect(window.scrollY).toBe(480)
   })
 
   it('combines text, inclusive date and category filters in the aggregate request', async () => {

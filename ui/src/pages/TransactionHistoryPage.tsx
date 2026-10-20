@@ -128,6 +128,13 @@ export function TransactionHistoryPage() {
     setPage(0)
   }
 
+  function handleTransactionSaved(updated: TransactionRecord) {
+    setSelectedTransaction(updated)
+    setTransactions((current) => current.map((transaction) => transaction.id === updated.id ? updated : transaction))
+    // Refresh the current page and category choices without resetting pagination or filters.
+    void loadTransactions()
+  }
+
   const hasFilters = Boolean(query || from || to || category)
   const firstResult = totalElements === 0 ? 0 : page * PAGE_SIZE + 1
   const lastResult = Math.min((page + 1) * PAGE_SIZE, totalElements)
@@ -261,6 +268,7 @@ export function TransactionHistoryPage() {
         transaction={selectedTransaction}
         openerRef={transactionOpenerRef}
         onClose={() => setSelectedTransaction(null)}
+        onSaved={handleTransactionSaved}
       />
     </AppShell>
   )

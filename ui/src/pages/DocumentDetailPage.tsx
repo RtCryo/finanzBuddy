@@ -124,6 +124,19 @@ export function DocumentDetailPage() {
     }
   }
 
+  function handleTransactionSaved(updated: TransactionRecord) {
+    setSelectedTransaction(updated)
+    setTransactions((current) => current.map((transaction) => transaction.id === updated.id ? updated : transaction))
+    void getDocumentTransactions(id)
+      .then((rows) => {
+        setTransactions(rows)
+        setTransactionsError('')
+      })
+      .catch((requestError) => {
+        setTransactionsError(getErrorMessage(requestError, 'We could not refresh this document’s transactions.'))
+      })
+  }
+
   return (
     <AppShell>
       <Link className="back-link" to="/documents">← Back to documents</Link>
@@ -247,6 +260,7 @@ export function DocumentDetailPage() {
         transaction={selectedTransaction}
         openerRef={transactionOpenerRef}
         onClose={() => setSelectedTransaction(null)}
+        onSaved={handleTransactionSaved}
       />
     </AppShell>
   )

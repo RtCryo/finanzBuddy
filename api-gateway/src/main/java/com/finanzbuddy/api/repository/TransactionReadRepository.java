@@ -39,8 +39,10 @@ public class TransactionReadRepository {
 
     public List<TransactionResponse> findByDocumentId(Long documentId) {
         return jdbcTemplate.query(
-                "SELECT id, booking_date, value_date, amount, currency, counterparty, description,"
-                        + " category FROM transactions WHERE document_id = ? ORDER BY id ASC",
+                "SELECT t.id, t.booking_date, t.value_date, t.amount, t.currency, t.counterparty,"
+                        + " t.description, t.category"
+                        + currentTransactionsQuery()
+                        + " t WHERE t.document_id = ? ORDER BY t.id ASC",
                 TransactionReadRepository::toTransaction,
                 documentId);
     }
@@ -122,11 +124,20 @@ public class TransactionReadRepository {
 
     public List<String> findHistoryCategories(Long userId) {
         return jdbcTemplate.queryForList(
-                "SELECT DISTINCT t.category"
+                "SELECT DISTINCT category FROM ("
+                        + "SELECT t.category AS category"
                         + baseHistoryQuery()
                         + " AND t.category IS NOT NULL AND TRIM(t.category) <> ''"
-                        + " ORDER BY t.category",
+                        + " UNION SELECT v.category AS category FROM transaction_versions v"
+                        + " JOIN documents d ON d.id = v.document_id"
+                        + " WHERE d.user_id = ? AND v.user_id = ? AND d.status = 'PROCESSED'"
+                        + " AND v.category IS NOT NULL AND TRIM(v.category) <> ''"
+                        + " UNION SELECT name AS category FROM personal_transaction_categories"
+                        + " WHERE user_id = ?) available_categories ORDER BY category",
                 String.class,
+                userId,
+                userId,
+                userId,
                 userId,
                 userId);
     }
@@ -162,8 +173,31 @@ public class TransactionReadRepository {
     }
 
     private static String baseHistoryQuery() {
-        return " FROM transactions t JOIN documents d ON d.id = t.document_id"
+        return " FROM ("
+                + currentTransactionsSelect()
+                + ") t JOIN documents d ON d.id = t.document_id"
                 + " WHERE d.user_id = ? AND t.user_id = ? AND d.status = 'PROCESSED'";
+    }
+
+    private static String currentTransactionsQuery() {
+        return " FROM (" + currentTransactionsSelect() + ")";
+    }
+
+    private static String currentTransactionsSelect() {
+        return "SELECT t.id, t.document_id, t.user_id,"
+                + " CASE WHEN v.id IS NULL THEN t.booking_date ELSE v.booking_date END AS booking_date,"
+                + " CASE WHEN v.id IS NULL THEN t.value_date ELSE v.value_date END AS value_date,"
+                + " CASE WHEN v.id IS NULL THEN t.amount ELSE v.amount END AS amount,"
+                + " CASE WHEN v.id IS NULL THEN t.currency ELSE v.currency END AS currency,"
+                + " CASE WHEN v.id IS NULL THEN t.counterparty ELSE v.counterparty END AS counterparty,"
+                + " CASE WHEN v.id IS NULL THEN t.description ELSE v.description END AS description,"
+                + " CASE WHEN v.id IS NULL THEN t.category ELSE v.category END AS category"
+                + " FROM transactions t LEFT JOIN transaction_versions v"
+                + " ON v.transaction_id = t.id AND v.document_id = t.document_id"
+                + " AND v.user_id = t.user_id AND v.version_number = ("
+                + "SELECT MAX(latest.version_number) FROM transaction_versions latest"
+                + " WHERE latest.transaction_id = t.id AND latest.document_id = t.document_id"
+                + " AND latest.user_id = t.user_id)";
     }
 
     private static TransactionResponse toTransaction(java.sql.ResultSet rs, int rowNum)
@@ -179,7 +213,7 @@ public class TransactionReadRepository {
                 rs.getString("category"));
     }
 
-    private static LocalDate toLocalDate(Date date) {
+    static LocalDate toLocalDate(Date date) {
         return date == null ? null : date.toLocalDate();
     }
 

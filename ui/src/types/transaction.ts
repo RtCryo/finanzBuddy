@@ -9,6 +9,17 @@ export type TransactionRecord = {
   category: string | null
 }
 
+export type TransactionVersion = {
+  versionNumber: number
+  transaction: TransactionRecord
+  createdAt: string | null
+}
+
+export type PersonalCategoryCreateResponse = {
+  name: string
+  transaction: TransactionRecord
+}
+
 export type TransactionHistoryPage = {
   content: TransactionRecord[]
   totalElements: number

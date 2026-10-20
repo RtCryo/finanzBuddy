@@ -4,11 +4,24 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../api/client'
 import { getDocument, getDocumentTransactions } from '../api/documents'
+import {
+  createPersonalTransactionCategory,
+  getTransactionCategories,
+  getTransactionVersions,
+  updateTransactionCategory,
+} from '../api/transactions'
 import { DocumentDetailPage } from './DocumentDetailPage'
 
 vi.mock('../api/documents', () => ({
   getDocument: vi.fn(),
   getDocumentTransactions: vi.fn(),
+}))
+
+vi.mock('../api/transactions', () => ({
+  createPersonalTransactionCategory: vi.fn(),
+  getTransactionCategories: vi.fn(),
+  getTransactionVersions: vi.fn(),
+  updateTransactionCategory: vi.fn(),
 }))
 
 const processingDocument = {
@@ -46,6 +59,15 @@ describe('DocumentDetailPage', () => {
   beforeEach(() => {
     vi.mocked(getDocument).mockReset()
     vi.mocked(getDocumentTransactions).mockReset()
+    vi.mocked(getTransactionCategories).mockResolvedValue(['Food', 'Shopping'])
+    vi.mocked(getTransactionVersions).mockResolvedValue([
+      { versionNumber: 1, transaction, createdAt: null },
+    ])
+    vi.mocked(updateTransactionCategory).mockResolvedValue({ ...transaction, category: 'Food' })
+    vi.mocked(createPersonalTransactionCategory).mockResolvedValue({
+      name: 'Travel',
+      transaction: { ...transaction, category: 'Travel' },
+    })
     URL.createObjectURL = vi.fn(() => 'blob:mock')
     URL.revokeObjectURL = vi.fn()
   })
@@ -102,7 +124,7 @@ describe('DocumentDetailPage', () => {
     action.focus()
     await user.keyboard('{Enter}')
 
-    const dialog = screen.getByRole('dialog', { name: 'Selected transaction' })
+    const dialog = screen.getByRole('dialog', { name: 'Transaction details' })
     expect(dialog).toHaveTextContent('Booking date')
     expect(dialog).toHaveTextContent('Mar 14, 2024')
     expect(dialog).toHaveTextContent('Value date')
@@ -116,12 +138,14 @@ describe('DocumentDetailPage', () => {
 
   it('normalizes blank and padded transaction values the same in document rows and details', async () => {
     vi.mocked(getDocument).mockResolvedValue(processedDocument)
-    vi.mocked(getDocumentTransactions).mockResolvedValue([{
+    const paddedTransaction = {
       ...transaction,
       counterparty: '   ',
       description: '  Book purchase  ',
       category: '  ',
-    }])
+    }
+    vi.mocked(getDocumentTransactions).mockResolvedValue([paddedTransaction])
+    vi.mocked(getTransactionVersions).mockResolvedValue([{ versionNumber: 1, transaction: paddedTransaction, createdAt: null }])
     const user = userEvent.setup()
     renderDetail()
 
@@ -131,9 +155,9 @@ describe('DocumentDetailPage', () => {
     expect(within(row).getByText('Uncategorized')).toBeInTheDocument()
 
     await user.click(within(row).getByText('Book purchase'))
-    const dialog = screen.getByRole('dialog', { name: 'Selected transaction' })
+    const dialog = screen.getByRole('dialog', { name: 'Transaction details' })
     expect(within(dialog).getByText('—')).toBeInTheDocument()
-    expect(within(dialog).getByText('Book purchase')).toBeInTheDocument()
+    expect(within(dialog).getAllByText('Book purchase')).toHaveLength(1)
     expect(within(dialog).getByText('Uncategorized')).toBeInTheDocument()
   })
 
@@ -155,6 +179,28 @@ describe('DocumentDetailPage', () => {
     expect(screen.getByRole('table', { name: 'Document transactions' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'View transaction details: Book purchase' })).toBeInTheDocument()
     expect(getDocumentTransactions).toHaveBeenCalledTimes(1)
+  })
+
+  it('refreshes a saved category in the source document without duplicating its row', async () => {
+    vi.mocked(getDocument).mockResolvedValue(processedDocument)
+    const updated = { ...transaction, category: 'Food' }
+    vi.mocked(getDocumentTransactions)
+      .mockResolvedValueOnce([transaction])
+      .mockResolvedValue([updated])
+    vi.mocked(updateTransactionCategory).mockResolvedValue(updated)
+    const user = userEvent.setup()
+    renderDetail()
+
+    const row = await screen.findByRole('row', { name: /Book purchase/ })
+    await user.click(within(row).getByText('Book purchase'))
+    await user.click(await screen.findByRole('button', { name: 'Edit transaction' }))
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Transaction category' }), 'Food')
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    const updatedRow = await screen.findByRole('row', { name: /Food/ })
+    expect(updatedRow).toHaveTextContent('Food')
+    expect(screen.getAllByRole('row')).toHaveLength(2)
+    await waitFor(() => expect(getDocumentTransactions).toHaveBeenCalledTimes(2))
   })
 
   it('requests the original file as a download and attaches the link', async () => {
