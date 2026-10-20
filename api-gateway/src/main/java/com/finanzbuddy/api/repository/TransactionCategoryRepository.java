@@ -149,8 +149,5 @@ public class TransactionCategoryRepository {
     }
 
     public record TransactionSnapshot(
-            long transactionId,
-            long documentId,
-            long userId,
-            TransactionResponse transaction) {}
+            long transactionId, long documentId, long userId, TransactionResponse transaction) {}
 }

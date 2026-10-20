@@ -234,7 +234,12 @@ class TransactionReadRepositoryTest {
         assertThat(currentCategory.getContent()).extracting("id").containsExactly(1L);
         assertThat(formerCategory.getTotalElements()).isZero();
         assertThat(documentRows).hasSize(3);
-        assertThat(documentRows.stream().filter(row -> row.id() == 1L).findFirst().orElseThrow().category())
+        assertThat(
+                        documentRows.stream()
+                                .filter(row -> row.id() == 1L)
+                                .findFirst()
+                                .orElseThrow()
+                                .category())
                 .isEqualTo("Housing");
         assertThat(repository.findHistoryCategories(7L)).contains("Food", "Housing", "Income");
     }

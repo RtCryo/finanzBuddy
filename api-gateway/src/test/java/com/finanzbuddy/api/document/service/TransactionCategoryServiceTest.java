@@ -125,9 +125,7 @@ class TransactionCategoryServiceTest {
     @Test
     void rollsBackBaselineAndPersonalCategoryWhenSnapshotAppendFails() {
         assertThatThrownBy(
-                        () ->
-                                service.createCategoryAndAssign(
-                                        "owner@example.com", 101, "Broken"))
+                        () -> service.createCategoryAndAssign("owner@example.com", 101, "Broken"))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
@@ -153,8 +151,7 @@ class TransactionCategoryServiceTest {
                         racingRepository,
                         new DataSourceTransactionManager(database));
 
-        assertThatThrownBy(
-                        () -> racingService.updateCategory("owner@example.com", 101, "Changed"))
+        assertThatThrownBy(() -> racingService.updateCategory("owner@example.com", 101, "Changed"))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);

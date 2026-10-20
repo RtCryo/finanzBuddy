@@ -133,7 +133,9 @@ class LiquibaseMigrationTest {
                         String.class);
 
         assertThat(versionConstraints)
-                .contains("UK_TRANSACTION_VERSIONS_TRANSACTION_USER_VERSION", "FK_TRANSACTION_VERSIONS_USER");
+                .contains(
+                        "UK_TRANSACTION_VERSIONS_TRANSACTION_USER_VERSION",
+                        "FK_TRANSACTION_VERSIONS_USER");
         assertThat(categoryConstraints)
                 .contains(
                         "UK_PERSONAL_TRANSACTION_CATEGORIES_USER_NAME",

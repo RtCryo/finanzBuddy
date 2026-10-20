@@ -82,18 +82,13 @@ public class TransactionCategoryService {
         List<TransactionVersionResponse> versions =
                 categoryRepository.findVersions(userId, transactionId);
         TransactionResponse current =
-                versions.isEmpty()
-                        ? source.transaction()
-                        : versions.getLast().transaction();
+                versions.isEmpty() ? source.transaction() : versions.getLast().transaction();
         if (category.equals(current.category())) return current;
 
         if (versions.isEmpty()) {
             categoryRepository.appendVersion(userId, source.documentId(), 1, source.transaction());
             categoryRepository.appendVersion(
-                    userId,
-                    source.documentId(),
-                    2,
-                    withCategory(source.transaction(), category));
+                    userId, source.documentId(), 2, withCategory(source.transaction(), category));
         } else {
             categoryRepository.appendVersion(
                     userId,
@@ -117,7 +112,9 @@ public class TransactionCategoryService {
         return userRepository
                 .findByEmail(userEmail)
                 .orElseThrow(
-                        () -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+                        () ->
+                                new ResponseStatusException(
+                                        HttpStatus.UNAUTHORIZED, "User not found"));
     }
 
     private static String normalizeCategory(String category) {

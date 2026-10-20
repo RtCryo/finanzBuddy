@@ -390,8 +390,10 @@ class DocumentControllerIntegrationTest {
                                 .content(
                                         objectMapper.writeValueAsString(
                                                 java.util.Map.of(
-                                                        "name", "Travel",
-                                                        "transactionId", ownerTransaction))))
+                                                        "name",
+                                                        "Travel",
+                                                        "transactionId",
+                                                        ownerTransaction))))
                 .andExpect(status().isCreated());
 
         MvcResult versions =
@@ -413,7 +415,10 @@ class DocumentControllerIntegrationTest {
                                         .header("Authorization", "Bearer " + ownerToken))
                         .andExpect(status().isOk())
                         .andReturn();
-        assertThat(objectMapper.readTree(ownerCategories.getResponse().getContentAsString()).toString())
+        assertThat(
+                        objectMapper
+                                .readTree(ownerCategories.getResponse().getContentAsString())
+                                .toString())
                 .contains("Food", "Housing", "Travel");
 
         mockMvc.perform(
@@ -433,8 +438,10 @@ class DocumentControllerIntegrationTest {
                                 .content(
                                         objectMapper.writeValueAsString(
                                                 java.util.Map.of(
-                                                        "name", "Stolen",
-                                                        "transactionId", ownerTransaction))))
+                                                        "name",
+                                                        "Stolen",
+                                                        "transactionId",
+                                                        ownerTransaction))))
                 .andExpect(status().isNotFound());
         mockMvc.perform(
                         get("/transactions/" + otherTransaction + "/versions")
@@ -447,7 +454,10 @@ class DocumentControllerIntegrationTest {
                                         .header("Authorization", "Bearer " + otherToken))
                         .andExpect(status().isOk())
                         .andReturn();
-        assertThat(objectMapper.readTree(otherCategories.getResponse().getContentAsString()).toString())
+        assertThat(
+                        objectMapper
+                                .readTree(otherCategories.getResponse().getContentAsString())
+                                .toString())
                 .contains("Other")
                 .doesNotContain("Travel", "Housing", "Food");
     }
