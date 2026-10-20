@@ -263,8 +263,14 @@ The system SHALL authorize category changes, personal-category operations, and v
 - **WHEN** an authenticated user attempts to edit or read versions of a transaction owned by another user
 - **THEN** the system rejects the operation without disclosing or changing the other user's transaction data
 
+## Related implementation and history
+
+- Documentation: [UI and transaction map](../../../docs/README.md#subsystem-map), [UI README](../../../ui/README.md), [architecture](../../../docs/ARCHITECTURE.md)
+- Implementation: [`TransactionHistoryPage.tsx`](../../../ui/src/pages/TransactionHistoryPage.tsx), [`TransactionDetailsDialog.tsx`](../../../ui/src/components/TransactionDetailsDialog.tsx), [`TransactionController.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/controller/TransactionController.java), [`TransactionReadRepository.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/repository/TransactionReadRepository.java), [`TransactionCategoryService.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/service/TransactionCategoryService.java)
+- History: [initial UI](../../changes/archive/2026-09-28-ui/), [transaction history](../../changes/archive/2026-10-10-transaction-history-page/), [transaction details panel](../../changes/archive/2026-10-20-transaction-details-popup/), [category edit history](../../changes/archive/2026-10-20-transaction-category-edit-history/)
+
 ## Implementation Notes
 
-- The API Gateway transaction route is authenticated and owner-scoped. It currently returns an empty list; the controller contains a TODO to connect the transaction read model.
-- The authenticated download route is owner-scoped and currently returns `501 Not Implemented`; the controller contains a TODO to stream the original object from MinIO with a download filename.
+- The API Gateway transaction routes are authenticated and owner-scoped. Transaction history is served from the parser-owned transaction table through `TransactionReadRepository`, including filters, sorting, pagination, and the latest saved transaction version.
+- The authenticated download route verifies document ownership, reads the original object from S3-compatible storage, and returns it as an attachment with the stored filename.
 - `DocumentResponse.errorMessage` is populated only for documents in the `FAILED` state so the detail screen can show parser failure details.

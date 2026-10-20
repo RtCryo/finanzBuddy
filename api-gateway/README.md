@@ -2,6 +2,8 @@
 
 Spring Boot 4.1 API Gateway for the finanzBuddy platform. Provides JWT authentication, document upload to S3-compatible object storage (SeaweedFS), Kafka event publishing, and document query endpoints.
 
+Documentation map: [API Gateway implementation, capabilities, and history](../docs/README.md#subsystem-map) · [cross-service architecture](../docs/ARCHITECTURE.md).
+
 ## Requirements
 
 - Java 25

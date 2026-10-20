@@ -30,3 +30,9 @@ The system SHALL store the original raw representation of each transaction in a 
 #### Scenario: Raw CSV row preserved
 - **WHEN** a CSV transaction is normalized
 - **THEN** the raw CSV values are stored alongside the normalized fields
+
+## Related implementation and history
+
+- Documentation: [parser and sample-document map](../../../docs/README.md#subsystem-map), [Parser README](../../../parser-service/README.md)
+- Implementation: [`parser-service/src/main/java/com/finanzbuddy/parser/parser/`](../../../parser-service/src/main/java/com/finanzbuddy/parser/parser/), [`Transaction.java`](../../../parser-service/src/main/java/com/finanzbuddy/parser/entity/Transaction.java), [`TransactionPersistenceService.java`](../../../parser-service/src/main/java/com/finanzbuddy/parser/service/TransactionPersistenceService.java)
+- History: [Parser service](../../changes/archive/2026-09-27-parser-service/)

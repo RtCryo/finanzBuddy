@@ -1,0 +1,26 @@
+name: Documentation Integrity
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  documentation-integrity:
+    name: Check documentation links and map coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Validate Markdown links and OpenSpec map coverage
+        run: python scripts/check_documentation_map.py

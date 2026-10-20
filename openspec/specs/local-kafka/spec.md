@@ -34,3 +34,9 @@ The Compose environment SHALL report Kafka healthy only after it accepts Kafka p
 #### Scenario: Kafka becomes ready
 - **WHEN** the broker begins accepting Kafka protocol requests
 - **THEN** Kafka is marked healthy and Kafka-dependent application services may start
+
+## Related implementation and history
+
+- Documentation: [deployment and Kafka map](../../../docs/README.md#subsystem-map), [architecture](../../../docs/ARCHITECTURE.md)
+- Implementation: [`docker-compose.yml`](../../../docker-compose.yml), [`docker-compose.override.yml`](../../../docker-compose.override.yml), [`KafkaConfig.java`](../../../parser-service/src/main/java/com/finanzbuddy/parser/config/KafkaConfig.java)
+- History: [Compose Kafka migration](../../changes/archive/2026-09-30-migrate-compose-kafka-to-apache-kafka/)

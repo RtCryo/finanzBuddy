@@ -2,6 +2,8 @@
 
 The finanzBuddy web interface. A React 19 + TypeScript single-page application built with Vite and styled with Tailwind CSS.
 
+Documentation map: [UI implementation, capabilities, and history](../docs/README.md#subsystem-map) · [UI design system](DESIGN_SYSTEM.md) · [cross-service architecture](../docs/ARCHITECTURE.md).
+
 ## What it does
 
 - User registration and login against the API Gateway.

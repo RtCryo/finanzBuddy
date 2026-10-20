@@ -2,6 +2,8 @@
 
 This is the contributor-facing implementation reference for the [canonical UI design-system capability](../openspec/specs/ui-design-system/spec.md). The capability is normative; this document records the current implementation choices and is updated with approved shared-pattern changes.
 
+See the [documentation map](../docs/README.md#subsystem-map) for UI entry points, implementation areas, and related history.
+
 ## Principles and screen inventory
 
 - Keep the existing light fintech direction: calm neutral canvases, white surfaces, navy information, and restrained teal actions.

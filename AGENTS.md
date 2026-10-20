@@ -45,3 +45,10 @@ rtk pip list            rtk pnpm install        rtk npm run <script>
 
 - Before work that changes or depends on cross-service boundaries, APIs, data ownership or migrations, Kafka/event flows, security boundaries, or deployment topology, read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and the relevant module README/OpenSpec requirements.
 - When a change materially alters any of those architecture facts, update `docs/ARCHITECTURE.md` in the same change. Keep it aligned with the source code and deployment configuration; if they disagree, treat code/configuration as authoritative and correct the documentation.
+
+## Documentation map maintenance
+
+- Before implementing a task that changes application behavior, a module/source entry point, an API or cross-service contract, deployment, monitoring, UI patterns, an OpenSpec capability, or module documentation, review [`docs/README.md`](docs/README.md) and its relevant subsystem row.
+- Update `docs/README.md` in the same change when a subsystem's canonical documentation, implementation paths, current capabilities, or related archived changes are added, removed, renamed, or materially changed. Add every new current capability spec to the map and add every completed/archived change folder when it is archived. Link only to paths and artifacts that exist.
+- Add or maintain a return path from affected module entry-point documentation and current capability specs to the documentation map and relevant implementation/history references. Preserve normative OpenSpec requirements and do not rewrite archive history for navigation.
+- Before reporting completion, run `rtk proxy python scripts/check_documentation_map.py` and fix any failures. If the map was reviewed and no update was warranted, state why in the final summary.

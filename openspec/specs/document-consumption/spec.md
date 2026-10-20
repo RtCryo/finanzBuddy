@@ -34,3 +34,9 @@ The system SHALL ignore duplicate events for the same `documentId`.
 #### Scenario: Duplicate event
 - **WHEN** the same `documentId` is received more than once
 - **THEN** only the first event triggers parsing; duplicates are acknowledged without reprocessing
+
+## Related implementation and history
+
+- Documentation: [parser service map](../../../docs/README.md#subsystem-map), [Parser README](../../../parser-service/README.md)
+- Implementation: [`DocumentEventListeners.java`](../../../parser-service/src/main/java/com/finanzbuddy/parser/event/DocumentEventListeners.java), [`DocumentProcessor.java`](../../../parser-service/src/main/java/com/finanzbuddy/parser/service/DocumentProcessor.java), [`KafkaConfig.java`](../../../parser-service/src/main/java/com/finanzbuddy/parser/config/KafkaConfig.java), [`MinioStorageService.java`](../../../parser-service/src/main/java/com/finanzbuddy/parser/storage/MinioStorageService.java)
+- History: [Parser service](../../changes/archive/2026-09-27-parser-service/)

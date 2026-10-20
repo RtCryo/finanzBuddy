@@ -39,6 +39,8 @@ users/documents/outbox and reads the parser-owned `transactions` table to serve 
 └── openspec/          # OpenSpec change tracking
 ```
 
+For a navigable map of module documentation, implementation areas, current capabilities, and archived changes, see the [documentation map](docs/README.md). Cross-service ownership and data-flow details are in the [architecture guide](docs/ARCHITECTURE.md).
+
 ## Quick start (local development)
 
 Run the full stack from the repository root:

@@ -34,3 +34,9 @@ The system SHALL record the original filename, storage path, document type, init
 #### Scenario: Metadata creation
 - **WHEN** a document is uploaded successfully
 - **THEN** a `documents` row exists with status `PENDING` and correct metadata
+
+## Related implementation and history
+
+- Documentation: [API Gateway map](../../../docs/README.md#subsystem-map), [Gateway README](../../../api-gateway/README.md)
+- Implementation: [`DocumentController.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/controller/DocumentController.java), [`DocumentService.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/service/DocumentService.java), [`OutboxRelay.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/outbox/OutboxRelay.java)
+- History: [API Gateway](../../changes/archive/2026-09-26-api-gateway/)

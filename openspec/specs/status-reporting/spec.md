@@ -33,3 +33,9 @@ The system SHALL authenticate status update calls to the API Gateway using an in
 #### Scenario: Invalid credentials
 - **WHEN** a status request is made without valid service credentials
 - **THEN** the API Gateway returns a 401 Unauthorized error
+
+## Related implementation and history
+
+- Documentation: [parser and gateway map](../../../docs/README.md#subsystem-map), [architecture](../../../docs/ARCHITECTURE.md)
+- Implementation: [`GatewayStatusClient.java`](../../../parser-service/src/main/java/com/finanzbuddy/parser/client/GatewayStatusClient.java), [`InternalDocumentController.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/controller/InternalDocumentController.java), [`DocumentService.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/service/DocumentService.java)
+- History: [Parser service](../../changes/archive/2026-09-27-parser-service/)

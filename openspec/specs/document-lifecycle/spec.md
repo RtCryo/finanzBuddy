@@ -42,3 +42,9 @@ The system SHALL allow an authenticated user to retrieve the status of their own
 #### Scenario: Access foreign document
 - **WHEN** a user requests `GET /documents/{id}` for a document they do not own
 - **THEN** the system returns a 404 Not Found error
+
+## Related implementation and history
+
+- Documentation: [API Gateway map](../../../docs/README.md#subsystem-map), [architecture](../../../docs/ARCHITECTURE.md)
+- Implementation: [`DocumentService.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/service/DocumentService.java), [`DocumentController.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/controller/DocumentController.java), [`DocumentEventListeners.java`](../../../parser-service/src/main/java/com/finanzbuddy/parser/event/DocumentEventListeners.java)
+- History: [API Gateway](../../changes/archive/2026-09-26-api-gateway/), [Parser service](../../changes/archive/2026-09-27-parser-service/)

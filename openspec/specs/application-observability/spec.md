@@ -46,3 +46,9 @@ The application SHALL expose operational metrics for document upload outcomes, d
 #### Scenario: Documents are uploaded or processed in multiple formats
 - **WHEN** documents of different supported file types are uploaded or processed
 - **THEN** upload outcomes, parser outcomes, parsed transaction volume, and processing duration can be aggregated separately by bounded file type
+
+## Related implementation and history
+
+- Documentation: [monitoring map](../../../docs/README.md#subsystem-map), [architecture](../../../docs/ARCHITECTURE.md)
+- Implementation: [`monitoring/`](../../../monitoring/), [`docker-compose.yml`](../../../docker-compose.yml)
+- History: [Grafana and Prometheus monitoring](../../changes/archive/2026-10-10-grafana-prometheus-monitoring/)
