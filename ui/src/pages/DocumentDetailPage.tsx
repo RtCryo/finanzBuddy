@@ -12,6 +12,7 @@ import {
   formatTransactionCategory,
   formatTransactionText,
   normalizeTransactionText,
+  transactionAmountTone,
 } from '../format'
 import type { DocumentRecord } from '../types/document'
 import type { TransactionRecord } from '../types/transaction'
@@ -242,7 +243,7 @@ export function DocumentDetailPage() {
                           {formatDateOnly(transaction.bookingDate)}
                         </span>
                         <span role="cell">{formatDateOnly(transaction.valueDate)}</span>
-                        <span className="transaction-amount" role="cell">{formatAmount(transaction.amount)}</span>
+                        <span className={`transaction-amount ${transactionAmountTone(transaction.amount)}`} role="cell">{formatAmount(transaction.amount)}</span>
                         <span role="cell">{transaction.currency || '—'}</span>
                         <span role="cell">{formatTransactionText(transaction.counterparty)}</span>
                         <span role="cell">{formatTransactionText(transaction.description)}</span>

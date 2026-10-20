@@ -36,3 +36,10 @@ export function formatTransactionText(value: string | null | undefined) {
 export function formatTransactionCategory(value: string | null | undefined) {
   return normalizeTransactionText(value) || 'Uncategorized'
 }
+
+export function transactionAmountTone(amount: number | string | null) {
+  if (amount === null || amount === '') return 'amount-neutral'
+  const value = Number(amount)
+  if (!Number.isFinite(value) || value === 0) return 'amount-neutral'
+  return value > 0 ? 'amount-positive' : 'amount-negative'
+}

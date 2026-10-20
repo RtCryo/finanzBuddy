@@ -37,7 +37,29 @@ describe('AppShell', () => {
 
     expect(screen.getByRole('link', { name: 'Transaction history' }))
       .toHaveAttribute('href', '/transactions')
+    expect(screen.getByRole('link', { name: 'Transaction history' }))
+      .toHaveAttribute('aria-current', 'page')
     expect(screen.getByLabelText('Breadcrumb')).toHaveTextContent('Transaction history')
+  })
+
+  it('keeps shell navigation and profile actions reachable by keyboard', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <AppShell><div>dashboard</div></AppShell>
+      </MemoryRouter>,
+    )
+
+    await user.tab()
+    expect(screen.getByRole('link', { name: 'finanzBuddy home' })).toHaveFocus()
+    await user.tab()
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveFocus()
+    await user.tab()
+    expect(screen.getByRole('link', { name: 'Documents' })).toHaveFocus()
+    await user.tab()
+    expect(screen.getByRole('link', { name: 'Transaction history' })).toHaveFocus()
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Sign out' })).toHaveFocus()
   })
 
   it('shows shared workspace destinations and privacy reassurance once', () => {

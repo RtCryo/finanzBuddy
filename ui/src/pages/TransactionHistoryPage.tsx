@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { getTransactionHistory, UNCATEGORIZED_CATEGORY } from '../api/transactions'
 import { getErrorMessage } from '../api/errors'
 import { AppShell } from '../components/AppShell'
+import { PageHeading } from '../components/PageHeading'
 import { TransactionDetailsDialog } from '../components/TransactionDetailsDialog'
-import { formatDateOnly, formatTransactionCategory, formatTransactionText, normalizeTransactionText } from '../format'
+import { formatDateOnly, formatTransactionCategory, formatTransactionText, normalizeTransactionText, transactionAmountTone } from '../format'
 import type {
   TransactionHistoryPage as TransactionHistoryResult,
   TransactionHistorySortDirection,
@@ -142,12 +143,11 @@ export function TransactionHistoryPage() {
 
   return (
     <AppShell>
-      <section className="page-heading transaction-history-heading">
-        <div>
-          <h1>Transaction history</h1>
-          <p>Review transactions from all of your processed statements.</p>
-        </div>
-      </section>
+      <PageHeading
+        className="transaction-history-heading"
+        title="Transaction history"
+        description="Review transactions from all of your processed statements."
+      />
 
       <section className="surface transactions-card history-card" aria-labelledby="history-transactions-heading">
         <div className="documents-toolbar history-toolbar">
@@ -303,7 +303,7 @@ function HistoryRow({
         />
         {formatDateOnly(transaction.valueDate)}
       </span>
-      <span className={`transaction-amount ${amountPolarityClass(transaction.amount)}`} role="cell">{formatAmount(transaction.amount)}</span>
+      <span className={`transaction-amount ${transactionAmountTone(transaction.amount)}`} role="cell">{formatAmount(transaction.amount)}</span>
       <span role="cell">{transaction.currency || '—'}</span>
       <span role="cell">{formatTransactionText(transaction.counterparty)}</span>
       <span role="cell">{formatTransactionText(transaction.description)}</span>
@@ -335,13 +335,6 @@ function SortHeader({
       </button>
     </span>
   )
-}
-
-function amountPolarityClass(amount: number | string | null) {
-  if (amount === null || amount === '') return 'amount-neutral'
-  const value = Number(amount)
-  if (!Number.isFinite(value) || value === 0) return 'amount-neutral'
-  return value > 0 ? 'amount-positive' : 'amount-negative'
 }
 
 function getPaginationItems(total: number, current: number): PaginationItem[] {

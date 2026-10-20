@@ -4,6 +4,7 @@ import { getDocuments } from '../api/documents'
 import { getErrorMessage } from '../api/errors'
 import { AppShell } from '../components/AppShell'
 import { DocumentStatusBadge } from '../components/DocumentStatusBadge'
+import { PageHeading } from '../components/PageHeading'
 import { formatInstant } from '../format'
 import type { DocumentRecord, DocumentStatus } from '../types/document'
 
@@ -75,13 +76,11 @@ export function DocumentsPage() {
 
   return (
     <AppShell>
-      <section className="page-heading">
-        <div>
-          <h1>Your documents</h1>
-          <p>Upload statements and track processing, all in one place.</p>
-        </div>
-        <Link className="button button-primary" to="/documents/upload"><span aria-hidden="true">＋</span> Upload document</Link>
-      </section>
+      <PageHeading
+        title="Your documents"
+        description="Upload statements and track processing, all in one place."
+        action={<Link className="button button-primary" to="/documents/upload"><span aria-hidden="true">＋</span> Upload document</Link>}
+      />
 
       <section className="summary-grid" aria-label="Document summary">
         <div className="surface summary-card"><span>Total documents</span><strong>{totalDocuments}</strong><span className="summary-icon summary-icon-green" aria-hidden="true">▤</span></div>

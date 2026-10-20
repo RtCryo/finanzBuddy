@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { getDashboard } from '../api/dashboard'
 import { getErrorMessage } from '../api/errors'
 import { AppShell } from '../components/AppShell'
+import { PageHeading } from '../components/PageHeading'
 import type { DashboardMetrics } from '../types/dashboard'
 
 const metricCards: { key: keyof DashboardMetrics; label: string; icon: string; tone: string }[] = [
@@ -46,12 +47,7 @@ export function DashboardPage() {
 
   return (
     <AppShell>
-      <section className="page-heading">
-        <div>
-          <h1>Dashboard</h1>
-          <p>A quick overview of your documents and extracted transactions.</p>
-        </div>
-      </section>
+      <PageHeading title="Dashboard" description="A quick overview of your documents and extracted transactions." />
 
       {error && <div className="notice notice-error list-notice" role="alert">{error}</div>}
       {isLoading && <div className="list-state" role="status">Loading your dashboard…</div>}

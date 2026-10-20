@@ -40,3 +40,8 @@ rtk pip list            rtk pnpm install        rtk npm run <script>
 - For debugging, use raw command without rtk prefix
 - `rtk proxy <cmd>` runs command without filtering but tracks usage
 <!-- /headroom:rtk-instructions -->
+
+## Architecture documentation
+
+- Before work that changes or depends on cross-service boundaries, APIs, data ownership or migrations, Kafka/event flows, security boundaries, or deployment topology, read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and the relevant module README/OpenSpec requirements.
+- When a change materially alters any of those architecture facts, update `docs/ARCHITECTURE.md` in the same change. Keep it aligned with the source code and deployment configuration; if they disagree, treat code/configuration as authoritative and correct the documentation.
