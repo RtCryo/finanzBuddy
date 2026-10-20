@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: traefik:v3.7.14
+    image: traefik:v3.7.15
     container_name: finanzbuddy-traefik
     profiles:
       - production
@@ -41,7 +41,7 @@ services:
       retries: 5
 
   kafka:
-    image: apache/kafka:4.3.1
+    image: apache/kafka:4.3.2
     container_name: finanzbuddy-kafka
     environment:
       KAFKA_NODE_ID: 1
@@ -175,7 +175,7 @@ services:
       - prometheus-data:/prometheus
 
   grafana:
-    image: grafana/grafana:13.2.3
+    image: grafana/grafana:13.2.4
     container_name: finanzbuddy-grafana
     depends_on:
       prometheus:
