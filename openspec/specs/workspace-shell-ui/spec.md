@@ -31,3 +31,9 @@ The authenticated workspace SHALL display the financial-data privacy reassurance
 #### Scenario: View an authenticated workspace page
 - **WHEN** an authenticated user opens a page using the shared workspace shell
 - **THEN** the privacy reassurance is visible once
+
+## Related implementation and history
+
+- Documentation: [UI map](../../../docs/README.md#subsystem-map), [UI README](../../../ui/README.md), [UI design system](../../../ui/DESIGN_SYSTEM.md)
+- Implementation: [`AppShell.tsx`](../../../ui/src/components/AppShell.tsx), [`DashboardPage.tsx`](../../../ui/src/pages/DashboardPage.tsx)
+- History: [dashboard and workspace](../../changes/archive/2026-10-10-add-dashboard-page/), [document and transaction UI polish](../../changes/archive/2026-10-10-polish-document-transaction-ui/)

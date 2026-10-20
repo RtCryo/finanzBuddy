@@ -33,3 +33,9 @@ The system SHALL make each document row a navigation target and SHALL NOT requir
 #### Scenario: Open document details
 - **WHEN** a user selects a document row
 - **THEN** the UI navigates to that document's detail page
+
+## Related implementation and history
+
+- Documentation: [UI map](../../../docs/README.md#subsystem-map), [UI README](../../../ui/README.md)
+- Implementation: [`DocumentsPage.tsx`](../../../ui/src/pages/DocumentsPage.tsx), [`DocumentController.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/controller/DocumentController.java), [`DocumentService.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/service/DocumentService.java)
+- History: [initial UI](../../changes/archive/2026-09-28-ui/), [document and transaction UI polish](../../changes/archive/2026-10-10-polish-document-transaction-ui/)

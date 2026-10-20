@@ -2,6 +2,8 @@
 
 Consumes `DocumentUploadedEvent` messages from Kafka, downloads the referenced file from S3-compatible object storage (SeaweedFS), parses it, and persists normalized transactions to PostgreSQL. Reports processing status back to the API Gateway.
 
+Documentation map: [parser implementation, capabilities, and history](../docs/README.md#subsystem-map) · [cross-service architecture](../docs/ARCHITECTURE.md).
+
 ## Supported Formats
 
 | Format | Status | Default |

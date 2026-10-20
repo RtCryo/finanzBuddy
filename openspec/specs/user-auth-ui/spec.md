@@ -49,3 +49,9 @@ The system SHALL present login and registration screens in English using the app
 #### Scenario: User opens an authentication screen
 - **WHEN** a user opens `/login` or `/register`
 - **THEN** the UI presents the corresponding form and navigation link in English using the shared visual style
+
+## Related implementation and history
+
+- Documentation: [UI map](../../../docs/README.md#subsystem-map), [UI README](../../../ui/README.md), [UI design system](../../../ui/DESIGN_SYSTEM.md)
+- Implementation: [`LoginPage.tsx`](../../../ui/src/pages/LoginPage.tsx), [`RegisterPage.tsx`](../../../ui/src/pages/RegisterPage.tsx), [`AuthLayout.tsx`](../../../ui/src/components/AuthLayout.tsx)
+- History: [initial UI](../../changes/archive/2026-09-28-ui/), [dashboard and authentication](../../changes/archive/2026-10-10-add-dashboard-page/)

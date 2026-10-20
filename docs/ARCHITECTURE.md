@@ -4,6 +4,8 @@
 
 This document describes the current repository architecture and the boundaries between the UI, API Gateway, parser service, and shared infrastructure. It is a contributor map, not a substitute for executable configuration or behavioral specifications: when details conflict, the source code and deployment configuration are authoritative and this document should be corrected in the same change.
 
+- [Documentation map](README.md) — subsystem entry points, implementation paths, current capabilities, and archived changes.
+
 - [Root README](../README.md) — product overview, quick start, and deployment commands.
 - [API Gateway README](../api-gateway/README.md) — gateway configuration, endpoint examples, and operational constraints.
 - [Parser Service README](../parser-service/README.md) — parser configuration, format support, retries, and metrics.

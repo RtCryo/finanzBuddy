@@ -40,3 +40,9 @@ The upload page SHALL follow the approved English-language application shell and
 #### Scenario: Upload failure
 - **WHEN** the server returns an error
 - **THEN** the UI displays the error message
+
+## Related implementation and history
+
+- Documentation: [UI map](../../../docs/README.md#subsystem-map), [UI README](../../../ui/README.md)
+- Implementation: [`UploadPage.tsx`](../../../ui/src/pages/UploadPage.tsx), [`ui/src/api/documents.ts`](../../../ui/src/api/documents.ts)
+- History: [initial UI](../../changes/archive/2026-09-28-ui/)

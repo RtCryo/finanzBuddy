@@ -41,3 +41,9 @@ The system SHALL parse dates according to the locale associated with the user or
 #### Scenario: German date format
 - **WHEN** a CSV contains dates in `dd.MM.yy` format for a German locale
 - **THEN** dates are parsed correctly into UTC/local date objects
+
+## Related implementation and history
+
+- Documentation: [parser and sample-document map](../../../docs/README.md#subsystem-map), [Parser README](../../../parser-service/README.md)
+- Implementation: [`parser-service/src/main/java/com/finanzbuddy/parser/parser/`](../../../parser-service/src/main/java/com/finanzbuddy/parser/parser/)
+- History: [Parser service](../../changes/archive/2026-09-27-parser-service/)

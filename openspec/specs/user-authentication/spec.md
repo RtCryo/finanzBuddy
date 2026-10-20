@@ -38,3 +38,9 @@ The system SHALL reject requests to protected endpoints when the JWT is missing,
 #### Scenario: Expired token
 - **WHEN** a request reaches a protected endpoint with an expired JWT
 - **THEN** the system returns a 401 Unauthorized error
+
+## Related implementation and history
+
+- Documentation: [API Gateway map](../../../docs/README.md#subsystem-map), [Gateway README](../../../api-gateway/README.md), [architecture](../../../docs/ARCHITECTURE.md)
+- Implementation: [`AuthController.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/auth/controller/AuthController.java), [`AuthService.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/auth/service/AuthService.java), [`SecurityConfig.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/security/SecurityConfig.java), [`JwtService.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/security/jwt/JwtService.java)
+- History: [API Gateway](../../changes/archive/2026-09-26-api-gateway/)

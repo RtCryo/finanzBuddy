@@ -34,3 +34,9 @@ The system SHALL not publish a Kafka event when the upload fails before persiste
 #### Scenario: Storage failure
 - **WHEN** MinIO storage fails during upload
 - **THEN** no Kafka event is published and the transaction rolls back
+
+## Related implementation and history
+
+- Documentation: [API Gateway and Kafka map](../../../docs/README.md#subsystem-map), [Gateway README](../../../api-gateway/README.md)
+- Implementation: [`DocumentService.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/service/DocumentService.java), [`OutboxRelay.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/outbox/OutboxRelay.java), [`DocumentUploadedEvent.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/event/DocumentUploadedEvent.java)
+- History: [API Gateway](../../changes/archive/2026-09-26-api-gateway/)

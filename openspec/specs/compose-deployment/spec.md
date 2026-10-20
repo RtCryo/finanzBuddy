@@ -112,3 +112,9 @@ The Docker Compose deployment SHALL include Prometheus and Grafana configured to
 #### Scenario: Production Compose stack is running
 - **WHEN** the production Compose workflow is running
 - **THEN** Prometheus, Grafana, and the Kafka exporter are reachable to other services only over the internal Compose network and are not exposed through host ports or the public Traefik entry point
+
+## Related implementation and history
+
+- Documentation: [deployment and infrastructure map](../../../docs/README.md#subsystem-map), [architecture](../../../docs/ARCHITECTURE.md)
+- Implementation: [`docker-compose.yml`](../../../docker-compose.yml), [`docker-compose.override.yml`](../../../docker-compose.override.yml)
+- History: [Traefik](../../changes/archive/2026-09-30-add-traefik-compose/), [storage alternatives](../../changes/archive/2026-09-30-evaluate-minio-alternatives/), [Kafka migration](../../changes/archive/2026-09-30-migrate-compose-kafka-to-apache-kafka/), [image versions](../../changes/archive/2026-09-30-update-compose-image-versions/), [monitoring](../../changes/archive/2026-10-10-grafana-prometheus-monitoring/)

@@ -95,3 +95,9 @@ Every new or materially updated web UI screen or component SHALL be designed aga
 #### Scenario: A visual change is reviewed
 - **WHEN** a change modifies shared visual foundations or applies them to an existing screen
 - **THEN** review confirms token consistency, semantic states, narrow and wide layouts, keyboard focus, and reduced-motion behavior where applicable
+
+## Related implementation and history
+
+- Documentation: [UI foundations map](../../../docs/README.md#subsystem-map), [UI design system](../../../ui/DESIGN_SYSTEM.md), [UI README](../../../ui/README.md)
+- Implementation: [`ui/src/index.css`](../../../ui/src/index.css), [`ui/src/components/`](../../../ui/src/components/)
+- History: [Establish UI design system](../../changes/archive/2026-10-21-establish-ui-design-system/)

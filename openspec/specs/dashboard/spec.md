@@ -59,3 +59,9 @@ The dashboard SHALL periodically refresh its aggregate data while the page is op
 #### Scenario: Dashboard reflects document processing updates
 - **WHEN** a document changes lifecycle status while the dashboard remains open
 - **THEN** the dashboard refreshes its counts automatically and reflects the updated status count
+
+## Related implementation and history
+
+- Documentation: [subsystem map](../../../docs/README.md#subsystem-map), [architecture](../../../docs/ARCHITECTURE.md)
+- Implementation: [`DashboardPage.tsx`](../../../ui/src/pages/DashboardPage.tsx), [`DashboardController.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/dashboard/controller/DashboardController.java), [`DashboardService.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/dashboard/service/DashboardService.java)
+- History: [dashboard page](../../changes/archive/2026-10-10-add-dashboard-page/)
