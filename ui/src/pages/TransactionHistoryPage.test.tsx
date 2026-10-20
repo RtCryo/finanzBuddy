@@ -64,14 +64,79 @@ describe('TransactionHistoryPage', () => {
     expect(screen.getByRole('option', { name: 'Uncategorized' })).toBeInTheDocument()
   })
 
-  it('renders whitespace-only categories as Uncategorized', async () => {
+  it('normalizes padded text and whitespace-only categories the same in rows and details', async () => {
+    const user = userEvent.setup()
     vi.mocked(getTransactionHistory).mockResolvedValue(
-      result({ content: [{ ...transaction, category: '   ' }] }),
+      result({ content: [{ ...transaction, counterparty: '  ACME GmbH  ', description: ' Monthly rent ', category: '   ' }] }),
     )
     renderPage()
 
     const row = await screen.findByRole('row', { name: /Monthly rent/ })
+    expect(within(row).getByText('ACME GmbH')).toBeInTheDocument()
+    expect(within(row).getByText('Monthly rent')).toBeInTheDocument()
     expect(within(row).getByText('Uncategorized')).toBeInTheDocument()
+
+    await user.click(within(row).getByText('Monthly rent'))
+    const dialog = screen.getByRole('dialog', { name: 'Selected transaction' })
+    expect(within(dialog).getByText('ACME GmbH')).toBeInTheDocument()
+    expect(within(dialog).getByText('Monthly rent')).toBeInTheDocument()
+    expect(within(dialog).getByText('Uncategorized')).toBeInTheDocument()
+  })
+
+  it('opens details for the keyboard-activated history transaction, including its booking date', async () => {
+    const selected = { ...transaction, id: 8, counterparty: 'Example Bank', description: 'Savings deposit' }
+    vi.mocked(getTransactionHistory).mockResolvedValue(result({ content: [transaction, selected], totalElements: 2 }))
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByRole('table', { name: 'Transaction history' })
+    const action = screen.getByRole('button', { name: 'View transaction details: Savings deposit' })
+    action.focus()
+    await user.keyboard('{Enter}')
+
+    const dialog = screen.getByRole('dialog', { name: 'Selected transaction' })
+    expect(dialog).toHaveTextContent('Jan 31, 2024')
+    expect(dialog).toHaveTextContent('Feb 1, 2024')
+    expect(dialog).toHaveTextContent('Example Bank')
+    expect(dialog).toHaveTextContent('Savings deposit')
+    expect(dialog).toHaveTextContent('123.45')
+    expect(dialog).toHaveTextContent('EUR')
+    expect(dialog).toHaveTextContent('Housing')
+  })
+
+  it('preserves history filters, sorting, pagination, scroll position, and loaded results after closing details', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getTransactionHistory).mockResolvedValue(result({ totalElements: 200, totalPages: 10 }))
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 640 })
+    renderPage()
+
+    await screen.findByRole('table', { name: 'Transaction history' })
+    await user.type(screen.getByRole('textbox', { name: 'Search description or counterparty' }), 'rent')
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({ query: 'rent' })))
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Filter by category' }), 'Housing')
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({ category: 'Housing' })))
+    await user.click(screen.getByRole('button', { name: /Counterparty/ }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({
+      sortField: 'counterparty',
+      sortDirection: 'ASC',
+    })))
+    await user.click(screen.getByRole('button', { name: 'Page 2' }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 })))
+
+    const requestCount = vi.mocked(getTransactionHistory).mock.calls.length
+    const selectedRow = screen.getByRole('row', { name: /Monthly rent/ })
+    await user.click(within(selectedRow).getByText('Monthly rent'))
+    expect(selectedRow).toHaveClass('transaction-row-selected')
+    await user.click(screen.getByRole('button', { name: 'Close transaction details' }))
+
+    expect(getTransactionHistory).toHaveBeenCalledTimes(requestCount)
+    expect(selectedRow).not.toHaveClass('transaction-row-selected')
+    expect(screen.getByRole('textbox', { name: 'Search description or counterparty' })).toHaveValue('rent')
+    expect(screen.getByRole('combobox', { name: 'Filter by category' })).toHaveValue('Housing')
+    expect(screen.getByRole('columnheader', { name: /Counterparty/ })).toHaveAttribute('aria-sort', 'ascending')
+    expect(screen.getByRole('button', { name: 'Page 2' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByText('Showing 21–40 of 200 transactions')).toBeInTheDocument()
+    expect(window.scrollY).toBe(640)
   })
 
   it('combines text, inclusive date and category filters in the aggregate request', async () => {

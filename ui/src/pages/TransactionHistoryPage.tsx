@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { getTransactionHistory, UNCATEGORIZED_CATEGORY } from '../api/transactions'
 import { getErrorMessage } from '../api/errors'
 import { AppShell } from '../components/AppShell'
-import { formatDateOnly } from '../format'
+import { TransactionDetailsDialog } from '../components/TransactionDetailsDialog'
+import { formatDateOnly, formatTransactionCategory, formatTransactionText, normalizeTransactionText } from '../format'
 import type {
   TransactionHistoryPage as TransactionHistoryResult,
   TransactionHistorySortDirection,
@@ -30,6 +31,8 @@ export function TransactionHistoryPage() {
   const [sortDirection, setSortDirection] = useState<TransactionHistorySortDirection>('DESC')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [selectedTransaction, setSelectedTransaction] = useState<TransactionRecord | null>(null)
+  const transactionOpenerRef = useRef<HTMLElement | null>(null)
   const requestId = useRef(0)
 
   const loadTransactions = useCallback(async () => {
@@ -199,7 +202,17 @@ export function TransactionHistoryPage() {
                 <SortHeader field="description" label="Description" activeField={sortField} direction={sortDirection} onSort={changeSort} />
                 <SortHeader field="category" label="Category" activeField={sortField} direction={sortDirection} onSort={changeSort} />
               </div>
-              {transactions.map((transaction) => <HistoryRow key={transaction.id} transaction={transaction} />)}
+              {transactions.map((transaction) => (
+                <HistoryRow
+                  key={transaction.id}
+                  transaction={transaction}
+                  isSelected={selectedTransaction?.id === transaction.id}
+                  onSelect={(selected, opener) => {
+                    transactionOpenerRef.current = opener
+                    setSelectedTransaction(selected)
+                  }}
+                />
+              ))}
             </div>
           </div>
         )}
@@ -244,20 +257,48 @@ export function TransactionHistoryPage() {
           </nav>
         )}
       </section>
+      <TransactionDetailsDialog
+        transaction={selectedTransaction}
+        openerRef={transactionOpenerRef}
+        onClose={() => setSelectedTransaction(null)}
+      />
     </AppShell>
   )
 }
 
-function HistoryRow({ transaction }: { transaction: TransactionRecord }) {
-  const category = transaction.category?.trim() || 'Uncategorized'
+function HistoryRow({
+  transaction,
+  isSelected,
+  onSelect,
+}: {
+  transaction: TransactionRecord
+  isSelected: boolean
+  onSelect: (transaction: TransactionRecord, opener: HTMLElement) => void
+}) {
+  const category = formatTransactionCategory(transaction.category)
+  const actionName = normalizeTransactionText(transaction.description) || normalizeTransactionText(transaction.counterparty) || 'transaction'
 
   return (
-    <div className="transaction-row" role="row">
-      <span role="cell">{formatDateOnly(transaction.valueDate)}</span>
+    <div
+      className={`transaction-row${isSelected ? ' transaction-row-selected' : ''}`}
+      role="row"
+      onClick={(event) => {
+        const opener = event.currentTarget.querySelector<HTMLButtonElement>('.transaction-row-action')
+        if (opener) onSelect(transaction, opener)
+      }}
+    >
+      <span className="transaction-action-cell" role="cell">
+        <button
+          className="transaction-row-action"
+          type="button"
+          aria-label={`View transaction details: ${actionName}`}
+        />
+        {formatDateOnly(transaction.valueDate)}
+      </span>
       <span className={`transaction-amount ${amountPolarityClass(transaction.amount)}`} role="cell">{formatAmount(transaction.amount)}</span>
       <span role="cell">{transaction.currency || '—'}</span>
-      <span role="cell">{transaction.counterparty || '—'}</span>
-      <span role="cell">{transaction.description || '—'}</span>
+      <span role="cell">{formatTransactionText(transaction.counterparty)}</span>
+      <span role="cell">{formatTransactionText(transaction.description)}</span>
       <span role="cell"><span className="category-chip">{category}</span></span>
     </div>
   )
