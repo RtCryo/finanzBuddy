@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <changeSet id="009-create-transaction-category-history" author="api-gateway">
+        <createTable tableName="personal_transaction_categories">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_personal_transaction_categories" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="normalized_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint
+                baseTableName="personal_transaction_categories"
+                baseColumnNames="user_id"
+                referencedTableName="users"
+                referencedColumnNames="id"
+                constraintName="fk_personal_transaction_categories_user"/>
+        <addUniqueConstraint
+                tableName="personal_transaction_categories"
+                columnNames="user_id, normalized_name"
+                constraintName="uk_personal_transaction_categories_user_name"/>
+        <createIndex tableName="personal_transaction_categories" indexName="idx_personal_transaction_categories_user">
+            <column name="user_id"/>
+        </createIndex>
+
+        <createTable tableName="transaction_versions">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_transaction_versions" nullable="false"/>
+            </column>
+            <column name="transaction_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="document_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version_number" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="booking_date" type="DATE"/>
+            <column name="value_date" type="DATE"/>
+            <column name="amount" type="DECIMAL(19,4)"/>
+            <column name="currency" type="VARCHAR(3)"/>
+            <column name="counterparty" type="VARCHAR(500)"/>
+            <column name="description" type="CLOB"/>
+            <column name="category" type="VARCHAR(255)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint
+                baseTableName="transaction_versions"
+                baseColumnNames="user_id"
+                referencedTableName="users"
+                referencedColumnNames="id"
+                constraintName="fk_transaction_versions_user"/>
+        <addUniqueConstraint
+                tableName="transaction_versions"
+                columnNames="transaction_id, user_id, version_number"
+                constraintName="uk_transaction_versions_transaction_user_version"/>
+        <createIndex tableName="transaction_versions" indexName="idx_transaction_versions_user_document">
+            <column name="user_id"/>
+            <column name="document_id"/>
+        </createIndex>
+        <createIndex tableName="transaction_versions" indexName="idx_transaction_versions_transaction_latest">
+            <column name="transaction_id"/>
+            <column name="user_id"/>
+            <column name="version_number" descending="true"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="transaction_versions"/>
+            <dropTable tableName="personal_transaction_categories"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

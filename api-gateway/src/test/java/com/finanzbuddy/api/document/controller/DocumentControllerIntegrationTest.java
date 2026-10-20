@@ -226,12 +226,7 @@ class DocumentControllerIntegrationTest {
 
         // The transactions table is owned by the parser-service; recreate its shape here since the
         // test profile runs neither that service's Liquibase nor a JPA entity for it.
-        jdbcTemplate.execute(
-                "CREATE TABLE IF NOT EXISTS transactions (id BIGINT AUTO_INCREMENT PRIMARY KEY,"
-                        + " document_id BIGINT NOT NULL, user_id BIGINT, booking_date DATE,"
-                        + " value_date DATE, amount DECIMAL(19,4), currency VARCHAR(3),"
-                        + " counterparty VARCHAR(500), description CLOB, category VARCHAR(255),"
-                        + " raw_data CLOB, created_at TIMESTAMP)");
+        ensureTransactionsTable();
 
         mockMvc.perform(get("/documents/" + documentId + "/transactions"))
                 .andExpect(status().isUnauthorized());
@@ -324,6 +319,147 @@ class DocumentControllerIntegrationTest {
         assertThat(otherBody.get("totalElements").asLong()).isEqualTo(1);
         assertThat(otherBody.get("content").get(0).get("description").asText())
                 .isEqualTo("Foreign row");
+    }
+
+    @Test
+    void categoryAndVersionEndpointsRequireAuthenticationAndEnforceTransactionOwnership()
+            throws Exception {
+        String ownerToken = registerAndLogin("category-owner@example.com", "password123");
+        String otherToken = registerAndLogin("category-other@example.com", "password123");
+        ensureTransactionsTable();
+        long ownerDocument = uploadDocument(ownerToken, csvFile("category-owner.csv"), "CSV");
+        long otherDocument = uploadDocument(otherToken, csvFile("category-other.csv"), "CSV");
+        markProcessed(ownerDocument);
+        markProcessed(otherDocument);
+        insertHistoryTransaction(ownerDocument, "2024-04-01", "Owner shop", "Owner row", "Food");
+        insertHistoryTransaction(otherDocument, "2024-04-02", "Other shop", "Other row", "Other");
+        Long ownerTransaction =
+                jdbcTemplate.queryForObject(
+                        "SELECT id FROM transactions WHERE document_id = ?",
+                        Long.class,
+                        ownerDocument);
+        Long otherTransaction =
+                jdbcTemplate.queryForObject(
+                        "SELECT id FROM transactions WHERE document_id = ?",
+                        Long.class,
+                        otherDocument);
+
+        mockMvc.perform(get("/transactions/categories")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/transactions/" + ownerTransaction + "/versions"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(
+                        put("/transactions/" + ownerTransaction + "/category")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"category\":\"Housing\"}"))
+                .andExpect(status().isUnauthorized());
+
+        MvcResult initialVersions =
+                mockMvc.perform(
+                                get("/transactions/" + ownerTransaction + "/versions")
+                                        .header("Authorization", "Bearer " + ownerToken))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        assertThat(
+                        objectMapper
+                                .readTree(initialVersions.getResponse().getContentAsString())
+                                .get(0)
+                                .get("transaction")
+                                .get("category")
+                                .asText())
+                .isEqualTo("Food");
+
+        MvcResult updated =
+                mockMvc.perform(
+                                put("/transactions/" + ownerTransaction + "/category")
+                                        .header("Authorization", "Bearer " + ownerToken)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content("{\"category\":\"Housing\"}"))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        assertThat(
+                        objectMapper
+                                .readTree(updated.getResponse().getContentAsString())
+                                .get("category")
+                                .asText())
+                .isEqualTo("Housing");
+
+        mockMvc.perform(
+                        post("/transactions/categories")
+                                .header("Authorization", "Bearer " + ownerToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        objectMapper.writeValueAsString(
+                                                java.util.Map.of(
+                                                        "name",
+                                                        "Travel",
+                                                        "transactionId",
+                                                        ownerTransaction))))
+                .andExpect(status().isCreated());
+
+        MvcResult versions =
+                mockMvc.perform(
+                                get("/transactions/" + ownerTransaction + "/versions")
+                                        .header("Authorization", "Bearer " + ownerToken))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode versionRows = objectMapper.readTree(versions.getResponse().getContentAsString());
+        assertThat(versionRows.size()).isEqualTo(3);
+        assertThat(versionRows.get(0).get("transaction").get("category").asText())
+                .isEqualTo("Food");
+        assertThat(versionRows.get(2).get("transaction").get("category").asText())
+                .isEqualTo("Travel");
+
+        MvcResult ownerCategories =
+                mockMvc.perform(
+                                get("/transactions/categories")
+                                        .header("Authorization", "Bearer " + ownerToken))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        assertThat(
+                        objectMapper
+                                .readTree(ownerCategories.getResponse().getContentAsString())
+                                .toString())
+                .contains("Food", "Housing", "Travel");
+
+        mockMvc.perform(
+                        get("/transactions/" + ownerTransaction + "/versions")
+                                .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(
+                        put("/transactions/" + ownerTransaction + "/category")
+                                .header("Authorization", "Bearer " + otherToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"category\":\"Stolen\"}"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(
+                        post("/transactions/categories")
+                                .header("Authorization", "Bearer " + otherToken)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        objectMapper.writeValueAsString(
+                                                java.util.Map.of(
+                                                        "name",
+                                                        "Stolen",
+                                                        "transactionId",
+                                                        ownerTransaction))))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(
+                        get("/transactions/" + otherTransaction + "/versions")
+                                .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isNotFound());
+
+        MvcResult otherCategories =
+                mockMvc.perform(
+                                get("/transactions/categories")
+                                        .header("Authorization", "Bearer " + otherToken))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        assertThat(
+                        objectMapper
+                                .readTree(otherCategories.getResponse().getContentAsString())
+                                .toString())
+                .contains("Other")
+                .doesNotContain("Travel", "Housing", "Food");
     }
 
     @Test
@@ -741,6 +877,20 @@ class DocumentControllerIntegrationTest {
                         + " value_date DATE, amount DECIMAL(19,4), currency VARCHAR(3),"
                         + " counterparty VARCHAR(500), description CLOB, category VARCHAR(255),"
                         + " raw_data CLOB, created_at TIMESTAMP)");
+        jdbcTemplate.execute(
+                "CREATE TABLE IF NOT EXISTS personal_transaction_categories ("
+                        + "id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id BIGINT NOT NULL,"
+                        + "name VARCHAR(255) NOT NULL, normalized_name VARCHAR(255) NOT NULL,"
+                        + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,"
+                        + "CONSTRAINT uk_test_personal_categories UNIQUE (user_id, normalized_name))");
+        jdbcTemplate.execute(
+                "CREATE TABLE IF NOT EXISTS transaction_versions ("
+                        + "id BIGINT AUTO_INCREMENT PRIMARY KEY, transaction_id BIGINT NOT NULL,"
+                        + "document_id BIGINT NOT NULL, user_id BIGINT NOT NULL, version_number INT NOT NULL,"
+                        + "booking_date DATE, value_date DATE, amount DECIMAL(19,4), currency VARCHAR(3),"
+                        + "counterparty VARCHAR(500), description CLOB, category VARCHAR(255),"
+                        + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,"
+                        + "CONSTRAINT uk_test_transaction_versions UNIQUE (transaction_id, user_id, version_number))");
     }
 
     private MockMultipartFile csvFile(String name) {

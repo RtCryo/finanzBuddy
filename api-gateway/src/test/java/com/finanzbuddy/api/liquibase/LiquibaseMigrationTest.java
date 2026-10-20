@@ -42,7 +42,14 @@ class LiquibaseMigrationTest {
                         "SELECT UPPER(table_schema || '.' || table_name) FROM information_schema.tables",
                         String.class);
 
-        assertThat(tables).contains("PUBLIC.USERS", "PUBLIC.DOCUMENTS", "PUBLIC.OUTBOX_EVENTS");
+        assertThat(tables)
+                .contains(
+                        "PUBLIC.USERS",
+                        "PUBLIC.DOCUMENTS",
+                        "PUBLIC.OUTBOX_EVENTS",
+                        "PUBLIC.PERSONAL_TRANSACTION_CATEGORIES",
+                        "PUBLIC.TRANSACTION_VERSIONS")
+                .doesNotContain("PUBLIC.TRANSACTIONS");
     }
 
     @Test
@@ -110,6 +117,29 @@ class LiquibaseMigrationTest {
                         String.class);
         assertThat(indexes)
                 .contains("IDX_OUTBOX_EVENTS_UNPUBLISHED", "IDX_OUTBOX_EVENTS_AGGREGATE_ID");
+    }
+
+    @Test
+    void transactionCategoryTablesHaveOwnerAndVersionConstraints() {
+        List<String> versionConstraints =
+                jdbcTemplate.queryForList(
+                        "SELECT UPPER(constraint_name) FROM information_schema.table_constraints"
+                                + " WHERE UPPER(table_name) = 'TRANSACTION_VERSIONS'",
+                        String.class);
+        List<String> categoryConstraints =
+                jdbcTemplate.queryForList(
+                        "SELECT UPPER(constraint_name) FROM information_schema.table_constraints"
+                                + " WHERE UPPER(table_name) = 'PERSONAL_TRANSACTION_CATEGORIES'",
+                        String.class);
+
+        assertThat(versionConstraints)
+                .contains(
+                        "UK_TRANSACTION_VERSIONS_TRANSACTION_USER_VERSION",
+                        "FK_TRANSACTION_VERSIONS_USER");
+        assertThat(categoryConstraints)
+                .contains(
+                        "UK_PERSONAL_TRANSACTION_CATEGORIES_USER_NAME",
+                        "FK_PERSONAL_TRANSACTION_CATEGORIES_USER");
     }
 
     private Map<String, String> columnNullability(String table) {

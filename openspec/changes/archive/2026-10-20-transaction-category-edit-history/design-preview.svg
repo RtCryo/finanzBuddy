@@ -1,0 +1,173 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1000" viewBox="0 0 1440 1000" role="img" aria-labelledby="title description">
+  <title id="title">Transaction category editing — redesigned side panel</title>
+  <desc id="description">A transaction history screen with a compact right-side read-only detail panel, version tabs, and an explicit edit action.</desc>
+  <defs>
+    <filter id="panel-shadow" x="-20%" y="-10%" width="140%" height="120%">
+      <feDropShadow dx="-10" dy="0" stdDeviation="22" flood-color="#172b4d" flood-opacity="0.16"/>
+    </filter>
+    <filter id="menu-shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#172b4d" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      text { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .ink { fill: #172b4d; }
+      .body { fill: #344054; }
+      .muted { fill: #718096; }
+      .tiny { font-size: 11px; }
+      .small { font-size: 12px; }
+      .regular { font-size: 14px; }
+      .medium { font-size: 15px; font-weight: 600; }
+      .semibold { font-size: 18px; font-weight: 650; }
+    </style>
+  </defs>
+
+  <!-- App shell behind the open transaction panel -->
+  <rect width="1440" height="1000" fill="#f6f8fb"/>
+  <rect width="248" height="1000" fill="#ffffff"/>
+  <path d="M248 0V1000" stroke="#e8edf3"/>
+  <rect x="22" y="22" width="38" height="38" rx="12" fill="#167d68"/>
+  <path d="M33 42h16M41 34v16" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
+  <text x="72" y="47" class="ink" font-size="20" font-weight="700">finanz<tspan fill="#167d68">Buddy</tspan></text>
+  <text x="28" y="112" class="muted tiny" font-weight="700" letter-spacing="1.1">WORKSPACE</text>
+  <rect x="14" y="132" width="220" height="46" rx="10" fill="#eaf5f1"/>
+  <rect x="31" y="146" width="16" height="16" rx="3" fill="none" stroke="#167d68" stroke-width="1.6"/>
+  <path d="M34 150h10M34 154h10M34 158h7" stroke="#167d68" stroke-width="1.3" stroke-linecap="round"/>
+  <text x="59" y="160" fill="#116653" font-size="14" font-weight="600">Transactions</text>
+  <rect x="31" y="200" width="16" height="16" rx="4" fill="none" stroke="#7b8797" stroke-width="1.5"/>
+  <path d="M34 209h10M39 204v10" stroke="#7b8797" stroke-width="1.3" stroke-linecap="round"/>
+  <text x="59" y="214" class="body regular">Documents</text>
+  <rect x="31" y="254" width="16" height="16" rx="8" fill="none" stroke="#7b8797" stroke-width="1.5"/>
+  <path d="M31 262h16M39 254v16" stroke="#7b8797" stroke-width="1.2"/>
+  <text x="59" y="268" class="body regular">Reports</text>
+  <path d="M0 928h248" stroke="#e8edf3"/>
+  <circle cx="48" cy="966" r="18" fill="#e8eef5"/>
+  <text x="48" y="970" text-anchor="middle" fill="#42566f" font-size="11" font-weight="700">AA</text>
+  <text x="77" y="963" class="body small" font-weight="600">Alex Account</text>
+  <text x="77" y="980" class="muted tiny">Personal workspace</text>
+
+  <rect x="248" y="0" width="1192" height="76" fill="#ffffff"/>
+  <path d="M248 76H1440" stroke="#e8edf3"/>
+  <text x="282" y="45" class="muted small">Workspace</text>
+  <path d="m354 39 4 4-4 4" fill="none" stroke="#a0aab8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="370" y="45" class="body small" font-weight="600">Transaction history</text>
+  <circle cx="1370" cy="38" r="18" fill="#e8eef5"/>
+  <text x="1370" y="42" text-anchor="middle" fill="#42566f" font-size="11" font-weight="700">AA</text>
+
+  <text x="282" y="137" class="ink" font-size="27" font-weight="700">Transaction history</text>
+  <text x="282" y="164" class="muted regular">Review transactions from all of your processed statements.</text>
+  <rect x="282" y="194" width="1118" height="122" rx="14" fill="#ffffff" stroke="#e8edf3"/>
+  <text x="306" y="226" class="ink" font-size="17" font-weight="650">All transactions</text>
+  <text x="306" y="249" class="muted small">307 transactions</text>
+  <rect x="754" y="211" width="250" height="38" rx="9" fill="#ffffff" stroke="#dfe6ee"/>
+  <circle cx="775" cy="228" r="6" fill="none" stroke="#8290a2" stroke-width="1.5"/>
+  <path d="m779 232 5 5" stroke="#8290a2" stroke-width="1.5" stroke-linecap="round"/>
+  <text x="793" y="233" class="muted small">Search transactions</text>
+  <rect x="1014" y="211" width="118" height="38" rx="9" fill="#ffffff" stroke="#dfe6ee"/>
+  <text x="1030" y="234" class="body small">All dates</text>
+  <path d="m1110 226 4 4 4-4" fill="none" stroke="#718096" stroke-width="1.4"/>
+  <rect x="1142" y="211" width="140" height="38" rx="9" fill="#ffffff" stroke="#dfe6ee"/>
+  <text x="1158" y="234" class="body small">All categories</text>
+  <path d="m1260 226 4 4 4-4" fill="none" stroke="#718096" stroke-width="1.4"/>
+  <text x="306" y="289" class="muted tiny" font-weight="700" letter-spacing=".8">VALUE DATE</text>
+  <text x="444" y="289" class="muted tiny" font-weight="700" letter-spacing=".8">DESCRIPTION</text>
+  <text x="664" y="289" class="muted tiny" font-weight="700" letter-spacing=".8">AMOUNT</text>
+  <text x="788" y="289" class="muted tiny" font-weight="700" letter-spacing=".8">CATEGORY</text>
+  <text x="926" y="289" class="muted tiny" font-weight="700" letter-spacing=".8">ACCOUNT</text>
+  <rect x="282" y="328" width="1118" height="76" rx="10" fill="#eaf5f1" stroke="#d8ece4"/>
+  <text x="306" y="371" class="body regular">14 Mar 2024</text>
+  <text x="444" y="364" class="ink regular" font-weight="600">Nordstrom Rack</text>
+  <text x="444" y="384" class="muted small">Card payment</text>
+  <text x="664" y="371" fill="#b54747" class="regular" font-weight="600">−$84.50</text>
+  <rect x="788" y="350" width="92" height="27" rx="13.5" fill="#e4f1ed"/>
+  <text x="834" y="368" text-anchor="middle" fill="#116653" class="small" font-weight="600">Shopping</text>
+  <text x="926" y="371" class="body regular">Everyday •• 2841</text>
+  <path d="M282 404H1400" stroke="#e8edf3"/>
+  <text x="306" y="451" class="body regular">13 Mar 2024</text>
+  <text x="444" y="444" class="ink regular" font-weight="600">City Market</text>
+  <text x="444" y="464" class="muted small">Groceries</text>
+  <text x="664" y="451" class="body regular">−$42.18</text>
+  <rect x="788" y="430" width="92" height="27" rx="13.5" fill="#f0f3f7"/>
+  <text x="834" y="448" text-anchor="middle" class="body small" font-weight="600">Groceries</text>
+  <text x="926" y="451" class="body regular">Everyday •• 2841</text>
+  <path d="M282 484H1400" stroke="#e8edf3"/>
+  <text x="306" y="531" class="body regular">12 Mar 2024</text>
+  <text x="444" y="524" class="ink regular" font-weight="600">Metro Transit</text>
+  <text x="444" y="544" class="muted small">Monthly pass</text>
+  <text x="664" y="531" class="body regular">−$98.00</text>
+  <rect x="788" y="510" width="92" height="27" rx="13.5" fill="#f0f3f7"/>
+  <text x="834" y="528" text-anchor="middle" class="body small" font-weight="600">Transport</text>
+  <text x="926" y="531" class="body regular">Everyday •• 2841</text>
+  <path d="M282 564H1400" stroke="#e8edf3"/>
+  <text x="306" y="611" class="body regular">11 Mar 2024</text>
+  <text x="444" y="604" class="ink regular" font-weight="600">Northside Pharmacy</text>
+  <text x="444" y="624" class="muted small">Card payment</text>
+  <text x="664" y="611" class="body regular">−$16.72</text>
+  <rect x="788" y="590" width="92" height="27" rx="13.5" fill="#f0f3f7"/>
+  <text x="834" y="608" text-anchor="middle" class="body small" font-weight="600">Health</text>
+  <text x="926" y="611" class="body regular">Everyday •• 2841</text>
+
+  <!-- Dimmed background keeps the transaction list recognizable -->
+  <rect x="248" y="76" width="1192" height="924" fill="#172b4d" opacity=".24"/>
+
+  <!-- Compact drawer: a single-column layout with version tabs -->
+  <g filter="url(#panel-shadow)">
+    <rect x="864" y="0" width="576" height="1000" fill="#ffffff"/>
+  </g>
+  <path d="M864 0V1000" stroke="#e6ebf1"/>
+
+  <!-- Minimal drawer header -->
+  <rect x="864" y="0" width="576" height="78" fill="#ffffff"/>
+  <path d="M864 78H1440" stroke="#edf0f4"/>
+  <text x="904" y="47" class="ink medium">Transaction details</text>
+  <rect x="1198" y="19" width="168" height="40" rx="9" fill="#ffffff" stroke="#d8e0e8"/>
+  <path d="m1217 39 4 4 8-9" fill="none" stroke="#167d68" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="1291" y="44" text-anchor="middle" class="body small" font-weight="600">Edit transaction</text>
+  <circle cx="1405" cy="39" r="18" fill="#f4f6f8"/>
+  <path d="m1400 34 10 10m0-10-10 10" stroke="#65758a" stroke-width="1.7" stroke-linecap="round"/>
+
+  <!-- Transaction identity -->
+  <text x="904" y="125" class="muted tiny" font-weight="700" letter-spacing="1.1">CARD PAYMENT</text>
+  <text x="904" y="160" class="ink" font-size="24" font-weight="700">Nordstrom Rack</text>
+  <text x="904" y="186" class="muted small">14 Mar 2024  ·  Everyday •• 2841</text>
+  <text x="1398" y="151" text-anchor="end" class="ink" font-size="22" font-weight="700">−$84.50</text>
+  <text x="1398" y="173" text-anchor="end" class="muted small">USD</text>
+
+  <!-- Version selector is compact and sits above the comparison -->
+  <text x="904" y="223" class="muted tiny" font-weight="700" letter-spacing=".8">VERSION HISTORY</text>
+  <text x="1398" y="223" text-anchor="end" class="muted tiny">3 versions</text>
+  <rect x="904" y="238" width="494" height="45" rx="9" fill="#f3f5f7"/>
+  <rect x="907" y="241" width="154" height="39" rx="7" fill="#ffffff" stroke="#e2e7ec"/>
+  <text x="984" y="265" text-anchor="middle" class="body small" font-weight="600">Original</text>
+  <text x="1133" y="265" text-anchor="middle" class="body small" font-weight="600">Version 2</text>
+  <rect x="1238" y="241" width="157" height="39" rx="7" fill="#167d68"/>
+  <text x="1316" y="265" text-anchor="middle" fill="#ffffff" class="small" font-weight="650">Version 3 · Current</text>
+  <text x="904" y="304" class="muted tiny">Selected snapshot · 22 Mar 2024 at 10:42</text>
+
+  <!-- Light comparison strip, not a second history panel -->
+  <rect x="904" y="326" width="494" height="112" rx="12" fill="#f7faf9" stroke="#e3eee9"/>
+  <text x="924" y="352" fill="#116653" class="tiny" font-weight="700" letter-spacing=".6">CHANGES SINCE VERSION 2</text>
+  <text x="924" y="378" class="muted small">Category</text>
+  <text x="1068" y="378" class="body small"><tspan fill="#718096">Groceries</tspan><tspan fill="#aab7c4">  →  </tspan><tspan fill="#116653" font-weight="700">Shopping</tspan></text>
+  <text x="924" y="411" class="muted small">Description</text>
+  <text x="1068" y="411" class="body small"><tspan fill="#718096">—</tspan><tspan fill="#aab7c4">  →  </tspan><tspan fill="#116653" font-weight="700">Clothing store</tspan></text>
+
+  <!-- Single-column transaction data -->
+  <text x="904" y="483" class="ink semibold">Transaction</text>
+  <text x="904" y="518" class="muted small">Booking date</text>
+  <text x="1398" y="518" text-anchor="end" class="body regular" font-weight="550">14 Mar 2024</text>
+  <path d="M904 534H1398" stroke="#edf0f4"/>
+  <text x="904" y="562" class="muted small">Value date</text>
+  <text x="1398" y="562" text-anchor="end" class="body regular" font-weight="550">15 Mar 2024</text>
+  <path d="M904 578H1398" stroke="#edf0f4"/>
+  <text x="904" y="606" class="muted small">Counterparty</text>
+  <text x="1398" y="606" text-anchor="end" class="body regular" font-weight="550">Nordstrom Rack</text>
+  <path d="M904 622H1398" stroke="#edf0f4"/>
+  <text x="904" y="650" class="muted small">Description</text>
+  <text x="1398" y="650" text-anchor="end" class="body regular" font-weight="550">Clothing store</text>
+  <path d="M904 666H1398" stroke="#edf0f4"/>
+
+  <!-- Read-only category uses the same plain label/value treatment as other fields -->
+  <text x="904" y="694" class="muted small">Category</text>
+  <text x="1398" y="694" text-anchor="end" class="body regular" font-weight="550">Shopping</text>
+  <path d="M904 710H1398" stroke="#edf0f4"/>
+</svg>

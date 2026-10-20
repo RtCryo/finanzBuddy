@@ -1,8 +1,15 @@
 package com.finanzbuddy.api.document.controller;
 
+import com.finanzbuddy.api.document.dto.PersonalCategoryCreateRequest;
+import com.finanzbuddy.api.document.dto.PersonalCategoryResponse;
+import com.finanzbuddy.api.document.dto.TransactionCategoryUpdateRequest;
 import com.finanzbuddy.api.document.dto.TransactionHistoryResponse;
+import com.finanzbuddy.api.document.dto.TransactionResponse;
+import com.finanzbuddy.api.document.dto.TransactionVersionResponse;
 import com.finanzbuddy.api.document.service.DocumentService;
+import com.finanzbuddy.api.document.service.TransactionCategoryService;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -10,6 +17,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,9 +35,13 @@ public class TransactionController {
             Set.of("valueDate", "amount", "currency", "counterparty", "description", "category");
 
     private final DocumentService documentService;
+    private final TransactionCategoryService transactionCategoryService;
 
-    public TransactionController(DocumentService documentService) {
+    public TransactionController(
+            DocumentService documentService,
+            TransactionCategoryService transactionCategoryService) {
         this.documentService = documentService;
+        this.transactionCategoryService = transactionCategoryService;
     }
 
     @GetMapping
@@ -63,5 +78,46 @@ public class TransactionController {
                         sortField,
                         normalizedDirection);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/categories")
+    public ResponseEntity<List<String>> listCategories(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(
+                transactionCategoryService.getAvailableCategories(userDetails.getUsername()));
+    }
+
+    @PostMapping("/categories")
+    public ResponseEntity<PersonalCategoryResponse> createCategory(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody PersonalCategoryCreateRequest request) {
+        if (request == null || request.transactionId() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "A transaction ID is required to assign a category");
+        }
+        PersonalCategoryResponse response =
+                transactionCategoryService.createCategoryAndAssign(
+                        userDetails.getUsername(), request.transactionId(), request.name());
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/{id}/versions")
+    public ResponseEntity<List<TransactionVersionResponse>> listVersions(
+            @AuthenticationPrincipal UserDetails userDetails, @PathVariable Long id) {
+        return ResponseEntity.ok(
+                transactionCategoryService.getVersions(userDetails.getUsername(), id));
+    }
+
+    @PutMapping("/{id}/category")
+    public ResponseEntity<TransactionResponse> updateCategory(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Long id,
+            @RequestBody TransactionCategoryUpdateRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category is required");
+        }
+        return ResponseEntity.ok(
+                transactionCategoryService.updateCategory(
+                        userDetails.getUsername(), id, request.category()));
     }
 }
