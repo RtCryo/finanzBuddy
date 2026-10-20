@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -18,6 +18,18 @@ const processingDocument = {
   status: 'PROCESSING' as const,
   createdAt: '2026-09-28T12:00:00Z',
   errorMessage: null,
+}
+
+const processedDocument = { ...processingDocument, status: 'PROCESSED' as const }
+const transaction = {
+  id: 12,
+  bookingDate: '2024-03-14',
+  valueDate: '2024-03-15',
+  amount: '42.75',
+  currency: 'USD',
+  counterparty: 'Example Books',
+  description: 'Book purchase',
+  category: 'Shopping',
 }
 
 function renderDetail() {
@@ -78,6 +90,71 @@ describe('DocumentDetailPage', () => {
     renderDetail()
     await waitFor(() => expect(getDocumentTransactions).toHaveBeenCalledTimes(2))
     expect(getDocument).toHaveBeenCalledTimes(2)
+  })
+
+  it('opens details for a keyboard-activated document transaction with every normalized field', async () => {
+    vi.mocked(getDocument).mockResolvedValue(processedDocument)
+    vi.mocked(getDocumentTransactions).mockResolvedValue([transaction])
+    const user = userEvent.setup()
+    renderDetail()
+
+    const action = await screen.findByRole('button', { name: 'View transaction details: Book purchase' })
+    action.focus()
+    await user.keyboard('{Enter}')
+
+    const dialog = screen.getByRole('dialog', { name: 'Selected transaction' })
+    expect(dialog).toHaveTextContent('Booking date')
+    expect(dialog).toHaveTextContent('Mar 14, 2024')
+    expect(dialog).toHaveTextContent('Value date')
+    expect(dialog).toHaveTextContent('Mar 15, 2024')
+    expect(dialog).toHaveTextContent('42.75')
+    expect(dialog).toHaveTextContent('USD')
+    expect(dialog).toHaveTextContent('Example Books')
+    expect(dialog).toHaveTextContent('Book purchase')
+    expect(dialog).toHaveTextContent('Shopping')
+  })
+
+  it('normalizes blank and padded transaction values the same in document rows and details', async () => {
+    vi.mocked(getDocument).mockResolvedValue(processedDocument)
+    vi.mocked(getDocumentTransactions).mockResolvedValue([{
+      ...transaction,
+      counterparty: '   ',
+      description: '  Book purchase  ',
+      category: '  ',
+    }])
+    const user = userEvent.setup()
+    renderDetail()
+
+    const row = await screen.findByRole('row', { name: /Book purchase/ })
+    expect(within(row).getByText('—')).toBeInTheDocument()
+    expect(within(row).getByText('Book purchase')).toBeInTheDocument()
+    expect(within(row).getByText('Uncategorized')).toBeInTheDocument()
+
+    await user.click(within(row).getByText('Book purchase'))
+    const dialog = screen.getByRole('dialog', { name: 'Selected transaction' })
+    expect(within(dialog).getByText('—')).toBeInTheDocument()
+    expect(within(dialog).getByText('Book purchase')).toBeInTheDocument()
+    expect(within(dialog).getByText('Uncategorized')).toBeInTheDocument()
+  })
+
+  it('closes document transaction details to the activating row without changing the transaction list', async () => {
+    vi.mocked(getDocument).mockResolvedValue(processedDocument)
+    vi.mocked(getDocumentTransactions).mockResolvedValue([transaction])
+    const user = userEvent.setup()
+    renderDetail()
+
+    const action = await screen.findByRole('button', { name: 'View transaction details: Book purchase' })
+    const row = screen.getByRole('row', { name: /Book purchase/ })
+    await user.click(within(row).getByText('Book purchase'))
+    expect(row).toHaveClass('transaction-row-selected')
+    await user.click(screen.getByRole('button', { name: 'Close transaction details' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(row).not.toHaveClass('transaction-row-selected')
+    expect(action).toHaveFocus()
+    expect(screen.getByRole('table', { name: 'Document transactions' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'View transaction details: Book purchase' })).toBeInTheDocument()
+    expect(getDocumentTransactions).toHaveBeenCalledTimes(1)
   })
 
   it('requests the original file as a download and attaches the link', async () => {

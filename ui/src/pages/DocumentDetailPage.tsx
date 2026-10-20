@@ -5,7 +5,14 @@ import { getErrorMessage } from '../api/errors'
 import { api } from '../api/client'
 import { AppShell } from '../components/AppShell'
 import { DocumentStatusBadge } from '../components/DocumentStatusBadge'
-import { formatDateOnly, formatInstant } from '../format'
+import { TransactionDetailsDialog } from '../components/TransactionDetailsDialog'
+import {
+  formatDateOnly,
+  formatInstant,
+  formatTransactionCategory,
+  formatTransactionText,
+  normalizeTransactionText,
+} from '../format'
 import type { DocumentRecord } from '../types/document'
 import type { TransactionRecord } from '../types/transaction'
 
@@ -15,6 +22,8 @@ export function DocumentDetailPage() {
   const [transactions, setTransactions] = useState<TransactionRecord[]>([])
   const [error, setError] = useState('')
   const [transactionsError, setTransactionsError] = useState('')
+  const [selectedTransaction, setSelectedTransaction] = useState<TransactionRecord | null>(null)
+  const transactionOpenerRef = useRef<HTMLElement | null>(null)
   const [downloadError, setDownloadError] = useState('')
   const [loadedId, setLoadedId] = useState<string | null>(null)
   const [areTransactionsLoading, setAreTransactionsLoading] = useState(false)
@@ -200,14 +209,31 @@ export function DocumentDetailPage() {
                       <span role="columnheader">Category</span>
                     </div>
                     {transactions.map((transaction) => (
-                      <div className="transaction-row" role="row" key={transaction.id}>
-                        <span role="cell">{formatDateOnly(transaction.bookingDate)}</span>
+                      <div
+                        className={`transaction-row${selectedTransaction?.id === transaction.id ? ' transaction-row-selected' : ''}`}
+                        role="row"
+                        key={transaction.id}
+                        onClick={(event) => {
+                          const opener = event.currentTarget.querySelector<HTMLButtonElement>('.transaction-row-action')
+                          if (!opener) return
+                          transactionOpenerRef.current = opener
+                          setSelectedTransaction(transaction)
+                        }}
+                      >
+                        <span className="transaction-action-cell" role="cell">
+                          <button
+                            className="transaction-row-action"
+                            type="button"
+                            aria-label={`View transaction details: ${normalizeTransactionText(transaction.description) || normalizeTransactionText(transaction.counterparty) || 'transaction'}`}
+                          />
+                          {formatDateOnly(transaction.bookingDate)}
+                        </span>
                         <span role="cell">{formatDateOnly(transaction.valueDate)}</span>
                         <span className="transaction-amount" role="cell">{formatAmount(transaction.amount)}</span>
                         <span role="cell">{transaction.currency || '—'}</span>
-                        <span role="cell">{transaction.counterparty || '—'}</span>
-                        <span role="cell">{transaction.description || '—'}</span>
-                        <span role="cell"><span className="category-chip">{transaction.category || 'Uncategorized'}</span></span>
+                        <span role="cell">{formatTransactionText(transaction.counterparty)}</span>
+                        <span role="cell">{formatTransactionText(transaction.description)}</span>
+                        <span role="cell"><span className="category-chip">{formatTransactionCategory(transaction.category)}</span></span>
                       </div>
                     ))}
                   </div>
@@ -217,6 +243,11 @@ export function DocumentDetailPage() {
           )}
         </>
       ) : null}
+      <TransactionDetailsDialog
+        transaction={selectedTransaction}
+        openerRef={transactionOpenerRef}
+        onClose={() => setSelectedTransaction(null)}
+      />
     </AppShell>
   )
 }

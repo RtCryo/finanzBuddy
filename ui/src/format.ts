@@ -24,3 +24,15 @@ export function formatDateOnly(value: string | null | undefined) {
   }
   return dateFormat.format(date)
 }
+
+export function normalizeTransactionText(value: string | null | undefined) {
+  return value?.trim() || ''
+}
+
+export function formatTransactionText(value: string | null | undefined) {
+  return normalizeTransactionText(value) || '—'
+}
+
+export function formatTransactionCategory(value: string | null | undefined) {
+  return normalizeTransactionText(value) || 'Uncategorized'
+}
