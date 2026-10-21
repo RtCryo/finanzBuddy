@@ -164,7 +164,7 @@ services:
       PARSER_FORMAT_XML: "false"
 
   prometheus:
-    image: prom/prometheus:v3.15.0
+    image: prom/prometheus:v3.15.1
     container_name: finanzbuddy-prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
