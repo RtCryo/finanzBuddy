@@ -16,7 +16,7 @@
 	<properties>
 		<java.version>25</java.version>
 		<minio.version>9.0.3</minio.version>
-		<okhttp.version>5.5.0</okhttp.version>
+		<okhttp.version>5.5.1</okhttp.version>
 		<jjwt.version>0.13.0</jjwt.version>
 		<spotless.version>3.10.4</spotless.version>
 		<jacoco.version>0.8.15</jacoco.version>
