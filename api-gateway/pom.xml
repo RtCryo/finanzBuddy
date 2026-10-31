@@ -15,7 +15,7 @@
 	<description>API Gateway for finanzBuddy</description>
 	<properties>
 		<java.version>25</java.version>
-		<minio.version>9.0.3</minio.version>
+		<minio.version>9.0.4</minio.version>
 		<okhttp.version>5.5.1</okhttp.version>
 		<jjwt.version>0.13.0</jjwt.version>
 		<spotless.version>3.10.4</spotless.version>
