@@ -65,7 +65,7 @@ services:
       start_period: 20s
 
   kafka-exporter:
-    image: danielqsj/kafka-exporter:v1.10.0
+    image: danielqsj/kafka-exporter:v1.11.0
     container_name: finanzbuddy-kafka-exporter
     command:
       - "--kafka.server=kafka:9092"
