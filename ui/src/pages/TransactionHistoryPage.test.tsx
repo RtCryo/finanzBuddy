@@ -7,6 +7,7 @@ import {
   getTransactionCategories,
   getTransactionHistory,
   getTransactionVersions,
+  getRelatedExpenses,
   updateTransactionCategory,
 } from '../api/transactions'
 import type { TransactionHistoryPage as TransactionHistoryResult } from '../types/transaction'
@@ -17,6 +18,7 @@ vi.mock('../api/transactions', () => ({
   getTransactionCategories: vi.fn(),
   getTransactionHistory: vi.fn(),
   getTransactionVersions: vi.fn(),
+  getRelatedExpenses: vi.fn(),
   updateTransactionCategory: vi.fn(),
   UNCATEGORIZED_CATEGORY: '__uncategorized__',
 }))
@@ -51,6 +53,7 @@ function renderPage() {
 
 describe('TransactionHistoryPage', () => {
   beforeEach(() => {
+    vi.mocked(getRelatedExpenses).mockResolvedValue({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
     vi.clearAllMocks()
     vi.mocked(getTransactionHistory).mockResolvedValue(result())
     vi.mocked(getTransactionCategories).mockResolvedValue(['Food', 'Housing'])
@@ -149,6 +152,8 @@ describe('TransactionHistoryPage', () => {
     const selectedRow = screen.getByRole('row', { name: /Monthly rent/ })
     await user.click(within(selectedRow).getByText('Monthly rent'))
     expect(selectedRow).toHaveClass('transaction-row-selected')
+    expect(await screen.findByText('No other expenses with this counterparty.')).toBeInTheDocument()
+    expect(getRelatedExpenses).toHaveBeenCalledWith(transaction.id, 0)
     await user.click(screen.getByRole('button', { name: 'Close transaction details' }))
 
     expect(getTransactionHistory).toHaveBeenCalledTimes(requestCount)

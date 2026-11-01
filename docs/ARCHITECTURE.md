@@ -97,6 +97,7 @@ The UI sends API requests to `/api`; Vite rewrites that prefix in development an
 | `POST /documents`, `GET /documents`, `GET /documents/{id}` | User JWT | Upload and list/read owned documents |
 | `GET /documents/{id}/transactions`, `GET /documents/{id}/download` | User JWT | Read processed transactions and download the original file for an owned document |
 | `GET /transactions` | User JWT | Filtered, sorted, paginated owner-scoped history |
+| `GET /transactions/{id}/related-expenses` | User JWT | Latest-snapshot negative expenses with exactly the source counterparty across owned processed documents; source and candidate transaction/document ownership checked |
 | `GET /transactions/categories`, `POST /transactions/categories` | User JWT | Read categories or atomically create a personal category and assign it |
 | `GET /transactions/{id}/versions`, `PUT /transactions/{id}/category` | User JWT | Read snapshots or update the latest category |
 | `PUT /internal/documents/{id}/status` | Internal API key | Parser-to-gateway status reporting |

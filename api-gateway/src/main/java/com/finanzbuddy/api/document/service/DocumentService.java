@@ -8,6 +8,7 @@ import com.finanzbuddy.api.document.dto.DocumentListResponse;
 import com.finanzbuddy.api.document.dto.DocumentResponse;
 import com.finanzbuddy.api.document.dto.DocumentStatusUpdateRequest;
 import com.finanzbuddy.api.document.dto.DownloadedFile;
+import com.finanzbuddy.api.document.dto.RelatedExpensePageResponse;
 import com.finanzbuddy.api.document.dto.TransactionHistoryResponse;
 import com.finanzbuddy.api.document.dto.TransactionResponse;
 import com.finanzbuddy.api.document.metrics.DocumentUploadMetrics;
@@ -283,6 +284,28 @@ public class DocumentService {
                 page.getSize(),
                 transactionReadRepository.findHistoryCategories(user.getId()),
                 transactionReadRepository.historyHasUncategorized(user.getId()));
+    }
+
+    @Transactional(readOnly = true)
+    public RelatedExpensePageResponse getRelatedExpenses(
+            String userEmail, Long sourceId, Pageable pageable) {
+        User user = getUser(userEmail);
+        TransactionResponse source =
+                transactionReadRepository
+                        .findOwnedProcessedSource(user.getId(), sourceId)
+                        .orElseThrow(
+                                () ->
+                                        new ResponseStatusException(
+                                                HttpStatus.NOT_FOUND, "Transaction not found"));
+        var page =
+                transactionReadRepository.findRelatedExpenses(
+                        user.getId(), sourceId, source.counterparty(), pageable);
+        return new RelatedExpensePageResponse(
+                page.getContent(),
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages());
     }
 
     /**

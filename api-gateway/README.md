@@ -124,6 +124,24 @@ curl -OJ http://localhost:8080/documents/<id>/download \
 Streams the originally uploaded file from object storage with a `Content-Disposition` filename.
 Returns `404 Not Found` if the document does not belong to the authenticated user.
 
+### Related transaction expenses
+
+`GET /transactions/{id}/related-expenses?page=0&size=20` requires a user JWT.
+For example: `curl "http://localhost:8080/transactions/7/related-expenses?page=0&size=20" -H "Authorization: Bearer <token>"`.
+
+The gateway authorizes both the source transaction and its processed document against the
+authenticated owner, returning `404` for missing, foreign, or unprocessed sources. It derives
+the counterparty from the latest source snapshot; historical selection and history filters do
+not affect matching. A null, empty, or whitespace-only source counterparty returns an empty page.
+Candidates use their latest snapshots across the owner's processed documents, match the stored
+counterparty exactly (case and whitespace sensitive), have negative amounts, and exclude the
+source ID. Both candidate transaction and document ownership must match.
+
+The response contains `items` (`id`, `valueDate`, `amount`, `currency`), `page`, `size`,
+`totalElements`, and `totalPages`. Rows sort by value date descending, null dates last, then ID
+ascending. Pages start at zero; negative pages and nonpositive sizes return `400`; size is capped
+at 100. Clients can request successive pages until `page + 1 >= totalPages`.
+
 ### Internal endpoints
 
 Endpoints under `/internal/**` are for trusted backend services (e.g. the parser service)

@@ -8,6 +8,7 @@ import {
   createPersonalTransactionCategory,
   getTransactionCategories,
   getTransactionVersions,
+  getRelatedExpenses,
   updateTransactionCategory,
 } from '../api/transactions'
 import { DocumentDetailPage } from './DocumentDetailPage'
@@ -21,6 +22,7 @@ vi.mock('../api/transactions', () => ({
   createPersonalTransactionCategory: vi.fn(),
   getTransactionCategories: vi.fn(),
   getTransactionVersions: vi.fn(),
+  getRelatedExpenses: vi.fn(),
   updateTransactionCategory: vi.fn(),
 }))
 
@@ -57,6 +59,7 @@ function renderDetail() {
 
 describe('DocumentDetailPage', () => {
   beforeEach(() => {
+    vi.mocked(getRelatedExpenses).mockResolvedValue({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
     vi.mocked(getDocument).mockReset()
     vi.mocked(getDocumentTransactions).mockReset()
     vi.mocked(getTransactionCategories).mockResolvedValue(['Food', 'Shopping'])
@@ -177,6 +180,7 @@ describe('DocumentDetailPage', () => {
   })
 
   it('closes document transaction details to the activating row without changing the transaction list', async () => {
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 480 })
     vi.mocked(getDocument).mockResolvedValue(processedDocument)
     vi.mocked(getDocumentTransactions).mockResolvedValue([transaction])
     const user = userEvent.setup()
@@ -186,11 +190,14 @@ describe('DocumentDetailPage', () => {
     const row = screen.getByRole('row', { name: /Book purchase/ })
     await user.click(within(row).getByText('Book purchase'))
     expect(row).toHaveClass('transaction-row-selected')
+    expect(await screen.findByText('No other expenses with this counterparty.')).toBeInTheDocument()
+    expect(getRelatedExpenses).toHaveBeenCalledWith(transaction.id, 0)
     await user.click(screen.getByRole('button', { name: 'Close transaction details' }))
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(row).not.toHaveClass('transaction-row-selected')
     expect(action).toHaveFocus()
+    expect(window.scrollY).toBe(480)
     expect(screen.getByRole('table', { name: 'Document transactions' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'View transaction details: Book purchase' })).toBeInTheDocument()
     expect(getDocumentTransactions).toHaveBeenCalledTimes(1)

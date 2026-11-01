@@ -1,5 +1,6 @@
 package com.finanzbuddy.api.repository;
 
+import com.finanzbuddy.api.document.dto.RelatedExpenseResponse;
 import com.finanzbuddy.api.document.dto.TransactionResponse;
 import java.sql.Date;
 import java.time.LocalDate;
@@ -45,6 +46,53 @@ public class TransactionReadRepository {
                         + " t WHERE t.document_id = ? ORDER BY t.id ASC",
                 TransactionReadRepository::toTransaction,
                 documentId);
+    }
+
+    public java.util.Optional<TransactionResponse> findOwnedProcessedSource(Long userId, Long id) {
+        return jdbcTemplate
+                .query(
+                        "SELECT t.id, t.booking_date, t.value_date, t.amount, t.currency,"
+                                + " t.counterparty, t.description, t.category"
+                                + baseHistoryQuery()
+                                + " AND t.id = ?",
+                        TransactionReadRepository::toTransaction,
+                        userId,
+                        userId,
+                        id)
+                .stream()
+                .findFirst();
+    }
+
+    public Page<RelatedExpenseResponse> findRelatedExpenses(
+            Long userId, Long sourceId, String counterparty, Pageable pageable) {
+        if (counterparty == null || counterparty.isBlank()) return Page.empty(pageable);
+        String where =
+                baseHistoryQuery() + " AND t.id <> ? AND t.amount < 0 AND t.counterparty = ?";
+        Long total =
+                jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*)" + where,
+                        Long.class,
+                        userId,
+                        userId,
+                        sourceId,
+                        counterparty);
+        var rows =
+                jdbcTemplate.query(
+                        "SELECT t.id, t.value_date, t.amount, t.currency"
+                                + where
+                                + " ORDER BY CASE WHEN t.value_date IS NULL THEN 1 ELSE 0 END,"
+                                + " t.value_date DESC, t.id ASC LIMIT ? OFFSET ?",
+                        (rs, rowNum) ->
+                                new RelatedExpenseResponse(
+                                        rs.getLong("id"), toLocalDate(rs.getDate("value_date")),
+                                        rs.getBigDecimal("amount"), rs.getString("currency")),
+                        userId,
+                        userId,
+                        sourceId,
+                        counterparty,
+                        pageable.getPageSize(),
+                        pageable.getOffset());
+        return new PageImpl<>(rows, pageable, total == null ? 0 : total);
     }
 
     public Page<TransactionResponse> findHistory(

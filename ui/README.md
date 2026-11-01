@@ -10,6 +10,14 @@ Documentation map: [UI implementation, capabilities, and history](../docs/README
 - Upload financial documents (`CSV`) with a document type tag.
 - List uploaded documents and poll for processing status updates.
 - View normalized transactions for processed documents.
+- Inspect transactions from history or processed documents, browse snapshots, and edit categories.
+- Compare other expenses with the same counterparty inside the shared details panel. The section
+  shows latest negative expenses across owned processed documents using exact case/whitespace
+  matching, independent of list filters and historical snapshot selection. Selectable rows show
+  Value date and signed amount/currency, newest dates first (undated last). Load more appends
+  pages of 20; loading, empty, missing-counterparty, and retry states do not block category editing.
+  Select a related expense to open its latest details in the same panel. Save or cancel category
+  edits before navigating. Closing returns focus to the original list row and preserves list state.
 - Download the original document from the document detail screen.
 
 ## Prerequisites

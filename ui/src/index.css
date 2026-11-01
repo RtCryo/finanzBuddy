@@ -2232,6 +2232,62 @@ button:disabled {
   margin-bottom: 6px;
 }
 
+.related-expenses {
+  margin-top: 24px;
+  min-width: 0;
+}
+
+.related-expenses > p {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.related-expenses > .button {
+  margin-top: 8px;
+}
+
+.related-expense-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+
+.related-expense-row {
+  display: grid;
+  grid-template-columns: minmax(82px, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  padding: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.related-expense-row strong {
+  color: var(--color-text-strong);
+  text-align: right;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.related-expense-row:hover:not(:disabled) {
+  background: var(--color-primary-soft-surface);
+}
+
+.related-expense-row:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
 .transaction-category-edit-control select,
 .transaction-category-edit-control input {
   width: 100%;
