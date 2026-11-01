@@ -65,6 +65,7 @@ public class TransactionCategoryService {
         try {
             return transactionTemplate.execute(
                     status -> {
+                        lockOwnedTransaction(user.getId(), transactionId);
                         String savedName =
                                 categoryRepository.createPersonalCategory(
                                         user.getId(), name, normalizeForComparison(name));
@@ -77,7 +78,8 @@ public class TransactionCategoryService {
         }
     }
 
-    private TransactionResponse changeCategory(long userId, long transactionId, String category) {
+    TransactionResponse changeCategory(long userId, long transactionId, String category) {
+        lockOwnedTransaction(userId, transactionId);
         TransactionSnapshot source = requireOwnedTransaction(userId, transactionId);
         List<TransactionVersionResponse> versions =
                 categoryRepository.findVersions(userId, transactionId);
@@ -99,7 +101,19 @@ public class TransactionCategoryService {
         return withCategory(current, category);
     }
 
-    private TransactionSnapshot requireOwnedTransaction(long userId, long transactionId) {
+    TransactionSnapshot lockOwnedTransaction(long userId, long transactionId) {
+        TransactionSnapshot source = requireOwnedTransaction(userId, transactionId);
+        categoryRepository.lockDocument(userId, source.documentId());
+        return requireOwnedTransaction(userId, transactionId);
+    }
+
+    TransactionResponse currentTransaction(long userId, long transactionId) {
+        TransactionSnapshot source = requireOwnedTransaction(userId, transactionId);
+        var versions = categoryRepository.findVersions(userId, transactionId);
+        return versions.isEmpty() ? source.transaction() : versions.getLast().transaction();
+    }
+
+    TransactionSnapshot requireOwnedTransaction(long userId, long transactionId) {
         TransactionSnapshot transaction =
                 categoryRepository.findOwnedTransaction(userId, transactionId);
         if (transaction == null) {
@@ -117,7 +131,7 @@ public class TransactionCategoryService {
                                         HttpStatus.UNAUTHORIZED, "User not found"));
     }
 
-    private static String normalizeCategory(String category) {
+    static String normalizeCategory(String category) {
         if (category == null || category.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category must not be blank");
         }

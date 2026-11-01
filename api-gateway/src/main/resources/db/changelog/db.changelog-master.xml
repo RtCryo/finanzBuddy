@@ -15,4 +15,5 @@
     <include file="classpath:/db/changelog/changes/008-add-users-email-unique-constraint.xml"/>
     <include file="classpath:/db/changelog/changes/009-create-transaction-category-history.xml"/>
 
+    <include file="classpath:/db/changelog/changes/010-create-transaction-tags.xml"/>
 </databaseChangeLog>

@@ -10,6 +10,8 @@ Documentation map: [UI implementation, capabilities, and history](../docs/README
 - Upload financial documents (`CSV`) with a document type tag.
 - List uploaded documents and poll for processing status updates.
 - View normalized transactions for processed documents.
+- Review transaction history with combined text, date, category, and reusable personal-tag filters; tag matching supports all selected tags (AND) or any selected tag (OR).
+- Edit a transaction's category and current tags together in its detail panel. Personal tags remain available for reuse after their last assignment is removed.
 - Download the original document from the document detail screen.
 
 ## Prerequisites

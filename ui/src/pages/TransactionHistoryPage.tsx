@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getTransactionHistory, UNCATEGORIZED_CATEGORY } from '../api/transactions'
+import { getTransactionHistory, getTransactionTags, UNCATEGORIZED_CATEGORY } from '../api/transactions'
+import { HistoryTagFilter } from '../components/HistoryTagFilter'
+import type { TransactionTag } from '../types/transaction'
 import { getErrorMessage } from '../api/errors'
 import { AppShell } from '../components/AppShell'
 import { PageHeading } from '../components/PageHeading'
@@ -19,6 +21,10 @@ type PaginationItem = number | 'left-ellipsis' | 'right-ellipsis'
 export function TransactionHistoryPage() {
   const [transactions, setTransactions] = useState<TransactionRecord[]>([])
   const [categories, setCategories] = useState<string[]>([])
+  const [tagChoices, setTagChoices] = useState<TransactionTag[]>([])
+  const [selectedTags, setSelectedTags] = useState<TransactionTag[]>([])
+  const [tagMode, setTagMode] = useState<'AND' | 'OR'>('AND')
+  const [tagError, setTagError] = useState('')
   const [hasUncategorized, setHasUncategorized] = useState(false)
   const [totalElements, setTotalElements] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
@@ -46,10 +52,16 @@ export function TransactionHistoryPage() {
         ...(from ? { from } : {}),
         ...(to ? { to } : {}),
         ...(category ? { category } : {}),
+        ...(selectedTags.length ? { tagIds: selectedTags.map(tag => tag.id) } : {}),
+        tagMode,
         sortField,
         sortDirection,
       })
       if (currentRequest !== requestId.current) return
+      if (page > 0 && page >= result.totalPages) {
+        setPage(Math.max(0, result.totalPages - 1))
+        return
+      }
       setTransactions(result.content)
       setTotalElements(result.totalElements)
       setTotalPages(result.totalPages)
@@ -62,7 +74,17 @@ export function TransactionHistoryPage() {
     } finally {
       if (currentRequest === requestId.current) setIsLoading(false)
     }
-  }, [appliedQuery, category, from, page, sortDirection, sortField, to])
+  }, [appliedQuery, category, from, page, sortDirection, sortField, to, selectedTags, tagMode])
+
+  const loadTags = useCallback(async () => {
+    try { setTagChoices(await getTransactionTags()); setTagError('') }
+    catch (error) { setTagError(getErrorMessage(error, 'We could not load tag choices.')) }
+  }, [])
+
+  useEffect(() => {
+    const initialLoad = window.setTimeout(() => void loadTags(), 0)
+    return () => window.clearTimeout(initialLoad)
+  }, [loadTags])
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => void loadTransactions(), 0)
@@ -88,6 +110,8 @@ export function TransactionHistoryPage() {
     setFrom('')
     setTo('')
     setCategory('')
+    setSelectedTags([])
+    setTagMode('AND')
     setPage(0)
   }
 
@@ -134,9 +158,10 @@ export function TransactionHistoryPage() {
     setTransactions((current) => current.map((transaction) => transaction.id === updated.id ? updated : transaction))
     // Refresh the current page and category choices without resetting pagination or filters.
     void loadTransactions()
+    void loadTags()
   }
 
-  const hasFilters = Boolean(query || from || to || category)
+  const hasFilters = Boolean(query || from || to || category || selectedTags.length || tagMode !== 'AND')
   const firstResult = totalElements === 0 ? 0 : page * PAGE_SIZE + 1
   const lastResult = Math.min((page + 1) * PAGE_SIZE, totalElements)
   const paginationItems = getPaginationItems(totalPages, page)
@@ -151,9 +176,14 @@ export function TransactionHistoryPage() {
 
       <section className="surface transactions-card history-card" aria-labelledby="history-transactions-heading">
         <div className="documents-toolbar history-toolbar">
-          <div>
-            <h2 id="history-transactions-heading">All transactions</h2>
-            <p>{totalElements} {totalElements === 1 ? 'transaction' : 'transactions'}</p>
+          <div className="history-title-row">
+            <div>
+              <h2 id="history-transactions-heading">All transactions</h2>
+              <p>{totalElements} {totalElements === 1 ? 'transaction' : 'transactions'}</p>
+            </div>
+            <button className="button button-secondary clear-filters-button" type="button" onClick={clearFilters} disabled={!hasFilters}>
+              Clear filters
+            </button>
           </div>
           <div className="history-filters" aria-label="Transaction filters">
             <label className="search-field history-search-field">
@@ -181,10 +211,15 @@ export function TransactionHistoryPage() {
                 {categories.map((value) => <option key={value} value={value}>{value}</option>)}
                 {hasUncategorized && <option value={UNCATEGORIZED_CATEGORY}>Uncategorized</option>}
               </select>
+              <svg className="history-select-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg>
             </label>
-            <button className="button button-secondary clear-filters-button" type="button" onClick={clearFilters} disabled={!hasFilters}>
-              Clear filters
-            </button>
+            <HistoryTagFilter choices={tagChoices} selected={selectedTags} mode={tagMode} error={tagError}
+              onRetry={() => void loadTags()}
+              onSelectionChange={tags => {
+                setSelectedTags(tags)
+                setPage(0)
+              }}
+              onModeChange={mode => { setTagMode(mode); setPage(0) }} />
           </div>
         </div>
 

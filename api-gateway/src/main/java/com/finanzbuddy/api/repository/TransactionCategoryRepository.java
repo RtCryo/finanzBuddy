@@ -49,6 +49,11 @@ public class TransactionCategoryRepository {
         return rows.isEmpty() ? null : rows.getFirst();
     }
 
+    public void lockDocument(long userId, long documentId) {
+        jdbcTemplate.queryForObject("SELECT id FROM documents WHERE id = ? AND user_id = ? FOR UPDATE",
+                Long.class, documentId, userId);
+    }
+
     public List<TransactionVersionResponse> findVersions(long userId, long transactionId) {
         return jdbcTemplate.query(
                 "SELECT version_number, booking_date, value_date, amount, currency, counterparty,"

@@ -6,7 +6,10 @@ import { api } from '../api/client'
 import { getDocument, getDocumentTransactions } from '../api/documents'
 import {
   createPersonalTransactionCategory,
+  editTransaction,
+  getAssignedTransactionTags,
   getTransactionCategories,
+  getTransactionTags,
   getTransactionVersions,
   updateTransactionCategory,
 } from '../api/transactions'
@@ -19,7 +22,10 @@ vi.mock('../api/documents', () => ({
 
 vi.mock('../api/transactions', () => ({
   createPersonalTransactionCategory: vi.fn(),
+  editTransaction: vi.fn(),
+  getAssignedTransactionTags: vi.fn(),
   getTransactionCategories: vi.fn(),
+  getTransactionTags: vi.fn(),
   getTransactionVersions: vi.fn(),
   updateTransactionCategory: vi.fn(),
 }))
@@ -63,6 +69,9 @@ describe('DocumentDetailPage', () => {
     vi.mocked(getTransactionVersions).mockResolvedValue([
       { versionNumber: 1, transaction, createdAt: null },
     ])
+    vi.mocked(getTransactionTags).mockResolvedValue([])
+    vi.mocked(getAssignedTransactionTags).mockResolvedValue([])
+    vi.mocked(editTransaction).mockResolvedValue({ transaction: { ...transaction, category: 'Food' }, tags: [] })
     vi.mocked(updateTransactionCategory).mockResolvedValue({ ...transaction, category: 'Food' })
     vi.mocked(createPersonalTransactionCategory).mockResolvedValue({
       name: 'Travel',
@@ -202,7 +211,7 @@ describe('DocumentDetailPage', () => {
     vi.mocked(getDocumentTransactions)
       .mockResolvedValueOnce([transaction])
       .mockResolvedValue([updated])
-    vi.mocked(updateTransactionCategory).mockResolvedValue(updated)
+    vi.mocked(editTransaction).mockResolvedValue({ transaction: updated, tags: [] })
     const user = userEvent.setup()
     renderDetail()
 
@@ -216,6 +225,30 @@ describe('DocumentDetailPage', () => {
     expect(updatedRow).toHaveTextContent('Food')
     expect(screen.getAllByRole('row')).toHaveLength(2)
     await waitFor(() => expect(getDocumentTransactions).toHaveBeenCalledTimes(2))
+  })
+
+  it('saves tags from the document transaction editor and shows them after reopening', async () => {
+    vi.mocked(getDocument).mockResolvedValue(processedDocument)
+    vi.mocked(getDocumentTransactions).mockResolvedValue([transaction])
+    vi.mocked(getTransactionTags).mockResolvedValue([{ id: 4, name: 'Work' }])
+    vi.mocked(editTransaction).mockResolvedValue({ transaction, tags: [{ id: 4, name: 'Work' }] })
+    const user = userEvent.setup()
+    renderDetail()
+
+    const row = await screen.findByRole('row', { name: /Book purchase/ })
+    await user.click(within(row).getByText('Book purchase'))
+    await user.click(await screen.findByRole('button', { name: 'Edit transaction' }))
+    await user.click(screen.getByRole('textbox', { name: 'Search or create tags' }))
+    await user.click(screen.getByRole('option', { name: /Work/ }))
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(editTransaction).toHaveBeenCalledWith(transaction.id, { tags: [{ id: 4 }] }))
+    expect(screen.getByRole('region', { name: 'Tags' })).toHaveTextContent('Work')
+    await waitFor(() => expect(getDocumentTransactions).toHaveBeenCalledTimes(2))
+
+    vi.mocked(getAssignedTransactionTags).mockResolvedValue([{ id: 4, name: 'Work' }])
+    await user.click(screen.getByRole('button', { name: 'Close transaction details' }))
+    await user.click(within(row).getByText('Book purchase'))
+    expect(await screen.findByText('Work', { selector: '.transaction-details-section .tag-chip' })).toBeInTheDocument()
   })
 
   it('requests the original file as a download and attaches the link', async () => {

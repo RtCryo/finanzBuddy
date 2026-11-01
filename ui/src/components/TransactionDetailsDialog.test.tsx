@@ -1,21 +1,23 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  createPersonalTransactionCategory,
+  editTransaction,
+  getAssignedTransactionTags,
   getTransactionCategories,
+  getTransactionTags,
   getTransactionVersions,
-  updateTransactionCategory,
 } from '../api/transactions'
 import type { TransactionRecord, TransactionVersion } from '../types/transaction'
 import { TransactionDetailsDialog } from './TransactionDetailsDialog'
 
 vi.mock('../api/transactions', () => ({
-  createPersonalTransactionCategory: vi.fn(),
+  editTransaction: vi.fn(),
+  getAssignedTransactionTags: vi.fn(),
   getTransactionCategories: vi.fn(),
+  getTransactionTags: vi.fn(),
   getTransactionVersions: vi.fn(),
-  updateTransactionCategory: vi.fn(),
 }))
 
 const fullTransaction: TransactionRecord = {
@@ -56,12 +58,10 @@ describe('TransactionDetailsDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(getTransactionCategories).mockResolvedValue(['Food', 'Housing'])
+    vi.mocked(getTransactionTags).mockResolvedValue([])
+    vi.mocked(getAssignedTransactionTags).mockResolvedValue([])
     vi.mocked(getTransactionVersions).mockResolvedValue([firstVersion])
-    vi.mocked(updateTransactionCategory).mockResolvedValue({ ...fullTransaction, category: 'Food' })
-    vi.mocked(createPersonalTransactionCategory).mockResolvedValue({
-      name: 'Travel',
-      transaction: { ...fullTransaction, category: 'Travel' },
-    })
+    vi.mocked(editTransaction).mockResolvedValue({ transaction: { ...fullTransaction, category: 'Food' }, tags: [] })
   })
 
   it('shows the transaction in a read-only side-panel dialog with plain-text category', async () => {
@@ -88,6 +88,7 @@ describe('TransactionDetailsDialog', () => {
     expect(screen.queryByRole('combobox', { name: 'Transaction category' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tablist', { name: 'Transaction versions' })).not.toBeInTheDocument()
     expect(dialog.querySelector('.category-chip')).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Tags' }).querySelectorAll('.tag-chip')).toHaveLength(0)
   })
 
   it('enters generic edit mode and cancels changes without saving', async () => {
@@ -106,7 +107,7 @@ describe('TransactionDetailsDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.getByText('Housing', { selector: '.transaction-details-fields dd' })).toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: 'Transaction category' })).not.toBeInTheDocument()
-    expect(updateTransactionCategory).not.toHaveBeenCalled()
+    expect(editTransaction).not.toHaveBeenCalled()
   })
 
   it('uses existing missing-value labels and dismisses with Escape', async () => {
@@ -164,7 +165,7 @@ describe('TransactionDetailsDialog', () => {
     vi.mocked(getTransactionVersions)
       .mockResolvedValueOnce([firstVersion])
       .mockResolvedValueOnce([firstVersion, secondVersion])
-    vi.mocked(updateTransactionCategory).mockResolvedValue(secondVersion.transaction)
+    vi.mocked(editTransaction).mockResolvedValue({ transaction: secondVersion.transaction, tags: [] })
     render(<DialogHarness onSaved={onSaved} />)
 
     await user.click(screen.getByRole('button', { name: 'Open transaction' }))
@@ -177,7 +178,7 @@ describe('TransactionDetailsDialog', () => {
     expect(screen.getByRole('heading', { name: 'Changes since version 1' })).toBeInTheDocument()
     expect(screen.getByText('Housing', { selector: '.transaction-version-diff dd span' })).toBeInTheDocument()
     expect(screen.getByText('Food', { selector: '.transaction-version-diff dd strong' })).toBeInTheDocument()
-    expect(updateTransactionCategory).toHaveBeenCalledWith(7, 'Food')
+    expect(editTransaction).toHaveBeenCalledWith(7, { category: 'Food', tags: [] })
     expect(onSaved).toHaveBeenCalledWith(secondVersion.transaction)
 
     await user.click(screen.getByRole('tab', { name: 'Original version' }))
@@ -244,6 +245,7 @@ describe('TransactionDetailsDialog', () => {
   it('creates and assigns a personal category through the shared save action', async () => {
     const user = userEvent.setup()
     const onSaved = vi.fn()
+    vi.mocked(editTransaction).mockResolvedValue({ transaction: { ...fullTransaction, category: 'Travel' }, tags: [] })
     const savedVersion: TransactionVersion = {
       versionNumber: 2,
       transaction: { ...fullTransaction, category: 'Travel' },
@@ -260,7 +262,7 @@ describe('TransactionDetailsDialog', () => {
     await user.type(screen.getByRole('textbox', { name: 'New personal category' }), 'Travel')
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    expect(createPersonalTransactionCategory).toHaveBeenCalledWith(7, 'Travel')
+    expect(editTransaction).toHaveBeenCalledWith(7, { newCategoryName: 'Travel', tags: [] })
     expect(onSaved).toHaveBeenCalledWith({ ...fullTransaction, category: 'Travel' })
     expect(await screen.findByText('Travel', { selector: '.transaction-details-fields dd' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Create and assign' })).not.toBeInTheDocument()
@@ -268,7 +270,7 @@ describe('TransactionDetailsDialog', () => {
 
   it('shows a save error while retaining the current transaction details', async () => {
     const user = userEvent.setup()
-    vi.mocked(updateTransactionCategory).mockRejectedValue(
+    vi.mocked(editTransaction).mockRejectedValue(
       Object.assign(new Error('network failure'), { isAxiosError: true }),
     )
     render(<DialogHarness />)
@@ -281,5 +283,80 @@ describe('TransactionDetailsDialog', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('network failure')
     expect(screen.getByRole('combobox', { name: 'Transaction category' })).toHaveValue('Food')
     expect(getTransactionVersions).toHaveBeenCalledTimes(1)
+  })
+
+  it('adds and removes tags with one tag-only save and no new version', async () => {
+    const user = userEvent.setup()
+    const travel = { id: 4, name: 'Travel' }
+    const work = { id: 5, name: 'Work' }
+    vi.mocked(getTransactionTags).mockResolvedValue([travel, work])
+    vi.mocked(getAssignedTransactionTags).mockResolvedValue([travel])
+    vi.mocked(editTransaction).mockResolvedValue({ transaction: fullTransaction, tags: [work] })
+    render(<DialogHarness />)
+
+    await user.click(screen.getByRole('button', { name: 'Open transaction' }))
+    expect(screen.getByRole('region', { name: 'Tags' })).toHaveTextContent('Travel')
+    expect(screen.queryByRole('button', { name: 'Remove tag Travel' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Edit transaction' }))
+    await user.click(screen.getByRole('button', { name: 'Remove tag Travel' }))
+    const search = screen.getByRole('textbox', { name: 'Search or create tags' })
+    expect(search).toHaveFocus()
+    await user.click(search)
+    await user.click(screen.getByRole('option', { name: /Work/ }))
+    await user.click(search)
+    expect(screen.getByRole('option', { name: /Travel/ })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(editTransaction).toHaveBeenCalledWith(7, { tags: [{ id: 5 }] }))
+    expect(screen.getByRole('region', { name: 'Tags' })).toHaveTextContent('Work')
+    expect(screen.queryByRole('tablist', { name: 'Transaction versions' })).not.toBeInTheDocument()
+    expect(getTransactionVersions).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a new tag draft after a failed save and discards it on cancel', async () => {
+    const user = userEvent.setup()
+    vi.mocked(editTransaction).mockRejectedValue(new Error('offline'))
+    render(<DialogHarness />)
+    await user.click(screen.getByRole('button', { name: 'Open transaction' }))
+    await user.click(screen.getByRole('button', { name: 'Edit transaction' }))
+    const search = screen.getByRole('textbox', { name: 'Search or create tags' })
+    await user.type(search, 'Personal')
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('button', { name: 'Remove tag Personal' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('We could not save these changes')
+    expect(screen.getByRole('button', { name: 'Remove tag Personal' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('region', { name: 'Tags' })).not.toHaveTextContent('Personal')
+  })
+
+  it('shows current tags as read-only metadata beside an older snapshot', async () => {
+    const user = userEvent.setup()
+    const current = { ...fullTransaction, category: 'Food' }
+    vi.mocked(getTransactionVersions).mockResolvedValue([
+      firstVersion, { versionNumber: 2, transaction: current, createdAt: '2024-02-02T10:00:00Z' },
+    ])
+    vi.mocked(getAssignedTransactionTags).mockResolvedValue([{ id: 4, name: 'Travel' }])
+    render(<DialogHarness />)
+    await user.click(screen.getByRole('button', { name: 'Open transaction' }))
+    await user.click(await screen.findByRole('tab', { name: 'Original version' }))
+    expect(screen.getByRole('region', { name: 'Current tags' })).toHaveTextContent('Travel')
+    expect(screen.queryByRole('button', { name: 'Remove tag Travel' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edit transaction' })).not.toBeInTheDocument()
+    expect(screen.getByText('Travel').closest('.transaction-version-diff')).toBeNull()
+  })
+
+  it('discards an unsaved tag when the editor is closed and reopened', async () => {
+    const user = userEvent.setup()
+    render(<DialogHarness />)
+    await user.click(screen.getByRole('button', { name: 'Open transaction' }))
+    await user.click(screen.getByRole('button', { name: 'Edit transaction' }))
+    await user.type(screen.getByRole('textbox', { name: 'Search or create tags' }), 'Draft')
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('button', { name: 'Remove tag Draft' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Close transaction details' }))
+    await user.click(screen.getByRole('button', { name: 'Open transaction' }))
+    expect(screen.getByRole('region', { name: 'Tags' })).not.toHaveTextContent('Draft')
+    expect(editTransaction).not.toHaveBeenCalled()
   })
 })
