@@ -1,5 +1,6 @@
 .opencode/
 .claude/
+.agents/
 .obsidian/
 .env
 .jdk/
