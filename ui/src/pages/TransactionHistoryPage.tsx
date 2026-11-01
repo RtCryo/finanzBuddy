@@ -130,7 +130,7 @@ export function TransactionHistoryPage() {
   }
 
   function handleTransactionSaved(updated: TransactionRecord) {
-    setSelectedTransaction(updated)
+    setSelectedTransaction((current) => current?.id === updated.id ? updated : current)
     setTransactions((current) => current.map((transaction) => transaction.id === updated.id ? updated : transaction))
     // Refresh the current page and category choices without resetting pagination or filters.
     void loadTransactions()

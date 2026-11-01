@@ -103,6 +103,10 @@ Product-specific behavior such as polling intervals, upload constraints, transac
 
 ### Related-expense section conformance
 
+The originating list transaction anchors the panel session until close. Saving a related
+transaction updates the active details within that session, preserving the scroll container,
+loaded related pages and original opener while the parent refreshes its list.
+
 The section reuses detail headings, 44 px definition rows, secondary buttons, error notices,
 and the panel's existing scroll region. It uses 24 px section spacing and 8 px action spacing.
 Wide and tablet panels retain their existing width; narrow panels retain the responsive detail

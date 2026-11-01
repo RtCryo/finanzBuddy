@@ -101,7 +101,10 @@ function TransactionDetailsSession(props: {
     transaction={current}
     prepared={prepared}
     onNavigate={setPrepared}
-    onSaved={props.onSaved}
+    onSaved={(updated) => {
+      setPrepared((current) => current ? { ...current, transaction: updated } : current)
+      props.onSaved?.(updated)
+    }}
     closeDialog={props.closeDialog}
   />
 }
