@@ -96,10 +96,27 @@ Contrast audit adjustments from the observed stylesheet: muted `#718096` becomes
 | Tables and categories | Document/transaction headers and rows; sortable headers; category/type indicators; signed amount text | preserve semantic table roles; table wrapper owns horizontal scrolling; row focus is visible; transaction sign remains represented in text |
 | Empty/loading/failure | Explicit loading status; empty explanation and relevant next action; recoverable error; processing and failure detail panels | never display unavailable data as a successful blank/zero; concise status copy; content remains readable at narrow widths |
 | Pagination | Result range, numbered pages, first/last page, ellipses, previous/next controls | current page is visually and semantically selected; unavailable arrows stay visible and disabled; controls wrap/scroll within their own region |
-| Transaction detail panel | Right-side dialog; heading/close; summary; version selector/comparison; detail fields; optional editor/footer actions | read-only, edit, loading, error; focus returns to opener; scroll stays inside panel; full viewport width on narrow screens; footer actions remain reachable |
+| Transaction detail panel | Right-side dialog; heading/close; summary; version selector/comparison; detail fields; related expenses; optional editor/footer actions | read-only, edit, loading, error; focus returns to opener; scroll stays inside panel; full viewport width on narrow screens; footer actions remain reachable |
 | Personal tag chips and picker | Wrapping semantic chips; selected count; labeled search field; contained suggestion list; separate create choice during editing; named remove buttons | selected, empty, searching, no matches, create, disabled, and focus states; choices stay within the panel/filter card; long names wrap; keyboard supports search, selection, and removal |
+| Related expenses in details | Named section after transaction fields; compact date and amount/currency button rows; secondary Load more / retry action | Independent initial/append status and inline error; preserve rows on append failure; explicit empty/missing-counterparty text; keyboard row navigation; latest source regardless of selected snapshot |
 
 Product-specific behavior such as polling intervals, upload constraints, transaction sorting/filtering/editing, routing, and pagination semantics remains defined by each capability spec rather than this visual catalog.
+
+### Related-expense section conformance
+
+The originating list transaction anchors the panel session until close. Saving a related
+transaction updates the active details within that session, preserving the scroll container,
+loaded related pages and original opener while the parent refreshes its list.
+
+The section reuses detail headings, 44 px definition rows, secondary buttons, error notices,
+and the panel's existing scroll region. It uses 24 px section spacing and 8 px action spacing.
+Wide and tablet panels retain their existing width; narrow panels retain the responsive detail
+grid (82 px minimum date column, wrapping amount values). Rows open the latest target in the same panel, with the heading focused without scrolling and the panel scroll position preserved. Target versions and the initial related page are prepared before replacing content, avoiding intermediate loading layouts; opening status is visually hidden so it does not move rows. Opening errors remain inline and rows can be selected again to retry; unsaved editing disables navigation with explanatory text. The original list opener is retained for close/focus return.
+Source-level review confirms contained vertical scrolling, wrapping headings/values, and no
+new fixed-width content at wide, tablet, or narrow breakpoints. DOM tests cover keyboard
+activation, close/focus return, loading/retry, and both list entry points. Muted text on white
+uses the existing 5.76:1 pair; values/headings use the 14.10:1 strong pair, notices and controls
+reuse their audited semantic tokens. No new motion or palette exception is introduced.
 
 ## Responsive rules
 

@@ -147,6 +147,24 @@ curl -X PUT http://localhost:8080/transactions/14 \
 
 `tags` is the required **complete desired set**; `[]` clears assignments but keeps dictionary entries for reuse. Each item contains either an owned `id` or a `name`, never both. Names are trimmed, nonblank, at most 255 characters, and reused case-insensitively per owner. Omit both `category` and `newCategoryName` to preserve the category, including an uncategorized transaction; to create a personal category, send `newCategoryName` instead of `category`. The response is `{ "transaction": { ...existing transaction fields... }, "tags": [{ "id": 4, "name": "Travel" }] }`. A category change creates the usual version; a tag-only or unchanged save creates none. The entire edit commits or rolls back together. Existing `PUT /transactions/{id}/category` and `POST /transactions/categories` remain available, and `GET /transactions/{id}/versions` stays tag-free.
 
+### Related transaction expenses
+
+`GET /transactions/{id}/related-expenses?page=0&size=20` requires a user JWT.
+For example: `curl "http://localhost:8080/transactions/7/related-expenses?page=0&size=20" -H "Authorization: Bearer <token>"`.
+
+The gateway authorizes both the source transaction and its processed document against the
+authenticated owner, returning `404` for missing, foreign, or unprocessed sources. It derives
+the counterparty from the latest source snapshot; historical selection and history filters do
+not affect matching. A null, empty, or whitespace-only source counterparty returns an empty page.
+Candidates use their latest snapshots across the owner's processed documents, match the stored
+counterparty exactly (case and whitespace sensitive), have negative amounts, and exclude the
+source ID. Both candidate transaction and document ownership must match.
+
+The response contains `items` (`id`, `valueDate`, `amount`, `currency`), `page`, `size`,
+`totalElements`, and `totalPages`. Rows sort by value date descending, null dates last, then ID
+ascending. Pages start at zero; negative pages and nonpositive sizes return `400`; size is capped
+at 100. Clients can request successive pages until `page + 1 >= totalPages`.
+
 ### Internal endpoints
 
 Endpoints under `/internal/**` are for trusted backend services (e.g. the parser service)

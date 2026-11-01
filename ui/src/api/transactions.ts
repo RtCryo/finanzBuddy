@@ -2,6 +2,7 @@ import { api } from './client'
 import type { TransactionTag, TransactionEdit } from '../types/transaction'
 import type {
   PersonalCategoryCreateResponse,
+  RelatedExpensePage,
   TransactionHistoryPage,
   TransactionHistoryParams,
   TransactionRecord,
@@ -9,6 +10,14 @@ import type {
 } from '../types/transaction'
 
 export const UNCATEGORIZED_CATEGORY = '__uncategorized__'
+
+export async function getRelatedExpenses(transactionId: number, page = 0, size = 20) {
+  const response = await api.get<RelatedExpensePage>(
+    `/transactions/${encodeURIComponent(transactionId)}/related-expenses`,
+    { params: { page, size } },
+  )
+  return response.data
+}
 
 export async function getTransactionHistory(params: TransactionHistoryParams = {}) {
   const response = await api.get<TransactionHistoryPage>('/transactions', {

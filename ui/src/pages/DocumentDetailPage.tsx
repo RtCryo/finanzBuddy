@@ -126,7 +126,7 @@ export function DocumentDetailPage() {
   }
 
   function handleTransactionSaved(updated: TransactionRecord) {
-    setSelectedTransaction(updated)
+    setSelectedTransaction((current) => current?.id === updated.id ? updated : current)
     setTransactions((current) => current.map((transaction) => transaction.id === updated.id ? updated : transaction))
     void getDocumentTransactions(id)
       .then((rows) => {

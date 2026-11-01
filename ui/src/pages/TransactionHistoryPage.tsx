@@ -38,6 +38,7 @@ export function TransactionHistoryPage() {
   const [sortDirection, setSortDirection] = useState<TransactionHistorySortDirection>('DESC')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [isTagFilterLoading, setIsTagFilterLoading] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionRecord | null>(null)
   const transactionOpenerRef = useRef<HTMLElement | null>(null)
   const requestId = useRef(0)
@@ -72,7 +73,10 @@ export function TransactionHistoryPage() {
       if (currentRequest !== requestId.current) return
       setError(getErrorMessage(requestError, 'We could not load your transaction history.'))
     } finally {
-      if (currentRequest === requestId.current) setIsLoading(false)
+      if (currentRequest === requestId.current) {
+        setIsLoading(false)
+        setIsTagFilterLoading(false)
+      }
     }
   }, [appliedQuery, category, from, page, sortDirection, sortField, to, selectedTags, tagMode])
 
@@ -154,7 +158,7 @@ export function TransactionHistoryPage() {
   }
 
   function handleTransactionSaved(updated: TransactionRecord) {
-    setSelectedTransaction(updated)
+    setSelectedTransaction((current) => current?.id === updated.id ? updated : current)
     setTransactions((current) => current.map((transaction) => transaction.id === updated.id ? updated : transaction))
     // Refresh the current page and category choices without resetting pagination or filters.
     void loadTransactions()
@@ -216,15 +220,17 @@ export function TransactionHistoryPage() {
             <HistoryTagFilter choices={tagChoices} selected={selectedTags} mode={tagMode} error={tagError}
               onRetry={() => void loadTags()}
               onSelectionChange={tags => {
+                setIsLoading(true)
+                setIsTagFilterLoading(true)
                 setSelectedTags(tags)
                 setPage(0)
               }}
-              onModeChange={mode => { setTagMode(mode); setPage(0) }} />
+              onModeChange={mode => { setIsLoading(true); setIsTagFilterLoading(true); setTagMode(mode); setPage(0) }} />
           </div>
         </div>
 
         {error && <div className="notice notice-error history-notice" role="alert">{error}</div>}
-        {isLoading ? (
+        {isLoading && !(isTagFilterLoading && totalElements > 0) ? (
           <div className="list-state" role="status">Loading transactions…</div>
         ) : error ? null : totalElements === 0 ? (
           <div className="list-state empty-list" role="status">
@@ -234,8 +240,8 @@ export function TransactionHistoryPage() {
             {hasFilters && <button className="button button-secondary" type="button" onClick={clearFilters}>Clear filters</button>}
           </div>
         ) : (
-          <div className="transaction-table-wrap">
-            <div className="transaction-table history-transaction-table" role="table" aria-label="Transaction history">
+          <div className={`transaction-table-wrap${isTagFilterLoading && isLoading ? ' history-results-pending' : ''}`}>
+            <div className="transaction-table history-transaction-table" role="table" aria-label="Transaction history" aria-hidden={isTagFilterLoading && isLoading}>
               <div className="transaction-row transaction-header" role="row">
                 <SortHeader field="valueDate" label="Value date" activeField={sortField} direction={sortDirection} onSort={changeSort} />
                 <SortHeader field="amount" label="Amount" activeField={sortField} direction={sortDirection} onSort={changeSort} />
@@ -256,11 +262,12 @@ export function TransactionHistoryPage() {
                 />
               ))}
             </div>
+            {isTagFilterLoading && isLoading && <div className="history-results-loading" role="status">Loading transactions…</div>}
           </div>
         )}
 
-        {!isLoading && !error && totalPages > 0 && (
-          <nav className="history-pagination" aria-label="Transaction history pages">
+        {(!isLoading || isTagFilterLoading) && !error && totalPages > 0 && (
+          <nav className="history-pagination" aria-label="Transaction history pages" aria-hidden={isTagFilterLoading && isLoading} style={isTagFilterLoading && isLoading ? { visibility: 'hidden' } : undefined}>
             <span className="history-result-range">Showing {firstResult}–{lastResult} of {totalElements} transactions</span>
             <div className="history-page-controls">
               <button

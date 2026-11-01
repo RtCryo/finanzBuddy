@@ -100,6 +100,7 @@ The UI sends API requests to `/api`; Vite rewrites that prefix in development an
 | `POST /documents`, `GET /documents`, `GET /documents/{id}` | User JWT | Upload and list/read owned documents |
 | `GET /documents/{id}/transactions`, `GET /documents/{id}/download` | User JWT | Read processed transactions and download the original file for an owned document |
 | `GET /transactions` | User JWT | Filtered, sorted, paginated owner-scoped history; repeated `tagIds` and `tagMode=AND\|OR` apply an all/any tag condition |
+| `GET /transactions/{id}/related-expenses` | User JWT | Latest-snapshot negative expenses with exactly the source counterparty across owned processed documents; source and candidate transaction/document ownership checked |
 | `GET /transactions/categories`, `POST /transactions/categories` | User JWT | Read categories or atomically create a personal category and assign it |
 | `GET /transactions/{id}/versions`, `PUT /transactions/{id}/category` | User JWT | Read snapshots or update the latest category |
 | `GET /transactions/tags`, `GET /transactions/{id}/tags` | User JWT | Read the owner's reusable tags or current assignments for an owned transaction |
@@ -120,7 +121,7 @@ The history tag query uses repeated bare IDs, for example `GET /transactions?tag
 | Database | PostgreSQL 18 in Docker Compose; H2 is used by the service test suites |
 | Object storage | SeaweedFS S3 gateway in Compose, accessed through the MinIO Java client |
 | Event transport | Apache Kafka 4.3.2 in single-node KRaft mode in the Compose stack |
-| UI runtime | Node 24 build stage and Nginx static runtime |
+| UI runtime | Node 26 build stage and Nginx static runtime |
 | Deployment | Docker Compose; optional production Traefik profile for HTTPS termination |
 
 The exact dependency versions and environment-variable defaults live in `ui/package.json`, the module POMs, `docker-compose.yml`, and the application configuration files.

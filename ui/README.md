@@ -12,11 +12,19 @@ Documentation map: [UI implementation, capabilities, and history](../docs/README
 - View normalized transactions for processed documents.
 - Review transaction history with combined text, date, category, and reusable personal-tag filters; tag matching supports all selected tags (AND) or any selected tag (OR).
 - Edit a transaction's category and current tags together in its detail panel. Personal tags remain available for reuse after their last assignment is removed.
+- Inspect transactions from history or processed documents and browse snapshots.
+- Compare other expenses with the same counterparty inside the shared details panel. The section
+  shows latest negative expenses across owned processed documents using exact case/whitespace
+  matching, independent of list filters and historical snapshot selection. Selectable rows show
+  Value date and signed amount/currency, newest dates first (undated last). Load more appends
+  pages of 20; loading, empty, missing-counterparty, and retry states do not block category editing.
+  Select a related expense to open its latest details in the same panel. Save or cancel category
+  edits before navigating. Closing returns focus to the original list row and preserves list state.
 - Download the original document from the document detail screen.
 
 ## Prerequisites
 
-- Node.js 24+ (the production image uses `node:24-alpine`)
+- Node.js 26+ (the production image uses `node:26-alpine`)
 - npm
 - A running API Gateway at `http://localhost:8080` for local development (see the root [`docker-compose.yml`](../docker-compose.yml))
 

@@ -8,6 +8,7 @@ import {
   getTransactionHistory,
   getTransactionTags,
   getTransactionVersions,
+  getRelatedExpenses,
   updateTransactionCategory,
 } from './transactions'
 import type { TransactionHistoryPage, TransactionRecord, TransactionVersion } from '../types/transaction'
@@ -70,6 +71,15 @@ describe('getTransactionHistory', () => {
     expect(api.get).toHaveBeenCalledWith('/transactions', {
       params: { page: 0, size: 20 }, paramsSerializer: { indexes: null },
     })
+  })
+
+  it('encodes the related source route and maps bounded page responses', async () => {
+    const page = { items: [{ id: 8, valueDate: null, amount: '-42.5', currency: 'EUR' }], page: 2, size: 10, totalElements: 21, totalPages: 3 }
+    vi.mocked(api.get).mockResolvedValue({ data: page } as never)
+    await expect(getRelatedExpenses('7/8' as unknown as number, 2, 10)).resolves.toEqual(page)
+    expect(api.get).toHaveBeenCalledWith('/transactions/7%2F8/related-expenses', { params: { page: 2, size: 10 } })
+    await getRelatedExpenses(7)
+    expect(api.get).toHaveBeenLastCalledWith('/transactions/7/related-expenses', { params: { page: 0, size: 20 } })
   })
 
   it('lists categories and reads chronological transaction versions', async () => {

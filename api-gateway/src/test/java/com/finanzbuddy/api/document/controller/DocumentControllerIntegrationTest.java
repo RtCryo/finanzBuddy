@@ -973,6 +973,72 @@ class DocumentControllerIntegrationTest {
         transition(documentId, DocumentStatus.PROCESSING, null);
     }
 
+    @Test
+    void relatedExpensesAuthorizeSourceAndReturnBoundedCompactPages() throws Exception {
+        ensureTransactionsTable();
+        String token = registerAndLogin("related-owner@example.com", "password123");
+        String foreign = registerAndLogin("related-foreign@example.com", "password123");
+        long doc = uploadDocument(token, csvFile("related.csv"), "CSV");
+        insertHistoryTransaction(doc, "2024-01-01", "Shop", "Source", "Food");
+        long source =
+                jdbcTemplate.queryForObject(
+                        "SELECT MAX(id) FROM transactions WHERE document_id = ?", Long.class, doc);
+        String route = "/transactions/" + source + "/related-expenses";
+        mockMvc.perform(get(route)).andExpect(status().isUnauthorized());
+        mockMvc.perform(get(route).header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        markProcessed(doc);
+        mockMvc.perform(get(route).header("Authorization", "Bearer " + foreign))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(
+                        get("/transactions/99999999/related-expenses")
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        long otherDoc = uploadDocument(token, csvFile("other-related.csv"), "CSV");
+        markProcessed(otherDoc);
+        insertHistoryTransaction(otherDoc, "2024-02-01", "Shop", "Expense", "Food");
+        jdbcTemplate.update(
+                "UPDATE transactions SET amount = -42.5 WHERE document_id = ?", otherDoc);
+        var result =
+                mockMvc.perform(
+                                get(route)
+                                        .param("size", "200")
+                                        .header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        var body = objectMapper.readTree(result.getResponse().getContentAsString());
+        assertThat(body.get("size").asInt()).isEqualTo(100);
+        assertThat(body.get("page").asInt()).isZero();
+        assertThat(body.get("totalElements").asInt()).isEqualTo(1);
+        assertThat(body.get("totalPages").asInt()).isEqualTo(1);
+        assertThat(body.get("items").get(0).size()).isEqualTo(4);
+        assertThat(body.get("items").get(0).get("amount").decimalValue())
+                .isEqualByComparingTo("-42.5");
+        assertThat(body.get("items").get(0).get("valueDate").asText()).isEqualTo("2024-02-01");
+        for (String[] invalid :
+                new String[][] {{"page", "-1"}, {"size", "0"}, {"size", "-1"}, {"page", "bad"}}) {
+            mockMvc.perform(
+                            get(route)
+                                    .param(invalid[0], invalid[1])
+                                    .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isBadRequest());
+        }
+        for (String blank : new String[] {null, "", " \t"}) {
+            jdbcTemplate.update(
+                    "UPDATE transactions SET counterparty = ? WHERE id = ?", blank, source);
+            var empty =
+                    mockMvc.perform(get(route).header("Authorization", "Bearer " + token))
+                            .andExpect(status().isOk())
+                            .andReturn();
+            assertThat(
+                            objectMapper
+                                    .readTree(empty.getResponse().getContentAsString())
+                                    .get("items")
+                                    .size())
+                    .isZero();
+        }
+    }
+
     private void ensureTransactionsTable() {
         jdbcTemplate.execute(
                 "CREATE TABLE IF NOT EXISTS transactions (id BIGINT AUTO_INCREMENT PRIMARY KEY,"

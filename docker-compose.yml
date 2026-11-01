@@ -175,7 +175,7 @@ services:
       - prometheus-data:/prometheus
 
   grafana:
-    image: grafana/grafana:13.2.4
+    image: grafana/grafana:13.3.0
     container_name: finanzbuddy-grafana
     depends_on:
       prometheus:

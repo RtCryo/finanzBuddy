@@ -10,6 +10,7 @@ import {
   getTransactionHistory,
   getTransactionTags,
   getTransactionVersions,
+  getRelatedExpenses,
   updateTransactionCategory,
 } from '../api/transactions'
 import type { TransactionHistoryPage as TransactionHistoryResult } from '../types/transaction'
@@ -23,6 +24,7 @@ vi.mock('../api/transactions', () => ({
   getTransactionHistory: vi.fn(),
   getTransactionTags: vi.fn(),
   getTransactionVersions: vi.fn(),
+  getRelatedExpenses: vi.fn(),
   updateTransactionCategory: vi.fn(),
   UNCATEGORIZED_CATEGORY: '__uncategorized__',
 }))
@@ -57,6 +59,7 @@ function renderPage() {
 
 describe('TransactionHistoryPage', () => {
   beforeEach(() => {
+    vi.mocked(getRelatedExpenses).mockResolvedValue({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
     vi.clearAllMocks()
     vi.mocked(getTransactionHistory).mockResolvedValue(result())
     vi.mocked(getTransactionCategories).mockResolvedValue(['Food', 'Housing'])
@@ -71,6 +74,50 @@ describe('TransactionHistoryPage', () => {
       name: 'Travel',
       transaction: { ...transaction, category: 'Travel' },
     })
+  })
+
+
+  it.each(['existing', 'personal'])('preserves the original session when saving a %s category on a related expense', async (mode) => {
+    vi.mocked(getTransactionHistory).mockResolvedValue(result())
+    const user = userEvent.setup()
+    const target = { ...transaction, id: 99, amount: '-42', description: 'Related expense' }
+    const updated = { ...target, category: mode === 'personal' ? 'Travel' : 'Food' }
+    let saved = false
+    vi.mocked(getTransactionVersions).mockImplementation(async (id) => id === transaction.id
+      ? [{ versionNumber: 1, transaction, createdAt: null }]
+      : [{ versionNumber: 1, transaction: target, createdAt: null }, ...(saved
+        ? [{ versionNumber: 2, transaction: updated, createdAt: null }]
+        : [])])
+    vi.mocked(getRelatedExpenses).mockImplementation(async (id) => ({
+      items: id === transaction.id ? [target] : [], page: 0, size: 20,
+      totalElements: id === transaction.id ? 1 : 0, totalPages: id === transaction.id ? 1 : 0,
+    }))
+    vi.mocked(updateTransactionCategory).mockImplementation(async () => { saved = true; return updated })
+    vi.mocked(createPersonalTransactionCategory).mockImplementation(async () => { saved = true; return { name: updated.category, transaction: updated } })
+    vi.mocked(editTransaction).mockImplementation(async () => { saved = true; return { transaction: updated, tags: [] } })
+    renderPage()
+    const opener = await screen.findByRole('button', { name: 'View transaction details: ' + transaction.description })
+    await user.click(opener)
+    await user.click(await screen.findByRole('button', { name: /Open transaction:.*-42/ }))
+    const dialog = screen.getByRole('dialog')
+    const scroll = dialog.querySelector('.transaction-details-scroll')!
+    scroll.scrollTop = 240
+    const relatedCalls = vi.mocked(getRelatedExpenses).mock.calls.length
+    const categoryCalls = vi.mocked(getTransactionCategories).mock.calls.length
+    await user.click(screen.getByRole('button', { name: 'Edit transaction' }))
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Transaction category' }), mode === 'personal' ? '__create_category__' : 'Food')
+    if (mode === 'personal') await user.type(screen.getByRole('textbox', { name: 'New personal category' }), 'Travel')
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await screen.findByRole('tab', { name: 'Version 2, current' })
+    expect(dialog.querySelector('.transaction-details-scroll')).toBe(scroll)
+    expect(scroll.scrollTop).toBe(240)
+    expect(within(dialog).getByText(updated.category, { selector: '.transaction-details-fields dd' })).toBeInTheDocument()
+    expect(getRelatedExpenses).toHaveBeenCalledTimes(relatedCalls)
+    expect(getTransactionCategories).toHaveBeenCalledTimes(categoryCalls)
+    await user.click(screen.getByRole('button', { name: 'Close transaction details' }))
+    expect(opener).toHaveFocus()
+    await user.click(opener)
+    expect(within(screen.getByRole('dialog')).getByText(transaction.description, { selector: '.transaction-details-fields dd' })).toBeInTheDocument()
   })
 
   afterEach(cleanup)
@@ -158,6 +205,8 @@ describe('TransactionHistoryPage', () => {
     const selectedRow = screen.getByRole('row', { name: /Monthly rent/ })
     await user.click(within(selectedRow).getByText('Monthly rent'))
     expect(selectedRow).toHaveClass('transaction-row-selected')
+    expect(await screen.findByText('No other expenses with this counterparty.')).toBeInTheDocument()
+    expect(getRelatedExpenses).toHaveBeenCalledWith(transaction.id, 0)
     await user.click(screen.getByRole('button', { name: 'Close transaction details' }))
 
     expect(getTransactionHistory).toHaveBeenCalledTimes(requestCount)
@@ -377,6 +426,39 @@ describe('TransactionHistoryPage', () => {
     await user.click(screen.getByRole('button', { name: 'Clear filters' }))
     await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({ tagMode: 'AND' })))
     expect(vi.mocked(getTransactionHistory).mock.lastCall?.[0]).not.toHaveProperty('tagIds')
+  })
+
+  it('hides previous rows in place while tag selection and match mode load', async () => {
+    const user = userEvent.setup()
+    const initial = result()
+    let finishSelection!: (value: typeof initial) => void
+    let finishMode!: (value: typeof initial) => void
+    vi.mocked(getTransactionTags).mockResolvedValue([{ id: 4, name: 'Travel' }])
+    vi.mocked(getTransactionHistory).mockImplementation(async (params) => {
+      const tagIds = params?.tagIds
+      const tagMode = params?.tagMode
+      if (!tagIds?.length) return initial
+      return new Promise((resolve) => {
+        if (tagMode === 'OR') finishMode = resolve
+        else finishSelection = resolve
+      })
+    })
+    renderPage()
+    const table = await screen.findByRole('table', { name: 'Transaction history' })
+    await user.click(screen.getByRole('button', { name: 'Filter by tags, 0 selected' }))
+    await user.click(await screen.findByRole('checkbox', { name: 'Travel' }))
+    await waitFor(() => expect(finishSelection).toBeTypeOf('function'))
+    expect(table).toHaveAttribute('aria-hidden', 'true')
+    expect(table.parentElement).toHaveClass('history-results-pending')
+    expect(screen.getByRole('status', { name: '' })).toHaveTextContent('Loading transactions')
+    finishSelection(initial)
+    await waitFor(() => expect(table).toHaveAttribute('aria-hidden', 'false'))
+    await user.click(screen.getByRole('radio', { name: 'Any selected (OR)' }))
+    await waitFor(() => expect(finishMode).toBeTypeOf('function'))
+    expect(table).toHaveAttribute('aria-hidden', 'true')
+    expect(table.parentElement).toHaveClass('history-results-pending')
+    finishMode(initial)
+    await waitFor(() => expect(table).toHaveAttribute('aria-hidden', 'false'))
   })
 
   it('clamps the final page and restores focus when a saved row leaves active tag results', async () => {

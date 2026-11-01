@@ -8,6 +8,7 @@ import {
   getTransactionCategories,
   getTransactionTags,
   getTransactionVersions,
+  getRelatedExpenses,
 } from '../api/transactions'
 import type { TransactionRecord, TransactionVersion } from '../types/transaction'
 import { TransactionDetailsDialog } from './TransactionDetailsDialog'
@@ -18,6 +19,7 @@ vi.mock('../api/transactions', () => ({
   getTransactionCategories: vi.fn(),
   getTransactionTags: vi.fn(),
   getTransactionVersions: vi.fn(),
+  getRelatedExpenses: vi.fn(),
 }))
 
 const fullTransaction: TransactionRecord = {
@@ -56,6 +58,7 @@ describe('TransactionDetailsDialog', () => {
   afterEach(cleanup)
 
   beforeEach(() => {
+    vi.mocked(getRelatedExpenses).mockResolvedValue({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
     vi.clearAllMocks()
     vi.mocked(getTransactionCategories).mockResolvedValue(['Food', 'Housing'])
     vi.mocked(getTransactionTags).mockResolvedValue([])
@@ -266,6 +269,188 @@ describe('TransactionDetailsDialog', () => {
     expect(onSaved).toHaveBeenCalledWith({ ...fullTransaction, category: 'Travel' })
     expect(await screen.findByText('Travel', { selector: '.transaction-details-fields dd' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Create and assign' })).not.toBeInTheDocument()
+  })
+
+  it('loads compact expenses independently and preserves rows while retrying an append', async () => {
+    const user = userEvent.setup()
+    const row = { id: 8, valueDate: '2024-03-01', amount: '-1234.5', currency: 'USD' }
+    vi.mocked(getRelatedExpenses)
+      .mockResolvedValueOnce({ items: [row], page: 0, size: 20, totalElements: 21, totalPages: 2 })
+      .mockRejectedValueOnce(new Error('Related offline'))
+      .mockResolvedValueOnce({ items: [{ ...row, id: 9, valueDate: null, amount: '-2', currency: 'EUR' }], page: 1, size: 20, totalElements: 21, totalPages: 2 })
+    render(<DialogHarness />)
+    await user.click(screen.getByRole('button', { name: 'Open transaction' }))
+    const section = screen.getByRole('region', { name: 'Other expenses with this counterparty' })
+    expect(await within(section).findByText('-1,234.5 USD')).toBeInTheDocument()
+    expect(section).toHaveTextContent('Mar 1, 2024')
+    await user.click(screen.getByRole('button', { name: 'Edit transaction' }))
+    await user.click(within(section).getByRole('button', { name: 'Load more' }))
+    expect(await within(section).findByRole('alert')).toBeInTheDocument()
+    expect(section).toHaveTextContent('-1,234.5 USD')
+    expect(screen.getByRole('combobox', { name: 'Transaction category' })).toBeEnabled()
+    await user.click(within(section).getByRole('button', { name: 'Retry related expenses' }))
+    expect(await within(section).findByText('-2 EUR')).toBeInTheDocument()
+    expect(section).toHaveTextContent('—')
+    expect(getRelatedExpenses).toHaveBeenNthCalledWith(2, 7, 1)
+    expect(getRelatedExpenses).toHaveBeenNthCalledWith(3, 7, 1)
+    expect(within(section).queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
+  })
+
+  it('recovers an initial failure without blocking details', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRelatedExpenses).mockRejectedValueOnce(new Error('Offline'))
+    render(<DialogHarness />)
+    await user.click(screen.getByRole('button', { name: 'Open transaction' }))
+    await user.click(await screen.findByRole('button', { name: 'Retry related expenses' }))
+    expect(await screen.findByText('No other expenses with this counterparty.')).toBeInTheDocument()
+    expect(getRelatedExpenses).toHaveBeenLastCalledWith(7, 0)
+  })
+
+  it('uses the latest source for missing-counterparty presentation when browsing old snapshots', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getTransactionVersions).mockResolvedValue([
+      firstVersion,
+      { versionNumber: 2, transaction: { ...fullTransaction, counterparty: ' \t' }, createdAt: null },
+    ])
+    render(<DialogHarness />)
+    await user.click(screen.getByRole('button', { name: 'Open transaction' }))
+    await user.click(await screen.findByRole('tab', { name: 'Original version' }))
+    expect(screen.getByText('Related expenses are unavailable because this transaction has no counterparty.')).toBeInTheDocument()
+    expect(getRelatedExpenses).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores closed and switched source requests and prevents duplicate loads', async () => {
+    const user = userEvent.setup()
+    let resolveFirst!: (value: Awaited<ReturnType<typeof getRelatedExpenses>>) => void
+    vi.mocked(getRelatedExpenses).mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve }))
+    function SwitchHarness() {
+      const [selected, setSelected] = useState<TransactionRecord | null>(fullTransaction)
+      const ref = useRef<HTMLButtonElement>(null)
+      return <><button ref={ref} onClick={() => setSelected({ ...fullTransaction, id: 99 })}>Switch source</button><TransactionDetailsDialog transaction={selected} openerRef={ref} onClose={() => setSelected(null)} /></>
+    }
+    render(<SwitchHarness />)
+    expect(screen.getByText('Loading related expenses…')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Switch source' }))
+    expect(await screen.findByText('No other expenses with this counterparty.')).toBeInTheDocument()
+    resolveFirst({ items: [{ id: 1, valueDate: null, amount: '-9999', currency: 'USD' }], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+    await user.click(screen.getByRole('button', { name: 'Close transaction details' }))
+    await user.click(screen.getByRole('button', { name: 'Switch source' }))
+    expect(await screen.findByText('No other expenses with this counterparty.')).toBeInTheDocument()
+    expect(screen.queryByText('-9,999 USD')).not.toBeInTheDocument()
+  })
+
+  it('ignores an in-flight response after closing and reopening the same source', async () => {
+    const user = userEvent.setup()
+    let finish!: (value: Awaited<ReturnType<typeof getRelatedExpenses>>) => void
+    vi.mocked(getRelatedExpenses).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    render(<DialogHarness />)
+    await user.click(screen.getByRole('button', { name: 'Open transaction' }))
+    expect(screen.getByText('Loading related expenses…')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Close transaction details' }))
+    await user.click(screen.getByRole('button', { name: 'Open transaction' }))
+    expect(await screen.findByText('No other expenses with this counterparty.')).toBeInTheDocument()
+    finish({ items: [{ id: 100, valueDate: null, amount: '-888', currency: 'EUR' }], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+    await user.click(screen.getByRole('button', { name: 'Edit transaction' }))
+    expect(screen.queryByText('-888 EUR')).not.toBeInTheDocument()
+  })
+
+  it('keeps rows visible and prevents duplicate requests during append loading', async () => {
+    const user = userEvent.setup()
+    const row = { id: 8, valueDate: null, amount: '-10', currency: 'EUR' }
+    let finish!: (value: Awaited<ReturnType<typeof getRelatedExpenses>>) => void
+    vi.mocked(getRelatedExpenses)
+      .mockResolvedValueOnce({ items: [row], page: 0, size: 20, totalElements: 21, totalPages: 2 })
+      .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    render(<DialogHarness />)
+    await user.click(screen.getByRole('button', { name: 'Open transaction' }))
+    const more = await screen.findByRole('button', { name: 'Load more' })
+    more.focus()
+    await user.keyboard('{Enter}')
+    expect(more).toBeDisabled()
+    expect(screen.getByText('Loading more expenses…')).toBeInTheDocument()
+    expect(screen.getByText('-10 EUR')).toBeInTheDocument()
+    fireEvent.click(more)
+    expect(getRelatedExpenses).toHaveBeenCalledTimes(2)
+    finish({ items: [], page: 1, size: 20, totalElements: 21, totalPages: 2 })
+    expect(await screen.findByText('-10 EUR')).toBeInTheDocument()
+  })
+
+  it('opens the latest related transaction in the same panel and retains the original opener', async () => {
+    const user = userEvent.setup()
+    const target = { ...fullTransaction, id: 8, description: 'Target expense', amount: '-42', category: 'Food' }
+    vi.mocked(getAssignedTransactionTags).mockImplementation(async (id) => id === 8 ? [{ id: 4, name: 'Travel' }] : [])
+    vi.mocked(getRelatedExpenses).mockImplementation(async (id) => ({
+      items: id === 7 ? [{ id: 8, valueDate: null, amount: '-42', currency: 'EUR' }] : [],
+      page: 0, size: 20, totalElements: id === 7 ? 1 : 0, totalPages: id === 7 ? 1 : 0,
+    }))
+    vi.mocked(getTransactionVersions).mockImplementation(async (id) => id === 7 ? [firstVersion] : [
+      { versionNumber: 2, transaction: target, createdAt: null },
+      { versionNumber: 1, transaction: { ...target, description: 'Old target' }, createdAt: null },
+    ])
+    render(<DialogHarness />)
+    const opener = screen.getByRole('button', { name: 'Open transaction' })
+    await user.click(opener)
+    const row = await screen.findByRole('button', { name: 'Open transaction: —, -42 EUR' })
+    const scroll = screen.getByRole('dialog').querySelector('.transaction-details-scroll')!
+    scroll.scrollTop = 240
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus')
+    row.focus()
+    await user.keyboard('{Enter}')
+    expect(await screen.findByText('Target expense', { selector: '.transaction-details-fields dd' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Tags' })).toHaveTextContent('Travel')
+    expect(getAssignedTransactionTags).toHaveBeenCalledWith(8)
+    expect(getRelatedExpenses).toHaveBeenLastCalledWith(8, 0)
+    expect(getTransactionVersions).toHaveBeenCalledTimes(2)
+    expect(getTransactionCategories).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('dialog').querySelector('.transaction-details-scroll')!.scrollTop).toBe(240)
+    expect(screen.queryByText('Loading categories and version history…')).not.toBeInTheDocument()
+    expect(screen.queryByText('Loading related expenses…')).not.toBeInTheDocument()
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true })
+    focus.mockRestore()
+    expect(screen.getByRole('heading', { name: 'Transaction details' })).toHaveFocus()
+    expect(screen.queryByText('Monthly rent')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Close transaction details' }))
+    expect(opener).toHaveFocus()
+    await user.click(opener)
+    expect(await screen.findByText('Monthly rent')).toBeInTheDocument()
+  })
+
+  it('retains the source on navigation failure, supports retry, and blocks navigation during editing', async () => {
+    const user = userEvent.setup()
+    const target = { ...fullTransaction, id: 8, description: 'Target expense' }
+    vi.mocked(getRelatedExpenses).mockResolvedValue({ items: [{ id: 8, valueDate: null, amount: '-42', currency: 'EUR' }], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+    vi.mocked(getTransactionVersions).mockResolvedValueOnce([firstVersion]).mockRejectedValueOnce(new Error('Cannot open target')).mockResolvedValue([{ versionNumber: 1, transaction: target, createdAt: null }])
+    render(<DialogHarness />)
+    await user.click(screen.getByRole('button', { name: 'Open transaction' }))
+    const row = await screen.findByRole('button', { name: 'Open transaction: —, -42 EUR' })
+    await user.click(screen.getByRole('button', { name: 'Edit transaction' }))
+    expect(row).toBeDisabled()
+    expect(screen.getByText('Save or cancel your changes before opening another transaction.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    await user.click(row)
+    expect(await screen.findByRole('alert')).toHaveTextContent('We could not open this transaction. Select it again to retry.')
+    expect(screen.getByText('Monthly rent')).toBeInTheDocument()
+    await user.click(row)
+    expect(await screen.findByText('Target expense')).toBeInTheDocument()
+  })
+
+  it('ignores a target-opening response after closing the panel', async () => {
+    const user = userEvent.setup()
+    let finish!: (history: TransactionVersion[]) => void
+    vi.mocked(getRelatedExpenses).mockResolvedValue({ items: [{ id: 8, valueDate: null, amount: '-42', currency: 'EUR' }], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+    vi.mocked(getTransactionVersions).mockResolvedValueOnce([firstVersion]).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve })).mockResolvedValue([firstVersion])
+    render(<DialogHarness />)
+    await user.click(screen.getByRole('button', { name: 'Open transaction' }))
+    const row = await screen.findByRole('button', { name: 'Open transaction: —, -42 EUR' })
+    await user.click(row)
+    expect(screen.getByText('Opening transaction…')).toBeInTheDocument()
+    expect(row).toHaveAttribute('aria-disabled', 'true')
+    await user.click(screen.getByRole('button', { name: 'Close transaction details' }))
+    await user.click(screen.getByRole('button', { name: 'Open transaction' }))
+    finish([{ versionNumber: 1, transaction: { ...fullTransaction, id: 8, description: 'Stale target' }, createdAt: null }])
+    await user.click(screen.getByRole('button', { name: 'Edit transaction' }))
+    expect(screen.queryByText('Stale target')).not.toBeInTheDocument()
+    expect(screen.getByText('Monthly rent')).toBeInTheDocument()
   })
 
   it('shows a save error while retaining the current transaction details', async () => {
