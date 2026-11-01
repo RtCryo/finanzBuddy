@@ -14,7 +14,7 @@ Documentation map: [UI implementation, capabilities, and history](../docs/README
 
 ## Prerequisites
 
-- Node.js 24+ (the production image uses `node:24-alpine`)
+- Node.js 26+ (the production image uses `node:26-alpine`)
 - npm
 - A running API Gateway at `http://localhost:8080` for local development (see the root [`docker-compose.yml`](../docker-compose.yml))
 

@@ -113,7 +113,7 @@ The gateway uses stateless Spring Security and BCrypt password hashing. `/auth/*
 | Database | PostgreSQL 18 in Docker Compose; H2 is used by the service test suites |
 | Object storage | SeaweedFS S3 gateway in Compose, accessed through the MinIO Java client |
 | Event transport | Apache Kafka 4.3.2 in single-node KRaft mode in the Compose stack |
-| UI runtime | Node 24 build stage and Nginx static runtime |
+| UI runtime | Node 26 build stage and Nginx static runtime |
 | Deployment | Docker Compose; optional production Traefik profile for HTTPS termination |
 
 The exact dependency versions and environment-variable defaults live in `ui/package.json`, the module POMs, `docker-compose.yml`, and the application configuration files.
