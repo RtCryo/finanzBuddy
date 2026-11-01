@@ -8,6 +8,7 @@ import {
   createPersonalTransactionCategory,
   getTransactionCategories,
   getTransactionVersions,
+  getRelatedExpenses,
   updateTransactionCategory,
 } from '../api/transactions'
 import { DocumentDetailPage } from './DocumentDetailPage'
@@ -21,6 +22,7 @@ vi.mock('../api/transactions', () => ({
   createPersonalTransactionCategory: vi.fn(),
   getTransactionCategories: vi.fn(),
   getTransactionVersions: vi.fn(),
+  getRelatedExpenses: vi.fn(),
   updateTransactionCategory: vi.fn(),
 }))
 
@@ -57,6 +59,7 @@ function renderDetail() {
 
 describe('DocumentDetailPage', () => {
   beforeEach(() => {
+    vi.mocked(getRelatedExpenses).mockResolvedValue({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
     vi.mocked(getDocument).mockReset()
     vi.mocked(getDocumentTransactions).mockReset()
     vi.mocked(getTransactionCategories).mockResolvedValue(['Food', 'Shopping'])
@@ -70,6 +73,50 @@ describe('DocumentDetailPage', () => {
     })
     URL.createObjectURL = vi.fn(() => 'blob:mock')
     URL.revokeObjectURL = vi.fn()
+  })
+
+
+  it.each(['existing', 'personal'])('preserves the original session when saving a %s category on a related expense', async (mode) => {
+    vi.mocked(getDocument).mockResolvedValue(processedDocument)
+    vi.mocked(getDocumentTransactions).mockResolvedValue([transaction])
+    const user = userEvent.setup()
+    const target = { ...transaction, id: 99, amount: '-42', description: 'Related expense' }
+    const updated = { ...target, category: mode === 'personal' ? 'Travel' : 'Food' }
+    let saved = false
+    vi.mocked(getTransactionVersions).mockImplementation(async (id) => id === transaction.id
+      ? [{ versionNumber: 1, transaction, createdAt: null }]
+      : [{ versionNumber: 1, transaction: target, createdAt: null }, ...(saved
+        ? [{ versionNumber: 2, transaction: updated, createdAt: null }]
+        : [])])
+    vi.mocked(getRelatedExpenses).mockImplementation(async (id) => ({
+      items: id === transaction.id ? [target] : [], page: 0, size: 20,
+      totalElements: id === transaction.id ? 1 : 0, totalPages: id === transaction.id ? 1 : 0,
+    }))
+    vi.mocked(updateTransactionCategory).mockImplementation(async () => { saved = true; return updated })
+    vi.mocked(createPersonalTransactionCategory).mockImplementation(async () => { saved = true; return { name: updated.category, transaction: updated } })
+    renderDetail()
+    const opener = await screen.findByRole('button', { name: 'View transaction details: ' + transaction.description })
+    await user.click(opener)
+    await user.click(await screen.findByRole('button', { name: /Open transaction:.*-42/ }))
+    const dialog = screen.getByRole('dialog')
+    const scroll = dialog.querySelector('.transaction-details-scroll')!
+    scroll.scrollTop = 240
+    const relatedCalls = vi.mocked(getRelatedExpenses).mock.calls.length
+    const categoryCalls = vi.mocked(getTransactionCategories).mock.calls.length
+    await user.click(screen.getByRole('button', { name: 'Edit transaction' }))
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Transaction category' }), mode === 'personal' ? '__create_category__' : 'Food')
+    if (mode === 'personal') await user.type(screen.getByRole('textbox', { name: 'New personal category' }), 'Travel')
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await screen.findByRole('tab', { name: 'Version 2, current' })
+    expect(dialog.querySelector('.transaction-details-scroll')).toBe(scroll)
+    expect(scroll.scrollTop).toBe(240)
+    expect(within(dialog).getByText(updated.category, { selector: '.transaction-details-fields dd' })).toBeInTheDocument()
+    expect(getRelatedExpenses).toHaveBeenCalledTimes(relatedCalls)
+    expect(getTransactionCategories).toHaveBeenCalledTimes(categoryCalls)
+    await user.click(screen.getByRole('button', { name: 'Close transaction details' }))
+    expect(opener).toHaveFocus()
+    await user.click(opener)
+    expect(within(screen.getByRole('dialog')).getByText(transaction.description, { selector: '.transaction-details-fields dd' })).toBeInTheDocument()
   })
 
   afterEach(() => {
@@ -177,6 +224,7 @@ describe('DocumentDetailPage', () => {
   })
 
   it('closes document transaction details to the activating row without changing the transaction list', async () => {
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 480 })
     vi.mocked(getDocument).mockResolvedValue(processedDocument)
     vi.mocked(getDocumentTransactions).mockResolvedValue([transaction])
     const user = userEvent.setup()
@@ -186,11 +234,14 @@ describe('DocumentDetailPage', () => {
     const row = screen.getByRole('row', { name: /Book purchase/ })
     await user.click(within(row).getByText('Book purchase'))
     expect(row).toHaveClass('transaction-row-selected')
+    expect(await screen.findByText('No other expenses with this counterparty.')).toBeInTheDocument()
+    expect(getRelatedExpenses).toHaveBeenCalledWith(transaction.id, 0)
     await user.click(screen.getByRole('button', { name: 'Close transaction details' }))
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(row).not.toHaveClass('transaction-row-selected')
     expect(action).toHaveFocus()
+    expect(window.scrollY).toBe(480)
     expect(screen.getByRole('table', { name: 'Document transactions' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'View transaction details: Book purchase' })).toBeInTheDocument()
     expect(getDocumentTransactions).toHaveBeenCalledTimes(1)

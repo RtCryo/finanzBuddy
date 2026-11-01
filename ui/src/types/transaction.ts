@@ -15,6 +15,16 @@ export type TransactionVersion = {
   createdAt: string | null
 }
 
+export type RelatedExpense = Pick<TransactionRecord, 'id' | 'valueDate' | 'amount' | 'currency'>
+
+export type RelatedExpensePage = {
+  items: RelatedExpense[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
 export type PersonalCategoryCreateResponse = {
   name: string
   transaction: TransactionRecord

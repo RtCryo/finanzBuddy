@@ -244,6 +244,66 @@ class TransactionReadRepositoryTest {
         assertThat(repository.findHistoryCategories(7L)).contains("Food", "Housing", "Income");
     }
 
+    @Test
+    void relatedExpensesUseExactLatestValuesAndDeterministicOwnerScopedPages() {
+        jdbcTemplate.update("INSERT INTO documents VALUES (4, 7, 'PROCESSED')");
+        jdbcTemplate.update("UPDATE transactions SET counterparty = 'Shop', amount = -10");
+        insertTransaction(6, 4, 7, DateValue.of("2024-03-20"), "Shop", "", "");
+        insertTransaction(7, 4, 7, DateValue.of("2024-03-20"), "Shop", "", "");
+        insertTransaction(8, 4, 7, null, "Shop", "", "");
+        insertTransaction(9, 4, 7, null, "shop", "", "");
+        insertTransaction(10, 4, 7, null, "Shop ", "", "");
+        insertTransaction(11, 4, 7, null, " Shop", "", "");
+        insertTransaction(12, 4, 7, null, "Shop extra", "", "");
+        insertTransaction(13, 4, 8, null, "Shop", "", "");
+        insertTransaction(14, 3, 7, null, "Shop", "", "");
+        insertTransaction(15, 4, 7, null, "Shop", "", "");
+        insertTransaction(16, 4, 7, null, "Shop", "", "");
+        jdbcTemplate.update("UPDATE transactions SET amount = -20 WHERE id >= 6");
+        jdbcTemplate.update("UPDATE transactions SET amount = 0 WHERE id = 15");
+        jdbcTemplate.update("UPDATE transactions SET amount = NULL WHERE id = 16");
+        // The source and candidate both resolve their newest full snapshot.
+        jdbcTemplate.update("UPDATE transactions SET counterparty = 'Old shop' WHERE id IN (1, 6)");
+        for (int version = 1; version <= 2; version++) {
+            jdbcTemplate.update(
+                    "INSERT INTO transaction_versions"
+                            + " (transaction_id, document_id, user_id, version_number, value_date, amount, currency, counterparty)"
+                            + " VALUES (1, 1, 7, ?, NULL, 10, 'EUR', ?)",
+                    version,
+                    version == 1 ? "Old shop" : "Shop");
+            jdbcTemplate.update(
+                    "INSERT INTO transaction_versions"
+                            + " (transaction_id, document_id, user_id, version_number, value_date, amount, currency, counterparty)"
+                            + " VALUES (6, 4, 7, ?, DATE '2024-03-20', -30, 'USD', ?)",
+                    version,
+                    version == 1 ? "Old shop" : "Shop");
+        }
+        jdbcTemplate.update("UPDATE transactions SET amount = 2 WHERE id = 2");
+        assertThat(repository.findOwnedProcessedSource(7L, 1L).orElseThrow().counterparty())
+                .isEqualTo("Shop");
+        for (long id : new long[] {4, 5, 13, 14, 999}) {
+            assertThat(repository.findOwnedProcessedSource(7L, id)).isEmpty();
+        }
+        var first = repository.findRelatedExpenses(7L, 1L, "Shop", PageRequest.of(0, 2));
+        var second = repository.findRelatedExpenses(7L, 1L, "Shop", PageRequest.of(1, 2));
+        assertThat(first.getTotalElements()).isEqualTo(4);
+        assertThat(first.getContent()).extracting("id").containsExactly(6L, 7L);
+        assertThat(first.getContent().getFirst().currency()).isEqualTo("USD");
+        assertThat(second.getContent()).extracting("id").containsExactly(3L, 8L);
+        assertThat(
+                        repository
+                                .findRelatedExpenses(7L, 1L, "Shop", PageRequest.of(2, 2))
+                                .getContent())
+                .isEmpty();
+        for (String blank : new String[] {null, "", " \t"}) {
+            assertThat(
+                            repository
+                                    .findRelatedExpenses(7L, 1L, blank, PageRequest.of(0, 20))
+                                    .getTotalElements())
+                    .isZero();
+        }
+    }
+
     private void insertTransaction(
             long id,
             long documentId,

@@ -3,11 +3,20 @@ import {
   createPersonalTransactionCategory,
   getTransactionCategories,
   getTransactionVersions,
+  getRelatedExpenses,
   updateTransactionCategory,
 } from '../api/transactions'
 import { getErrorMessage } from '../api/errors'
 import { formatDateOnly, formatInstant, formatTransactionCategory, formatTransactionText } from '../format'
-import type { TransactionRecord, TransactionVersion } from '../types/transaction'
+import type { RelatedExpense, RelatedExpensePage, TransactionRecord, TransactionVersion } from '../types/transaction'
+
+type PreparedTransaction = {
+  transaction: TransactionRecord
+  versions: TransactionVersion[]
+  related: RelatedExpensePage
+  categories: string[]
+  scrollTop: number
+}
 
 type TransactionDetailsDialogProps = {
   transaction: TransactionRecord | null
@@ -69,7 +78,7 @@ export function TransactionDetailsDialog({ transaction, openerRef, onClose, onSa
       }}
     >
       {transaction && (
-        <TransactionDetailsContent
+        <TransactionDetailsSession
           key={transaction.id}
           transaction={transaction}
           onSaved={onSaved}
@@ -80,31 +89,63 @@ export function TransactionDetailsDialog({ transaction, openerRef, onClose, onSa
   )
 }
 
-function TransactionDetailsContent({
-  transaction,
-  onSaved,
-  closeDialog,
-}: {
+function TransactionDetailsSession(props: {
   transaction: TransactionRecord
   onSaved?: (transaction: TransactionRecord) => void
   closeDialog: () => void
 }) {
+  const [prepared, setPrepared] = useState<PreparedTransaction | null>(null)
+  const current = prepared?.transaction ?? props.transaction
+  return <TransactionDetailsContent
+    key={current.id}
+    transaction={current}
+    prepared={prepared}
+    onNavigate={setPrepared}
+    onSaved={(updated) => {
+      setPrepared((current) => current ? { ...current, transaction: updated } : current)
+      props.onSaved?.(updated)
+    }}
+    closeDialog={props.closeDialog}
+  />
+}
+
+function TransactionDetailsContent({
+  transaction,
+  onSaved,
+  closeDialog,
+  onNavigate,
+  prepared,
+}: {
+  transaction: TransactionRecord
+  onSaved?: (transaction: TransactionRecord) => void
+  closeDialog: () => void
+  onNavigate: (transaction: PreparedTransaction) => void
+  prepared: PreparedTransaction | null
+}) {
   const transactionId = transaction.id
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = prepared?.scrollTop ?? 0
+    if (headingRef.current?.closest('dialog')?.open) headingRef.current.focus({ preventScroll: true })
+  }, [transactionId, prepared?.scrollTop])
   const createCategoryOption = '__create_category__'
-  const [categories, setCategories] = useState<string[]>([])
-  const [versions, setVersions] = useState<TransactionVersion[]>([])
-  const [selectedVersionIndex, setSelectedVersionIndex] = useState(-1)
+  const [categories, setCategories] = useState<string[]>(prepared?.categories ?? [])
+  const [versions, setVersions] = useState<TransactionVersion[]>(prepared?.versions ?? [])
+  const [selectedVersionIndex, setSelectedVersionIndex] = useState((prepared?.versions.length ?? 0) - 1)
   const [isEditing, setIsEditing] = useState(false)
+  const [isOpeningTarget, setIsOpeningTarget] = useState(false)
   const [category, setCategory] = useState(transaction.category ?? '')
   const [isCreatingCategory, setIsCreatingCategory] = useState(false)
   const [newCategory, setNewCategory] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(!prepared)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
   const versionTabsRef = useRef<HTMLDivElement>(null)
   const [versionIndicator, setVersionIndicator] = useState({ offset: 0, width: 0 })
 
   useEffect(() => {
+    if (prepared) return
     let isCurrent = true
     Promise.all([getTransactionCategories(), getTransactionVersions(transactionId)])
       .then(([availableCategories, history]) => {
@@ -125,7 +166,7 @@ function TransactionDetailsContent({
     return () => {
       isCurrent = false
     }
-  }, [transactionId])
+  }, [transactionId, prepared])
 
   const latestVersionIndex = versions.length - 1
   const displayedTransaction = versions[selectedVersionIndex]?.transaction ?? transaction
@@ -227,12 +268,12 @@ function TransactionDetailsContent({
   return (
     <div className="transaction-details-content">
       <div className="transaction-details-heading">
-        <h2 id="transaction-details-title">{isEditing ? 'Edit transaction' : 'Transaction details'}</h2>
+        <h2 ref={headingRef} tabIndex={-1} id="transaction-details-title">{isEditing ? 'Edit transaction' : 'Transaction details'}</h2>
         {!isEditing && isLatestVersion && (
           <button className="button button-secondary" type="button" onClick={() => {
             setCategory(displayedTransaction.category ?? '')
             setIsEditing(true)
-          }} disabled={isLoading}>
+          }} disabled={isLoading || isOpeningTarget}>
             Edit transaction
           </button>
         )}
@@ -240,7 +281,7 @@ function TransactionDetailsContent({
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15" /></svg>
         </button>
       </div>
-      <div className="transaction-details-scroll">
+      <div ref={scrollRef} className="transaction-details-scroll">
         <div className="transaction-details-summary">
           <div>
             <p>Counterparty</p>
@@ -357,6 +398,14 @@ function TransactionDetailsContent({
             </div>
           </dl>
         </section>
+        <RelatedExpenses
+          onNavigate={(target) => onNavigate({ ...target, categories, scrollTop: scrollRef.current?.scrollTop ?? 0 })}
+          initialPage={prepared?.related}
+          navigationDisabled={isEditing}
+          onOpeningChange={setIsOpeningTarget}
+          transactionId={transactionId}
+          counterparty={(versions[latestVersionIndex]?.transaction ?? transaction).counterparty}
+        />
         {isLoading && <p className="transaction-history-loading" role="status">Loading categories and version history…</p>}
         {error && <p className="notice notice-error transaction-details-error" role="alert">{error}</p>}
       </div>
@@ -374,6 +423,120 @@ function TransactionDetailsContent({
         </div>
       )}
     </div>
+  )
+}
+
+function RelatedExpenses({ transactionId, counterparty, onNavigate, navigationDisabled, onOpeningChange, initialPage }: {
+  transactionId: number
+  counterparty: string | null
+  onNavigate: (transaction: Omit<PreparedTransaction, 'categories' | 'scrollTop'>) => void
+  initialPage?: RelatedExpensePage
+  navigationDisabled: boolean
+  onOpeningChange: (opening: boolean) => void
+}) {
+  const [rows, setRows] = useState<RelatedExpense[]>(initialPage?.items ?? [])
+  const [nextPage, setNextPage] = useState(initialPage ? initialPage.page + 1 : 0)
+  const [hasMore, setHasMore] = useState(initialPage ? initialPage.page + 1 < initialPage.totalPages : false)
+  const [loading, setLoading] = useState(!initialPage)
+  const [error, setError] = useState('')
+  const lifecycle = useRef<AbortController | null>(null)
+  const pending = useRef(false)
+  const navigating = useRef(false)
+  const [openingId, setOpeningId] = useState<number | null>(null)
+  const [navigationError, setNavigationError] = useState('')
+
+  async function openExpense(id: number) {
+    if (navigating.current || navigationDisabled) return
+    const signal = lifecycle.current?.signal
+    navigating.current = true
+    onOpeningChange(true)
+    setOpeningId(id)
+    setNavigationError('')
+    try {
+      const [history, related] = await Promise.all([getTransactionVersions(id), getRelatedExpenses(id, 0)])
+      if (signal?.aborted) return
+      const ordered = [...history].sort((a, b) => a.versionNumber - b.versionNumber)
+      const latest = ordered[ordered.length - 1]
+      if (!latest) throw new Error('This transaction is unavailable. Please try again.')
+      onNavigate({ transaction: latest.transaction, versions: ordered, related })
+    } catch (requestError) {
+      if (!signal?.aborted) setNavigationError(getErrorMessage(requestError, 'We could not open this transaction. Select it again to retry.'))
+    } finally {
+      if (!signal?.aborted) {
+        navigating.current = false
+        onOpeningChange(false)
+        setOpeningId(null)
+      }
+    }
+  }
+
+  async function load(page: number, signal = lifecycle.current?.signal) {
+    if (pending.current) return
+    pending.current = true
+    setLoading(true)
+    setError('')
+    try {
+      const result = await getRelatedExpenses(transactionId, page)
+      if (signal?.aborted) return
+      setRows((current) => page === 0 ? result.items : [...current, ...result.items])
+      setNextPage(result.page + 1)
+      setHasMore(result.page + 1 < result.totalPages)
+    } catch (requestError) {
+      if (!signal?.aborted) {
+        setError(getErrorMessage(requestError, 'We could not load related expenses. Please try again.'))
+      }
+    } finally {
+      if (!signal?.aborted) {
+        pending.current = false
+        setLoading(false)
+      }
+    }
+  }
+
+  useEffect(() => {
+    const controller = new AbortController()
+    lifecycle.current = controller
+    pending.current = false
+    if (!initialPage) void load(0, controller.signal)
+    return () => { controller.abort() }
+    // The enclosing content is keyed by source ID; snapshot selection never reloads this set.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactionId])
+
+  return (
+    <section className="transaction-details-section related-expenses" aria-label="Other expenses with this counterparty">
+      <h3>Other expenses with this counterparty</h3>
+      {!counterparty?.trim() ? <p>Related expenses are unavailable because this transaction has no counterparty.</p> : (
+        <>
+          {rows.length > 0 && (
+            <ul className="related-expense-list">
+              {rows.map((row) => (
+                <li key={row.id}>
+                  <button className="related-expense-row" type="button"
+                    aria-label={`Open transaction: ${formatDateOnly(row.valueDate)}, ${formatTransactionAmount(row.amount)} ${row.currency || '—'}`}
+                    disabled={navigationDisabled}
+                    aria-disabled={openingId !== null || navigationDisabled}
+                    aria-busy={openingId === row.id}
+                    onClick={() => void openExpense(row.id)}>
+                    <span>{formatDateOnly(row.valueDate)}</span>
+                    <strong>{formatTransactionAmount(row.amount)} {row.currency || '—'}</strong>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {loading && <p role="status">{rows.length ? 'Loading more expenses…' : 'Loading related expenses…'}</p>}
+          {!loading && !error && rows.length === 0 && <p>No other expenses with this counterparty.</p>}
+          {error && <p className="notice notice-error" role="alert">{error}</p>}
+          {openingId !== null && <span className="visually-hidden" role="status">Opening transaction…</span>}
+          {navigationError && <p className="notice notice-error" role="alert">{navigationError}</p>}
+          {navigationDisabled && rows.length > 0 && <p>Save or cancel your changes before opening another transaction.</p>}
+          {error
+            ? <button className="button button-secondary" type="button" onClick={() => void load(nextPage)} disabled={loading}>Retry related expenses</button>
+            : hasMore && <button className="button button-secondary" type="button" onClick={() => void load(nextPage)} disabled={loading}>Load more</button>}
+        </>
+      )}
+    </section>
   )
 }
 

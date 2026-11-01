@@ -2,6 +2,7 @@ package com.finanzbuddy.api.document.controller;
 
 import com.finanzbuddy.api.document.dto.PersonalCategoryCreateRequest;
 import com.finanzbuddy.api.document.dto.PersonalCategoryResponse;
+import com.finanzbuddy.api.document.dto.RelatedExpensePageResponse;
 import com.finanzbuddy.api.document.dto.TransactionCategoryUpdateRequest;
 import com.finanzbuddy.api.document.dto.TransactionHistoryResponse;
 import com.finanzbuddy.api.document.dto.TransactionResponse;
@@ -78,6 +79,23 @@ public class TransactionController {
                         sortField,
                         normalizedDirection);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/related-expenses")
+    public ResponseEntity<RelatedExpensePageResponse> relatedExpenses(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        if (page < 0 || size < 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Page must be non-negative and size must be positive");
+        }
+        return ResponseEntity.ok(
+                documentService.getRelatedExpenses(
+                        userDetails.getUsername(),
+                        id,
+                        PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE))));
     }
 
     @GetMapping("/categories")
