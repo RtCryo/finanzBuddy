@@ -4,15 +4,15 @@ import com.finanzbuddy.api.document.dto.PersonalCategoryCreateRequest;
 import com.finanzbuddy.api.document.dto.PersonalCategoryResponse;
 import com.finanzbuddy.api.document.dto.RelatedExpensePageResponse;
 import com.finanzbuddy.api.document.dto.TransactionCategoryUpdateRequest;
+import com.finanzbuddy.api.document.dto.TransactionEditRequest;
+import com.finanzbuddy.api.document.dto.TransactionEditResponse;
 import com.finanzbuddy.api.document.dto.TransactionHistoryResponse;
 import com.finanzbuddy.api.document.dto.TransactionResponse;
+import com.finanzbuddy.api.document.dto.TransactionTag;
 import com.finanzbuddy.api.document.dto.TransactionVersionResponse;
 import com.finanzbuddy.api.document.service.DocumentService;
 import com.finanzbuddy.api.document.service.TransactionCategoryService;
 import com.finanzbuddy.api.document.service.TransactionTagService;
-import com.finanzbuddy.api.document.dto.TransactionTag;
-import com.finanzbuddy.api.document.dto.TransactionEditRequest;
-import com.finanzbuddy.api.document.dto.TransactionEditResponse;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -45,7 +45,8 @@ public class TransactionController {
 
     public TransactionController(
             DocumentService documentService,
-            TransactionCategoryService transactionCategoryService, TransactionTagService tagService) {
+            TransactionCategoryService transactionCategoryService,
+            TransactionTagService tagService) {
         this.documentService = documentService;
         this.transactionCategoryService = transactionCategoryService;
         this.tagService = tagService;
@@ -97,13 +98,16 @@ public class TransactionController {
     }
 
     @GetMapping("/{id}/tags")
-    public List<TransactionTag> assignedTags(@AuthenticationPrincipal UserDetails user, @PathVariable long id) {
+    public List<TransactionTag> assignedTags(
+            @AuthenticationPrincipal UserDetails user, @PathVariable long id) {
         return tagService.assigned(user.getUsername(), id);
     }
 
     @PutMapping("/{id}")
-    public TransactionEditResponse editTransaction(@AuthenticationPrincipal UserDetails user,
-            @PathVariable long id, @RequestBody TransactionEditRequest request) {
+    public TransactionEditResponse editTransaction(
+            @AuthenticationPrincipal UserDetails user,
+            @PathVariable long id,
+            @RequestBody TransactionEditRequest request) {
         return tagService.save(user.getUsername(), id, request);
     }
 

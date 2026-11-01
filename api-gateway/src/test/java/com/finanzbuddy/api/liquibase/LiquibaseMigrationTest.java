@@ -147,18 +147,25 @@ class LiquibaseMigrationTest {
     @Test
     void tagTablesHaveOwnerConsistentConstraintsAndIndexes() {
         assertThat(columnNullability("PERSONAL_TRANSACTION_TAGS"))
-                .containsEntry("USER_ID", "NO").containsEntry("NORMALIZED_NAME", "NO");
-        assertThat(columnNullability("TRANSACTION_TAG_ASSIGNMENTS").values())
-                .containsOnly("NO");
-        assertThat(jdbcTemplate.queryForList(
-                "SELECT UPPER(constraint_name) FROM information_schema.table_constraints"
-                        + " WHERE UPPER(table_name) IN ('PERSONAL_TRANSACTION_TAGS', 'TRANSACTION_TAG_ASSIGNMENTS')",
-                String.class))
-                .contains("UK_TAGS_OWNER_NAME", "FK_TAGS_USER", "FK_ASSIGNMENTS_OWNER_TAG",
-                        "FK_ASSIGNMENTS_OWNER_DOCUMENT", "PK_TRANSACTION_TAG_ASSIGNMENTS");
-        assertThat(jdbcTemplate.queryForList(
-                "SELECT UPPER(index_name) FROM information_schema.indexes"
-                        + " WHERE UPPER(table_name) = 'TRANSACTION_TAG_ASSIGNMENTS'", String.class))
+                .containsEntry("USER_ID", "NO")
+                .containsEntry("NORMALIZED_NAME", "NO");
+        assertThat(columnNullability("TRANSACTION_TAG_ASSIGNMENTS").values()).containsOnly("NO");
+        assertThat(
+                        jdbcTemplate.queryForList(
+                                "SELECT UPPER(constraint_name) FROM information_schema.table_constraints"
+                                        + " WHERE UPPER(table_name) IN ('PERSONAL_TRANSACTION_TAGS', 'TRANSACTION_TAG_ASSIGNMENTS')",
+                                String.class))
+                .contains(
+                        "UK_TAGS_OWNER_NAME",
+                        "FK_TAGS_USER",
+                        "FK_ASSIGNMENTS_OWNER_TAG",
+                        "FK_ASSIGNMENTS_OWNER_DOCUMENT",
+                        "PK_TRANSACTION_TAG_ASSIGNMENTS");
+        assertThat(
+                        jdbcTemplate.queryForList(
+                                "SELECT UPPER(index_name) FROM information_schema.indexes"
+                                        + " WHERE UPPER(table_name) = 'TRANSACTION_TAG_ASSIGNMENTS'",
+                                String.class))
                 .contains("IDX_ASSIGNMENTS_OWNER_TAG_TRANSACTION");
     }
 

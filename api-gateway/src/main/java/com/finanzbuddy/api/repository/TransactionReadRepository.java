@@ -104,14 +104,32 @@ public class TransactionReadRepository {
             String sortField,
             String sortDirection,
             Pageable pageable) {
-        return findHistory(userId, query, from, to, category, sortField, sortDirection, pageable,
-                List.of(), "AND");
+        return findHistory(
+                userId,
+                query,
+                from,
+                to,
+                category,
+                sortField,
+                sortDirection,
+                pageable,
+                List.of(),
+                "AND");
     }
 
-    public Page<TransactionResponse> findHistory(Long userId, String query, LocalDate from,
-            LocalDate to, String category, String sortField, String sortDirection, Pageable pageable,
-            List<Long> selectedTagIds, String tagMode) {
-        if (!List.of("AND", "OR").contains(tagMode)) throw new IllegalArgumentException("Unsupported tag mode");
+    public Page<TransactionResponse> findHistory(
+            Long userId,
+            String query,
+            LocalDate from,
+            LocalDate to,
+            String category,
+            String sortField,
+            String sortDirection,
+            Pageable pageable,
+            List<Long> selectedTagIds,
+            String tagMode) {
+        if (!List.of("AND", "OR").contains(tagMode))
+            throw new IllegalArgumentException("Unsupported tag mode");
         List<Long> tagIds = selectedTagIds.stream().distinct().toList();
         StringBuilder where = new StringBuilder(baseHistoryQuery());
         List<Object> parameters = new ArrayList<>();
@@ -144,10 +162,14 @@ public class TransactionReadRepository {
         }
 
         if (!tagIds.isEmpty()) {
-            String placeholders = String.join(",", java.util.Collections.nCopies(tagIds.size(), "?"));
-            where.append(" AND (SELECT COUNT(DISTINCT a.tag_id) FROM transaction_tag_assignments a"
-                    + " WHERE a.user_id = t.user_id AND a.transaction_id = t.id"
-                    + " AND a.document_id = t.document_id AND a.tag_id IN (" + placeholders + "))");
+            String placeholders =
+                    String.join(",", java.util.Collections.nCopies(tagIds.size(), "?"));
+            where.append(
+                    " AND (SELECT COUNT(DISTINCT a.tag_id) FROM transaction_tag_assignments a"
+                            + " WHERE a.user_id = t.user_id AND a.transaction_id = t.id"
+                            + " AND a.document_id = t.document_id AND a.tag_id IN ("
+                            + placeholders
+                            + "))");
             parameters.addAll(tagIds);
             if (tagMode.equals("AND")) {
                 where.append(" = ?");
