@@ -50,7 +50,7 @@ The system SHALL provide an authenticated transaction history page listing norma
 - **THEN** the page displays an empty state indicating that no transactions are available
 
 ### Requirement: Transaction history can be filtered
-The system SHALL allow the user to filter transaction history by a text query matching description or counterparty, an inclusive value-date range, and category. Filters SHALL be combinable, and changing filters SHALL update the displayed results.
+The system SHALL allow the user to filter transaction history by a text query matching description or counterparty, an inclusive value-date range, category, and multiple personal tags with an explicit AND/all or OR/any mode. Filters SHALL be combinable, and changing filters SHALL update the displayed results.
 
 #### Scenario: Search transactions
 - **WHEN** the user enters a text query
@@ -71,6 +71,14 @@ The system SHALL allow the user to filter transaction history by a text query ma
 #### Scenario: Clear filters
 - **WHEN** the user clears the active filters
 - **THEN** the page displays the unfiltered transaction history again
+
+#### Scenario: Filter by multiple tags
+- **WHEN** the user selects several personal tags and chooses all or any matching
+- **THEN** results satisfy the selected tag condition combined with other filters, reset to page one, and keep tags out of table rows
+
+#### Scenario: Clear tag filters
+- **WHEN** the user activates Clear filters
+- **THEN** all tag selections and other filters are cleared and tag matching returns to AND
 
 ### Requirement: Transaction history is private to its owner
 The system SHALL return transaction history only for the authenticated user, regardless of any client-supplied identifiers or filter values.
@@ -162,9 +170,9 @@ The transaction-history table SHALL style positive amounts with a soft green fro
 - **THEN** its amount uses neutral styling
 
 ### Requirement: Users can open transaction details from transaction lists
-The system SHALL let users open a right-side panel with the selected transaction's available normalized fields from both the transaction-history list and a processed document's transaction list. The panel SHALL initially be a read-only inspection view showing booking date, value date, amount, currency, counterparty, description, and category, representing unavailable values consistently with the corresponding list. Category SHALL appear as a plain text value, not as a chip or active control. The user SHALL enter edit mode only by activating a generic "Edit transaction" action. In this change, only the category field SHALL become editable; other transaction details SHALL remain read-only. Editing SHALL apply to the latest version only.
+The system SHALL let users open a right-side panel with the selected transaction's available normalized fields from both the transaction-history list and a processed document's transaction list. The panel SHALL initially be a read-only inspection view showing booking date, value date, amount, currency, counterparty, description, and category, representing unavailable values consistently with the corresponding list. Category SHALL appear as a plain text value, not as a chip or active control. The user SHALL enter edit mode only by activating a generic "Edit transaction" action. The category and current tag set SHALL become editable; other transaction details SHALL remain read-only. Current tags SHALL appear as chips, with an empty chip area when none are assigned. Tag additions, inline creation, and removal SHALL be available only in edit mode and committed through the same Save changes action. Editing SHALL apply to the latest version only.
 
-The category control in edit mode SHALL offer the user's available categories and an in-control option to create a personal category. Choosing that option SHALL reveal a category-name input within the same editor. The user SHALL commit category selection or creation with one generic "Save changes" action, or discard unsaved changes with "Cancel"; the panel SHALL NOT expose category-specific save or create actions. Creating a personal category and assigning it SHALL be committed atomically with the transaction version.
+The category control in edit mode SHALL offer the user's available categories and an in-control option to create a personal category. Choosing that option SHALL reveal a category-name input within the same editor. The user SHALL commit category selection or creation and tag edits with one generic "Save changes" action, or discard unsaved changes with "Cancel"; the panel SHALL NOT expose category-specific save or create actions. Creating a personal category and assigning it SHALL be committed atomically with the transaction version and any tag edits. Tag-only changes SHALL NOT create versions. Cancel or closing the editor SHALL discard all unsaved category and tag drafts.
 
 When a transaction has one version, the panel SHALL NOT display a version selector or comparison section. When it has multiple versions, the panel SHALL provide a compact chronological version selector, default to the latest version, and display the selected snapshot in the details view. For every selected version after the original, the panel SHALL show changed fields and their old/new values compared with the immediately older version. The original version SHALL be identified as imported and SHALL have no comparison section. Historical versions SHALL be read-only, and edit mode SHALL be available only for the latest version. Opening and closing the panel SHALL preserve the current list, filters, sorting, pagination, and scroll position.
 
@@ -189,7 +197,7 @@ When a transaction has one version, the panel SHALL NOT display a version select
 
 #### Scenario: Enter transaction edit mode
 - **WHEN** the user activates "Edit transaction" while viewing the latest version
-- **THEN** the category field becomes editable, the remaining fields stay read-only, and generic "Save changes" and "Cancel" actions are shown
+- **THEN** the category and tag set become editable, the remaining fields stay read-only, and generic "Save changes" and "Cancel" actions are shown
 
 #### Scenario: Edit a transaction category
 - **WHEN** the user selects a different existing category in edit mode and activates "Save changes"
@@ -201,7 +209,7 @@ When a transaction has one version, the panel SHALL NOT display a version select
 
 #### Scenario: Cancel transaction edits
 - **WHEN** the user changes the category or enters a new category name and activates "Cancel"
-- **THEN** no category or version is saved and the panel returns to read-only details
+- **THEN** no category, tag, assignment, or version is saved and the panel returns to read-only details
 
 #### Scenario: Close transaction details and continue browsing
 - **WHEN** the user closes the panel using its close control or the Escape key
@@ -210,6 +218,26 @@ When a transaction has one version, the panel SHALL NOT display a version select
 #### Scenario: Open transaction details using the keyboard
 - **WHEN** the user navigates to a transaction in either list using the keyboard and activates it
 - **THEN** the same transaction-details panel opens with an accessible name and keyboard-operable close behavior
+
+#### Scenario: Add and remove tags in edit mode
+- **WHEN** the owner enters Edit transaction, selects existing tags or creates a new tag, removes a selected tag, and saves
+- **THEN** the saved current tag set is shown as chips and is available when details are reopened from either transaction list
+
+#### Scenario: Save tags for an uncategorized transaction
+- **WHEN** the owner changes only tags on an uncategorized transaction and saves
+- **THEN** tags persist without requiring a category or creating a version
+
+#### Scenario: Failed editor save
+- **WHEN** saving category or tag edits fails
+- **THEN** no partial edit is committed, drafts remain available, and an accessible error allows retry
+
+#### Scenario: Show current tags alongside an older snapshot
+- **WHEN** the owner selects a historical version
+- **THEN** current tags are shown separately as current metadata, remain read-only, and are excluded from snapshot comparisons
+
+#### Scenario: Return from details after a tag-filtered row disappears
+- **WHEN** saved tag edits make the open transaction cease matching the active filters and the owner closes details
+- **THEN** results and counts refresh with existing filters and sorting preserved, pagination is clamped if necessary, and focus returns to a stable list control when the opener is unavailable
 
 ### Requirement: Transaction version history preserves the original and every category edit
 The system SHALL preserve an initial full snapshot of each transaction and create a new full snapshot after each successful category change. A snapshot SHALL include the transaction's booking date, value date, amount, currency, counterparty, description, and category. Historical snapshots SHALL remain unchanged and read-only, and the current transaction SHALL be the newest version.
@@ -331,8 +359,8 @@ The related-expense API SHALL require authentication and verify that the source 
 ## Related implementation and history
 
 - Documentation: [UI and transaction map](../../../docs/README.md#subsystem-map), [UI README](../../../ui/README.md), [architecture](../../../docs/ARCHITECTURE.md)
-- Implementation: [`TransactionHistoryPage.tsx`](../../../ui/src/pages/TransactionHistoryPage.tsx), [`TransactionDetailsDialog.tsx`](../../../ui/src/components/TransactionDetailsDialog.tsx), [`TransactionController.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/controller/TransactionController.java), [`TransactionReadRepository.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/repository/TransactionReadRepository.java), [`TransactionCategoryService.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/service/TransactionCategoryService.java)
-- History: [counterparty expenses](../../changes/archive/2026-11-01-show-counterparty-expenses-in-transaction-details/), [initial UI](../../changes/archive/2026-09-28-ui/), [transaction history](../../changes/archive/2026-10-10-transaction-history-page/), [transaction details panel](../../changes/archive/2026-10-20-transaction-details-popup/), [category edit history](../../changes/archive/2026-10-20-transaction-category-edit-history/)
+- Implementation: [`TransactionHistoryPage.tsx`](../../../ui/src/pages/TransactionHistoryPage.tsx), [`HistoryTagFilter.tsx`](../../../ui/src/components/HistoryTagFilter.tsx), [`TransactionDetailsDialog.tsx`](../../../ui/src/components/TransactionDetailsDialog.tsx), [`TagSelection.tsx`](../../../ui/src/components/TagSelection.tsx), [`TransactionController.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/controller/TransactionController.java), [`TransactionReadRepository.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/repository/TransactionReadRepository.java), [`TransactionCategoryService.java`](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/service/TransactionCategoryService.java)
+- History: [initial UI](../../changes/archive/2026-09-28-ui/), [transaction history](../../changes/archive/2026-10-10-transaction-history-page/), [transaction details panel](../../changes/archive/2026-10-20-transaction-details-popup/), [category edit history](../../changes/archive/2026-10-20-transaction-category-edit-history/), [transaction tags](../../changes/archive/2026-11-01-add-transaction-tags/), [counterparty expenses](../../changes/archive/2026-11-01-show-counterparty-expenses-in-transaction-details/)
 
 ## Implementation Notes
 

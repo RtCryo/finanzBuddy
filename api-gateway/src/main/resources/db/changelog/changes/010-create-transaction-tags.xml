@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+ <changeSet id="010-create-transaction-tags" author="api-gateway">
+  <createTable tableName="personal_transaction_tags">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="user_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="name" type="VARCHAR(255)"><constraints nullable="false"/></column>
+   <column name="normalized_name" type="VARCHAR(255)"><constraints nullable="false"/></column>
+  </createTable>
+  <addForeignKeyConstraint baseTableName="personal_transaction_tags" baseColumnNames="user_id" referencedTableName="users" referencedColumnNames="id" constraintName="fk_tags_user"/>
+  <addUniqueConstraint tableName="personal_transaction_tags" columnNames="user_id,normalized_name" constraintName="uk_tags_owner_name"/>
+  <addUniqueConstraint tableName="personal_transaction_tags" columnNames="user_id,id" constraintName="uk_tags_owner_id"/>
+  <addUniqueConstraint tableName="documents" columnNames="user_id,id" constraintName="uk_documents_owner_id"/>
+  <createTable tableName="transaction_tag_assignments">
+   <column name="user_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="document_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="transaction_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="tag_id" type="BIGINT"><constraints nullable="false"/></column>
+  </createTable>
+  <addPrimaryKey tableName="transaction_tag_assignments" columnNames="user_id,transaction_id,tag_id" constraintName="pk_transaction_tag_assignments"/>
+  <addForeignKeyConstraint baseTableName="transaction_tag_assignments" baseColumnNames="user_id,tag_id" referencedTableName="personal_transaction_tags" referencedColumnNames="user_id,id" constraintName="fk_assignments_owner_tag"/>
+  <addForeignKeyConstraint baseTableName="transaction_tag_assignments" baseColumnNames="user_id,document_id" referencedTableName="documents" referencedColumnNames="user_id,id" constraintName="fk_assignments_owner_document"/>
+  <createIndex tableName="transaction_tag_assignments" indexName="idx_assignments_owner_tag_transaction"><column name="user_id"/><column name="tag_id"/><column name="transaction_id"/></createIndex>
+  <rollback>
+   <dropTable tableName="transaction_tag_assignments"/>
+   <dropTable tableName="personal_transaction_tags"/>
+   <dropUniqueConstraint tableName="documents" constraintName="uk_documents_owner_id"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

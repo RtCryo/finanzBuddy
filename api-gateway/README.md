@@ -124,6 +124,29 @@ curl -OJ http://localhost:8080/documents/<id>/download \
 Streams the originally uploaded file from object storage with a `Content-Disposition` filename.
 Returns `404 Not Found` if the document does not belong to the authenticated user.
 
+### Transaction history and personal tags
+
+All routes below require `Authorization: Bearer <token>`. The Gateway owns reusable personal tag names and current assignments. Parser-owned imported transaction rows and Gateway-owned version snapshots do not contain tag data. Migration 010 creates the Gateway tag tables without requiring parser tables at Gateway startup. Deploy the additive migration and API before the UI; rolling the migration back drops tag data.
+
+```bash
+curl 'http://localhost:8080/transactions?tagIds=4&tagIds=8&tagMode=OR&page=0&size=20' \
+  -H 'Authorization: Bearer <token>'
+curl http://localhost:8080/transactions/tags -H 'Authorization: Bearer <token>'
+curl http://localhost:8080/transactions/14/tags -H 'Authorization: Bearer <token>'
+```
+
+`GET /transactions` accepts repeated bare `tagIds` parameters. `tagMode=AND` is the default and requires every distinct selected tag; `OR` requires at least one. No selected IDs means no tag restriction. Tag matching combines with `query`, inclusive `from`/`to`, and `category` filters using AND before sorting, counting, and pagination. Invalid, unknown, or foreign tag IDs return the same generic `400` response. Dictionary reads expose only the authenticated owner's tags; assignment reads also verify transaction ownership.
+
+The shared editor uses one request for category and tags:
+
+```bash
+curl -X PUT http://localhost:8080/transactions/14 \
+  -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' \
+  -d '{"category":"Travel","tags":[{"id":4},{"name":"Work"}]}'
+```
+
+`tags` is the required **complete desired set**; `[]` clears assignments but keeps dictionary entries for reuse. Each item contains either an owned `id` or a `name`, never both. Names are trimmed, nonblank, at most 255 characters, and reused case-insensitively per owner. Omit both `category` and `newCategoryName` to preserve the category, including an uncategorized transaction; to create a personal category, send `newCategoryName` instead of `category`. The response is `{ "transaction": { ...existing transaction fields... }, "tags": [{ "id": 4, "name": "Travel" }] }`. A category change creates the usual version; a tag-only or unchanged save creates none. The entire edit commits or rolls back together. Existing `PUT /transactions/{id}/category` and `POST /transactions/categories` remain available, and `GET /transactions/{id}/versions` stays tag-free.
+
 ### Related transaction expenses
 
 `GET /transactions/{id}/related-expenses?page=0&size=20` requires a user JWT.

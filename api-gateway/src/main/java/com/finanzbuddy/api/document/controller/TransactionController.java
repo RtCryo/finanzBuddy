@@ -4,11 +4,15 @@ import com.finanzbuddy.api.document.dto.PersonalCategoryCreateRequest;
 import com.finanzbuddy.api.document.dto.PersonalCategoryResponse;
 import com.finanzbuddy.api.document.dto.RelatedExpensePageResponse;
 import com.finanzbuddy.api.document.dto.TransactionCategoryUpdateRequest;
+import com.finanzbuddy.api.document.dto.TransactionEditRequest;
+import com.finanzbuddy.api.document.dto.TransactionEditResponse;
 import com.finanzbuddy.api.document.dto.TransactionHistoryResponse;
 import com.finanzbuddy.api.document.dto.TransactionResponse;
+import com.finanzbuddy.api.document.dto.TransactionTag;
 import com.finanzbuddy.api.document.dto.TransactionVersionResponse;
 import com.finanzbuddy.api.document.service.DocumentService;
 import com.finanzbuddy.api.document.service.TransactionCategoryService;
+import com.finanzbuddy.api.document.service.TransactionTagService;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -37,12 +41,15 @@ public class TransactionController {
 
     private final DocumentService documentService;
     private final TransactionCategoryService transactionCategoryService;
+    private final TransactionTagService tagService;
 
     public TransactionController(
             DocumentService documentService,
-            TransactionCategoryService transactionCategoryService) {
+            TransactionCategoryService transactionCategoryService,
+            TransactionTagService tagService) {
         this.documentService = documentService;
         this.transactionCategoryService = transactionCategoryService;
+        this.tagService = tagService;
     }
 
     @GetMapping
@@ -52,6 +59,8 @@ public class TransactionController {
             @RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to,
             @RequestParam(required = false) String category,
+            @RequestParam(required = false) List<Long> tagIds,
+            @RequestParam(defaultValue = "AND") String tagMode,
             @RequestParam(defaultValue = "valueDate") String sortField,
             @RequestParam(defaultValue = "DESC") String sortDirection,
             @RequestParam(defaultValue = "0") int page,
@@ -77,8 +86,29 @@ public class TransactionController {
                         to,
                         category,
                         sortField,
-                        normalizedDirection);
+                        normalizedDirection,
+                        tagService.validateSelection(userDetails.getUsername(), tagIds, tagMode),
+                        tagMode);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/tags")
+    public List<TransactionTag> listTags(@AuthenticationPrincipal UserDetails user) {
+        return tagService.list(user.getUsername());
+    }
+
+    @GetMapping("/{id}/tags")
+    public List<TransactionTag> assignedTags(
+            @AuthenticationPrincipal UserDetails user, @PathVariable long id) {
+        return tagService.assigned(user.getUsername(), id);
+    }
+
+    @PutMapping("/{id}")
+    public TransactionEditResponse editTransaction(
+            @AuthenticationPrincipal UserDetails user,
+            @PathVariable long id,
+            @RequestBody TransactionEditRequest request) {
+        return tagService.save(user.getUsername(), id, request);
     }
 
     @GetMapping("/{id}/related-expenses")

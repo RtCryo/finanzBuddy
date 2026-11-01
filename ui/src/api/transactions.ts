@@ -1,4 +1,5 @@
 import { api } from './client'
+import type { TransactionTag, TransactionEdit } from '../types/transaction'
 import type {
   PersonalCategoryCreateResponse,
   RelatedExpensePage,
@@ -29,7 +30,10 @@ export async function getTransactionHistory(params: TransactionHistoryParams = {
       ...(params.category ? { category: params.category } : {}),
       ...(params.sortField ? { sortField: params.sortField } : {}),
       ...(params.sortDirection ? { sortDirection: params.sortDirection } : {}),
+      ...(params.tagIds?.length ? { tagIds: params.tagIds } : {}),
+      ...(params.tagMode ? { tagMode: params.tagMode } : {}),
     },
+    paramsSerializer: { indexes: null },
   })
   return response.data
 }
@@ -37,6 +41,20 @@ export async function getTransactionHistory(params: TransactionHistoryParams = {
 export async function getTransactionCategories() {
   const response = await api.get<string[]>('/transactions/categories')
   return response.data
+}
+
+export async function getTransactionTags() {
+  return (await api.get<TransactionTag[]>('/transactions/tags')).data
+}
+
+export async function getAssignedTransactionTags(transactionId: number) {
+  return (await api.get<TransactionTag[]>(`/transactions/${encodeURIComponent(transactionId)}/tags`)).data
+}
+
+export async function editTransaction(transactionId: number, edit: TransactionEdit) {
+  return (await api.put<{ transaction: TransactionRecord; tags: TransactionTag[] }>(
+    `/transactions/${encodeURIComponent(transactionId)}`, edit,
+  )).data
 }
 
 export async function createPersonalTransactionCategory(transactionId: number, name: string) {

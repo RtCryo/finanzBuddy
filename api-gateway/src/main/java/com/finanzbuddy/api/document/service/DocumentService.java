@@ -261,6 +261,31 @@ public class DocumentService {
             String category,
             String sortField,
             String sortDirection) {
+        return getTransactionHistory(
+                userEmail,
+                pageable,
+                query,
+                from,
+                to,
+                category,
+                sortField,
+                sortDirection,
+                List.of(),
+                "AND");
+    }
+
+    @Transactional(readOnly = true)
+    public TransactionHistoryResponse getTransactionHistory(
+            String userEmail,
+            Pageable pageable,
+            String query,
+            LocalDate from,
+            LocalDate to,
+            String category,
+            String sortField,
+            String sortDirection,
+            List<Long> tagIds,
+            String tagMode) {
         if (from != null && to != null && from.isAfter(to)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "Start date must be on or before end date");
@@ -275,7 +300,9 @@ public class DocumentService {
                         category,
                         sortField,
                         sortDirection,
-                        pageable);
+                        pageable,
+                        tagIds,
+                        tagMode);
         return new TransactionHistoryResponse(
                 page.getContent(),
                 page.getTotalElements(),

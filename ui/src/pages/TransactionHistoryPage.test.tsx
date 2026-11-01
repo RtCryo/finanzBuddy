@@ -4,8 +4,11 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createPersonalTransactionCategory,
+  editTransaction,
+  getAssignedTransactionTags,
   getTransactionCategories,
   getTransactionHistory,
+  getTransactionTags,
   getTransactionVersions,
   getRelatedExpenses,
   updateTransactionCategory,
@@ -15,8 +18,11 @@ import { TransactionHistoryPage } from './TransactionHistoryPage'
 
 vi.mock('../api/transactions', () => ({
   createPersonalTransactionCategory: vi.fn(),
+  editTransaction: vi.fn(),
+  getAssignedTransactionTags: vi.fn(),
   getTransactionCategories: vi.fn(),
   getTransactionHistory: vi.fn(),
+  getTransactionTags: vi.fn(),
   getTransactionVersions: vi.fn(),
   getRelatedExpenses: vi.fn(),
   updateTransactionCategory: vi.fn(),
@@ -57,6 +63,9 @@ describe('TransactionHistoryPage', () => {
     vi.clearAllMocks()
     vi.mocked(getTransactionHistory).mockResolvedValue(result())
     vi.mocked(getTransactionCategories).mockResolvedValue(['Food', 'Housing'])
+    vi.mocked(getTransactionTags).mockResolvedValue([])
+    vi.mocked(getAssignedTransactionTags).mockResolvedValue([])
+    vi.mocked(editTransaction).mockResolvedValue({ transaction: { ...transaction, category: 'Food' }, tags: [] })
     vi.mocked(getTransactionVersions).mockResolvedValue([
       { versionNumber: 1, transaction, createdAt: null },
     ])
@@ -85,6 +94,7 @@ describe('TransactionHistoryPage', () => {
     }))
     vi.mocked(updateTransactionCategory).mockImplementation(async () => { saved = true; return updated })
     vi.mocked(createPersonalTransactionCategory).mockImplementation(async () => { saved = true; return { name: updated.category, transaction: updated } })
+    vi.mocked(editTransaction).mockImplementation(async () => { saved = true; return { transaction: updated, tags: [] } })
     renderPage()
     const opener = await screen.findByRole('button', { name: 'View transaction details: ' + transaction.description })
     await user.click(opener)
@@ -271,6 +281,7 @@ describe('TransactionHistoryPage', () => {
         category: 'Housing',
         sortField: 'valueDate',
         sortDirection: 'DESC',
+        tagMode: 'AND',
       })
     })
   })
@@ -287,6 +298,7 @@ describe('TransactionHistoryPage', () => {
       size: 20,
       sortField: 'valueDate',
       sortDirection: 'DESC',
+      tagMode: 'AND',
     }))
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Filter by category' }), 'Housing')
@@ -296,6 +308,7 @@ describe('TransactionHistoryPage', () => {
       category: 'Housing',
       sortField: 'valueDate',
       sortDirection: 'DESC',
+      tagMode: 'AND',
     }))
 
     await user.click(screen.getByRole('button', { name: 'Clear filters' }))
@@ -304,6 +317,7 @@ describe('TransactionHistoryPage', () => {
       size: 20,
       sortField: 'valueDate',
       sortDirection: 'DESC',
+      tagMode: 'AND',
     }))
     expect(screen.getByRole('combobox', { name: 'Filter by category' })).toHaveValue('')
   })
@@ -325,6 +339,7 @@ describe('TransactionHistoryPage', () => {
       size: 20,
       sortField: 'valueDate',
       sortDirection: 'DESC',
+      tagMode: 'AND',
     }))
     expect(screen.getByRole('button', { name: 'Page 10' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled()
@@ -336,6 +351,7 @@ describe('TransactionHistoryPage', () => {
       size: 20,
       sortField: 'valueDate',
       sortDirection: 'DESC',
+      tagMode: 'AND',
     }))
     expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled()
   })
@@ -388,6 +404,97 @@ describe('TransactionHistoryPage', () => {
       .toHaveClass('amount-neutral')
     expect(screen.getByRole('row', { name: /Missing/ }).querySelector('.transaction-amount'))
       .toHaveClass('amount-neutral')
+  })
+
+  it('filters by selected tags and mode without adding tag cells to history rows', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getTransactionTags).mockResolvedValue([{ id: 4, name: 'Travel' }, { id: 5, name: 'Work' }])
+    renderPage()
+    await screen.findByRole('table', { name: 'Transaction history' })
+    await user.click(screen.getByRole('button', { name: 'Filter by tags, 0 selected' }))
+    await user.click(await screen.findByRole('checkbox', { name: 'Travel' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Work' }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({
+      page: 0, tagIds: [4, 5], tagMode: 'AND',
+    })))
+    await user.click(screen.getByRole('radio', { name: 'Any selected (OR)' }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({
+      page: 0, tagIds: [4, 5], tagMode: 'OR',
+    })))
+    expect(screen.getAllByRole('columnheader')).toHaveLength(6)
+    expect(screen.getByRole('row', { name: /Monthly rent/ }).querySelectorAll('[role="cell"]')).toHaveLength(6)
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({ tagMode: 'AND' })))
+    expect(vi.mocked(getTransactionHistory).mock.lastCall?.[0]).not.toHaveProperty('tagIds')
+  })
+
+  it('hides previous rows in place while tag selection and match mode load', async () => {
+    const user = userEvent.setup()
+    const initial = result()
+    let finishSelection!: (value: typeof initial) => void
+    let finishMode!: (value: typeof initial) => void
+    vi.mocked(getTransactionTags).mockResolvedValue([{ id: 4, name: 'Travel' }])
+    vi.mocked(getTransactionHistory).mockImplementation(async (params) => {
+      const tagIds = params?.tagIds
+      const tagMode = params?.tagMode
+      if (!tagIds?.length) return initial
+      return new Promise((resolve) => {
+        if (tagMode === 'OR') finishMode = resolve
+        else finishSelection = resolve
+      })
+    })
+    renderPage()
+    const table = await screen.findByRole('table', { name: 'Transaction history' })
+    await user.click(screen.getByRole('button', { name: 'Filter by tags, 0 selected' }))
+    await user.click(await screen.findByRole('checkbox', { name: 'Travel' }))
+    await waitFor(() => expect(finishSelection).toBeTypeOf('function'))
+    expect(table).toHaveAttribute('aria-hidden', 'true')
+    expect(table.parentElement).toHaveClass('history-results-pending')
+    expect(screen.getByRole('status', { name: '' })).toHaveTextContent('Loading transactions')
+    finishSelection(initial)
+    await waitFor(() => expect(table).toHaveAttribute('aria-hidden', 'false'))
+    await user.click(screen.getByRole('radio', { name: 'Any selected (OR)' }))
+    await waitFor(() => expect(finishMode).toBeTypeOf('function'))
+    expect(table).toHaveAttribute('aria-hidden', 'true')
+    expect(table.parentElement).toHaveClass('history-results-pending')
+    finishMode(initial)
+    await waitFor(() => expect(table).toHaveAttribute('aria-hidden', 'false'))
+  })
+
+  it('clamps the final page and restores focus when a saved row leaves active tag results', async () => {
+    const user = userEvent.setup()
+    const travel = { id: 4, name: 'Travel' }
+    const other = { ...transaction, id: 8, description: 'Other matching transaction' }
+    let removed = false
+    vi.mocked(getTransactionTags).mockResolvedValue([travel])
+    vi.mocked(getAssignedTransactionTags).mockResolvedValue([travel])
+    vi.mocked(getTransactionHistory).mockImplementation(async params => {
+      if (removed) return result({ content: params?.page ? [] : [other], totalElements: 1, totalPages: 1 })
+      return result({ content: params?.page ? [transaction] : [other], totalElements: 21, totalPages: 2 })
+    })
+    vi.mocked(editTransaction).mockImplementation(async () => {
+      removed = true
+      return { transaction, tags: [] }
+    })
+    renderPage()
+    await screen.findByRole('table', { name: 'Transaction history' })
+    await user.click(screen.getByRole('button', { name: 'Filter by tags, 0 selected' }))
+    await user.click(await screen.findByRole('checkbox', { name: 'Travel' }))
+    await user.click(screen.getByRole('button', { name: 'Page 2' }))
+    const row = await screen.findByRole('row', { name: /Monthly rent/ })
+    await user.click(within(row).getByText('Monthly rent'))
+    await user.click(screen.getByRole('button', { name: 'Edit transaction' }))
+    await user.click(screen.getByRole('button', { name: 'Remove tag Travel' }))
+    const choicesReads = vi.mocked(getTransactionTags).mock.calls.length
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(getTransactionHistory).toHaveBeenLastCalledWith(expect.objectContaining({
+      page: 0, tagIds: [4], tagMode: 'AND',
+    })))
+    expect(screen.queryByRole('row', { name: /Monthly rent/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('row', { name: /Other matching transaction/ })).toBeInTheDocument()
+    await waitFor(() => expect(vi.mocked(getTransactionTags).mock.calls.length).toBeGreaterThan(choicesReads))
+    await user.click(screen.getByRole('button', { name: 'Close transaction details' }))
+    expect(screen.getByRole('textbox', { name: 'Search description or counterparty' })).toHaveFocus()
   })
 
   it('shows empty, loading and error states', async () => {

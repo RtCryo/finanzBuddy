@@ -28,7 +28,7 @@ UI (React SPA, served by Nginx) ── /api proxy ──► API Gateway (Spring 
                                                        │          ▼
                                                        │      PostgreSQL
                                                        │      users, documents, outbox,
-                                                       │      transaction versions/categories
+                                                       │      transaction versions/categories/tags
                                                        │
                                                        └── outbox relay ──► Kafka
                                                                               │
@@ -54,7 +54,7 @@ The API Gateway and parser service use the same PostgreSQL database and S3 bucke
 | Component | Responsibility | Main implementation areas |
 |---|---|---|
 | UI | Registration/login, dashboard, document upload/list/detail, transaction history and editing | `ui/src/pages/`, `ui/src/components/`, `ui/src/api/` |
-| API Gateway | JWT auth, document upload and ownership, document status, dashboard/history APIs, transaction category/version operations, outbox delivery | `api-gateway/src/main/java/com/finanzbuddy/api/` |
+| API Gateway | JWT auth, document upload and ownership, document status, dashboard/history APIs, transaction category/version and tag operations, outbox delivery | `api-gateway/src/main/java/com/finanzbuddy/api/` |
 | Parser Service | Kafka consumption, object download, format-specific parsing, deduplication, transaction persistence, status reporting | `parser-service/src/main/java/com/finanzbuddy/parser/` |
 | PostgreSQL | Shared relational store; each service applies its own Liquibase changelog | `api-gateway/src/main/resources/db/changelog/`, `parser-service/src/main/resources/db/changelog/` |
 | SeaweedFS | S3-compatible storage for original documents; Compose keeps the service name `minio` and `MINIO_*` settings for client compatibility | `docker-compose.yml`, each service's storage configuration |
@@ -72,10 +72,13 @@ Both services connect to the same database/schema. IDs crossing service boundari
 | `outbox_events` | API Gateway | Durable event publication after an upload or reprocess request |
 | `transactions`, `processed_documents` | Parser Service | Gateway reads transactions for document details, dashboard, history, and ownership-scoped category edits; the processed marker makes event handling idempotent |
 | `transaction_versions`, `personal_transaction_categories` | API Gateway | Full snapshots for category edits/history and each user's reusable category list |
+| `personal_transaction_tags`, `transaction_tag_assignments` | API Gateway | Owner-scoped reusable tag dictionary and current transaction assignments, independent of snapshots |
 
 The gateway intentionally accesses parser-owned transactions through JDBC (`TransactionReadRepository` and `TransactionCategoryRepository`) rather than mapping the `transactions` table as a JPA entity. This keeps gateway Hibernate schema validation from requiring a table that the parser service creates and permits the gateway to start before the parser. The gateway migration for category/version tables likewise does not require a foreign-key constraint to a parser-owned table.
 
 History and document transaction reads project the latest saved version when one exists, otherwise they return the parser's original transaction row. Category changes are recorded by the gateway as complete snapshots; the parser remains the writer of imported transaction rows.
+
+Gateway migration 010 adds personal tags and assignments without a foreign key to parser-owned `transactions`, so the gateway can start before parser tables exist. Tag reads and writes verify ownership through the transaction and document join. The shared transaction editor saves category and tags in one database transaction, locking the gateway-owned document row; legacy category writes use the same lock. Category changes create snapshots, while tag-only edits leave version history unchanged. Tag metadata never appears in snapshot payloads. Deploy the additive schema and backend before the UI; rolling back migration 010 explicitly deletes tag data.
 
 ## Document processing flow
 
@@ -96,14 +99,18 @@ The UI sends API requests to `/api`; Vite rewrites that prefix in development an
 | `GET /dashboard` | User JWT | Owner-scoped aggregate document/transaction metrics |
 | `POST /documents`, `GET /documents`, `GET /documents/{id}` | User JWT | Upload and list/read owned documents |
 | `GET /documents/{id}/transactions`, `GET /documents/{id}/download` | User JWT | Read processed transactions and download the original file for an owned document |
-| `GET /transactions` | User JWT | Filtered, sorted, paginated owner-scoped history |
+| `GET /transactions` | User JWT | Filtered, sorted, paginated owner-scoped history; repeated `tagIds` and `tagMode=AND\|OR` apply an all/any tag condition |
 | `GET /transactions/{id}/related-expenses` | User JWT | Latest-snapshot negative expenses with exactly the source counterparty across owned processed documents; source and candidate transaction/document ownership checked |
 | `GET /transactions/categories`, `POST /transactions/categories` | User JWT | Read categories or atomically create a personal category and assign it |
 | `GET /transactions/{id}/versions`, `PUT /transactions/{id}/category` | User JWT | Read snapshots or update the latest category |
+| `GET /transactions/tags`, `GET /transactions/{id}/tags` | User JWT | Read the owner's reusable tags or current assignments for an owned transaction |
+| `PUT /transactions/{id}` | User JWT | Atomically save optional category change and the complete desired current tag set; returns tag-free transaction plus tags |
 | `PUT /internal/documents/{id}/status` | Internal API key | Parser-to-gateway status reporting |
 | `/actuator/health`, `/actuator/info`, `/actuator/prometheus` | Service endpoint configuration | Health checks and Prometheus scraping; parser also exposes `/actuator/metrics` |
 
 The gateway uses stateless Spring Security and BCrypt password hashing. `/auth/**` and the configured gateway actuator endpoints are public; user routes require a JWT, and `/internal/**` requires the service-key filter. User document and transaction queries verify ownership before returning data. The internal status endpoint intentionally identifies a document by ID rather than user ownership; its trust boundary is the shared service API key, which must remain server-side and must never be sent to the browser. Original files are accessed through the gateway's owner-checked endpoints, not directly from the browser's S3 credentials.
+
+The history tag query uses repeated bare IDs, for example `GET /transactions?tagIds=4&tagIds=8&tagMode=OR`. AND is the default and requires all distinct selected tags; OR requires at least one. An empty selection applies no tag restriction, and either mode combines with the existing text/date/category filters using AND before counting and pagination. Unknown or foreign tag IDs receive the same generic invalid-selection response.
 
 ## Technology stack
 

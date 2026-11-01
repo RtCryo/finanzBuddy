@@ -1,14 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import {
-  createPersonalTransactionCategory,
+  editTransaction,
+  getTransactionTags,
+  getAssignedTransactionTags,
   getTransactionCategories,
   getTransactionVersions,
-  getRelatedExpenses,
-  updateTransactionCategory,
 } from '../api/transactions'
 import { getErrorMessage } from '../api/errors'
 import { formatDateOnly, formatInstant, formatTransactionCategory, formatTransactionText } from '../format'
-import type { RelatedExpense, RelatedExpensePage, TransactionRecord, TransactionVersion } from '../types/transaction'
+import type { RelatedExpense, RelatedExpensePage, TagDraft, TransactionRecord, TransactionTag, TransactionVersion } from '../types/transaction'
+import { TagSelection } from './TagSelection'
+import { getRelatedExpenses } from '../api/transactions'
 
 type PreparedTransaction = {
   transaction: TransactionRecord
@@ -54,7 +56,8 @@ export function TransactionDetailsDialog({ transaction, openerRef, onClose, onSa
 
   function handleClose() {
     onClose()
-    openerRef.current?.focus()
+    if (openerRef.current?.isConnected) openerRef.current.focus()
+    else document.querySelector<HTMLElement>('[aria-label="Search description or counterparty"]')?.focus()
   }
 
   return (
@@ -131,6 +134,9 @@ function TransactionDetailsContent({
   }, [transactionId, prepared?.scrollTop])
   const createCategoryOption = '__create_category__'
   const [categories, setCategories] = useState<string[]>(prepared?.categories ?? [])
+  const [tagChoices, setTagChoices] = useState<TransactionTag[]>([])
+  const [tags, setTags] = useState<TransactionTag[]>([])
+  const [tagDraft, setTagDraft] = useState<TagDraft[]>([])
   const [versions, setVersions] = useState<TransactionVersion[]>(prepared?.versions ?? [])
   const [selectedVersionIndex, setSelectedVersionIndex] = useState((prepared?.versions.length ?? 0) - 1)
   const [isEditing, setIsEditing] = useState(false)
@@ -138,26 +144,42 @@ function TransactionDetailsContent({
   const [category, setCategory] = useState(transaction.category ?? '')
   const [isCreatingCategory, setIsCreatingCategory] = useState(false)
   const [newCategory, setNewCategory] = useState('')
-  const [isLoading, setIsLoading] = useState(!prepared)
+  const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
   const versionTabsRef = useRef<HTMLDivElement>(null)
   const [versionIndicator, setVersionIndicator] = useState({ offset: 0, width: 0 })
 
   useEffect(() => {
-    if (prepared) return
     let isCurrent = true
-    Promise.all([getTransactionCategories(), getTransactionVersions(transactionId)])
-      .then(([availableCategories, history]) => {
+    if (prepared) {
+      Promise.all([getTransactionTags(), getAssignedTransactionTags(transactionId)])
+        .then(([choices, assigned]) => {
+          if (!isCurrent) return
+          setTagChoices(choices)
+          setTags(assigned)
+          setTagDraft(assigned)
+        })
+        .catch((requestError) => {
+          if (isCurrent) setError(getErrorMessage(requestError, 'We could not load tags.'))
+        })
+        .finally(() => { if (isCurrent) setIsLoading(false) })
+      return () => { isCurrent = false }
+    }
+    Promise.all([getTransactionCategories(), getTransactionVersions(transactionId), getTransactionTags(), getAssignedTransactionTags(transactionId)])
+      .then(([availableCategories, history, choices, assigned]) => {
         if (!isCurrent) return
         setCategories(availableCategories)
+        setTagChoices(choices)
+        setTags(assigned)
+        setTagDraft(assigned)
         const orderedHistory = [...history].sort((left, right) => left.versionNumber - right.versionNumber)
         setVersions(orderedHistory)
         setSelectedVersionIndex(orderedHistory.length - 1)
       })
       .catch((requestError) => {
         if (isCurrent) {
-          setError(getErrorMessage(requestError, 'We could not load category choices or transaction history.'))
+          setError(getErrorMessage(requestError, 'We could not load category choices, tags or transaction history.'))
         }
       })
       .finally(() => {
@@ -214,6 +236,7 @@ function TransactionDetailsContent({
   }, [selectedVersionIndex, versions.length])
 
   function cancelEditing() {
+    setTagDraft(tags)
     setCategory(displayedTransaction.category ?? '')
     setNewCategory('')
     setIsCreatingCategory(false)
@@ -223,13 +246,19 @@ function TransactionDetailsContent({
 
   async function saveChanges() {
     const categoryToSave = isCreatingCategory ? newCategory.trim() : category
-    if (!categoryToSave) return
+    if (isCreatingCategory && !categoryToSave) return
     setError('')
     setIsSaving(true)
     try {
-      const updated = isCreatingCategory
-        ? (await createPersonalTransactionCategory(transactionId, categoryToSave)).transaction
-        : await updateTransactionCategory(transactionId, categoryToSave)
+      const saved = await editTransaction(transactionId, {
+        ...(isCreatingCategory ? { newCategoryName: categoryToSave }
+          : categoryToSave !== (displayedTransaction.category ?? '') ? { category: categoryToSave } : {}),
+        tags: tagDraft.map(tag => tag.id === undefined ? { name: tag.name } : { id: tag.id }),
+      })
+      const updated = saved.transaction
+      setTags(saved.tags)
+      setTagDraft(saved.tags)
+      setTagChoices(current => [...current.filter(tag => !saved.tags.some(item => item.id === tag.id)), ...saved.tags])
       setCategories((current) => current.includes(updated.category ?? '') || !updated.category
         ? current
         : [...current, updated.category].sort((left, right) => left.localeCompare(right)))
@@ -248,8 +277,8 @@ function TransactionDetailsContent({
       onSaved?.(updated)
     } catch (requestError) {
       setError(getErrorMessage(requestError, isCreatingCategory
-        ? 'We could not create or assign this category. Please try again.'
-        : 'We could not save this category. Please try again.'))
+        ? 'We could not save these changes. Please try again.'
+        : 'We could not save these changes. Please try again.'))
     } finally {
       setIsSaving(false)
     }
@@ -271,6 +300,7 @@ function TransactionDetailsContent({
         <h2 ref={headingRef} tabIndex={-1} id="transaction-details-title">{isEditing ? 'Edit transaction' : 'Transaction details'}</h2>
         {!isEditing && isLatestVersion && (
           <button className="button button-secondary" type="button" onClick={() => {
+            setTagDraft(tags)
             setCategory(displayedTransaction.category ?? '')
             setIsEditing(true)
           }} disabled={isLoading || isOpeningTarget}>
@@ -398,6 +428,12 @@ function TransactionDetailsContent({
             </div>
           </dl>
         </section>
+        <section className="transaction-details-section" aria-label={isLatestVersion ? 'Tags' : 'Current tags'}>
+          {isEditing ? <TagSelection choices={tagChoices} selected={tagDraft} onChange={setTagDraft} allowCreate disabled={isSaving} />
+            : <><h3>{isLatestVersion ? 'Tags' : 'Current tags'}</h3><div className="tag-chips">
+              {tags.map(tag => <span className="tag-chip" key={tag.id}>{tag.name}</span>)}
+            </div></>}
+        </section>
         <RelatedExpenses
           onNavigate={(target) => onNavigate({ ...target, categories, scrollTop: scrollRef.current?.scrollTop ?? 0 })}
           initialPage={prepared?.related}
@@ -406,7 +442,7 @@ function TransactionDetailsContent({
           transactionId={transactionId}
           counterparty={(versions[latestVersionIndex]?.transaction ?? transaction).counterparty}
         />
-        {isLoading && <p className="transaction-history-loading" role="status">Loading categories and version history…</p>}
+        {isLoading && <p className="transaction-history-loading" role="status">Loading categories, tags and version history…</p>}
         {error && <p className="notice notice-error transaction-details-error" role="alert">{error}</p>}
       </div>
       {isEditing && (
@@ -416,7 +452,9 @@ function TransactionDetailsContent({
             className="button button-primary"
             type="button"
             onClick={() => void saveChanges()}
-            disabled={isLoading || isSaving || !(isCreatingCategory ? newCategory.trim() : category) || (!isCreatingCategory && category === displayedTransaction.category)}
+            disabled={isLoading || isSaving || (isCreatingCategory && !newCategory.trim()) ||
+              (!isCreatingCategory && category === (displayedTransaction.category ?? '') &&
+                tagDraft.length === tags.length && tagDraft.every(tag => tag.id !== undefined && tags.some(saved => saved.id === tag.id)))}
           >
             {isSaving ? 'Saving…' : 'Save changes'}
           </button>

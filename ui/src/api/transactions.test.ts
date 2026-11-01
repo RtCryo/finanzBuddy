@@ -2,8 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from './client'
 import {
   createPersonalTransactionCategory,
+  editTransaction,
+  getAssignedTransactionTags,
   getTransactionCategories,
   getTransactionHistory,
+  getTransactionTags,
   getTransactionVersions,
   getRelatedExpenses,
   updateTransactionCategory,
@@ -40,6 +43,8 @@ describe('getTransactionHistory', () => {
       category: 'Food',
       sortField: 'amount',
       sortDirection: 'ASC',
+      tagIds: [5, 8],
+      tagMode: 'OR',
     })
 
     expect(api.get).toHaveBeenCalledWith('/transactions', {
@@ -52,7 +57,10 @@ describe('getTransactionHistory', () => {
         category: 'Food',
         sortField: 'amount',
         sortDirection: 'ASC',
+        tagIds: [5, 8],
+        tagMode: 'OR',
       },
+      paramsSerializer: { indexes: null },
     })
     expect(result).toEqual(response)
   })
@@ -60,7 +68,9 @@ describe('getTransactionHistory', () => {
   it('uses default pagination and omits empty filters', async () => {
     await getTransactionHistory({ query: '', from: '', to: '', category: '' })
 
-    expect(api.get).toHaveBeenCalledWith('/transactions', { params: { page: 0, size: 20 } })
+    expect(api.get).toHaveBeenCalledWith('/transactions', {
+      params: { page: 0, size: 20 }, paramsSerializer: { indexes: null },
+    })
   })
 
   it('encodes the related source route and maps bounded page responses', async () => {
@@ -109,6 +119,29 @@ describe('getTransactionHistory', () => {
     await expect(updateTransactionCategory(14, 'Housing')).resolves.toEqual(updated)
 
     expect(api.put).toHaveBeenCalledWith('/transactions/14/category', { category: 'Housing' })
+  })
+
+  it('reads reusable and assigned tags and saves category plus the complete tag set together', async () => {
+    const tags = [{ id: 4, name: 'Travel' }]
+    vi.mocked(api.get).mockResolvedValue({ data: tags } as never)
+    vi.mocked(api.put).mockResolvedValue({ data: { transaction, tags } } as never)
+    await expect(getTransactionTags()).resolves.toEqual(tags)
+    await expect(getAssignedTransactionTags(14)).resolves.toEqual(tags)
+    await expect(editTransaction(14, { category: 'Food', tags: [{ id: 4 }] })).resolves.toEqual({ transaction, tags })
+    expect(api.get).toHaveBeenNthCalledWith(1, '/transactions/tags')
+    expect(api.get).toHaveBeenNthCalledWith(2, '/transactions/14/tags')
+    expect(api.put).toHaveBeenLastCalledWith('/transactions/14', { category: 'Food', tags: [{ id: 4 }] })
+  })
+
+  it('sends tag-only edits without category fields and propagates tag request failures', async () => {
+    const failure = new Error('offline')
+    vi.mocked(api.put).mockRejectedValueOnce(failure)
+    await expect(editTransaction(14, { tags: [{ name: 'New tag' }] })).rejects.toBe(failure)
+    expect(api.put).toHaveBeenCalledWith('/transactions/14', { tags: [{ name: 'New tag' }] })
+
+    vi.mocked(api.get).mockRejectedValueOnce(failure).mockRejectedValueOnce(failure)
+    await expect(getTransactionTags()).rejects.toBe(failure)
+    await expect(getAssignedTransactionTags(14)).rejects.toBe(failure)
   })
 })
 

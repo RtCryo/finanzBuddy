@@ -51,6 +51,8 @@ export type TransactionHistorySortField =
 export type TransactionHistorySortDirection = 'ASC' | 'DESC'
 
 export type TransactionHistoryParams = {
+  tagIds?: number[]
+  tagMode?: 'AND' | 'OR'
   page?: number
   size?: number
   query?: string
@@ -59,4 +61,12 @@ export type TransactionHistoryParams = {
   category?: string
   sortField?: TransactionHistorySortField
   sortDirection?: TransactionHistorySortDirection
+}
+
+export type TransactionTag = { id: number; name: string }
+export type TagDraft = { id: number; name: string } | { name: string; id?: undefined }
+export type TransactionEdit = {
+  category?: string
+  newCategoryName?: string
+  tags: ({ id: number } | { name: string })[]
 }
