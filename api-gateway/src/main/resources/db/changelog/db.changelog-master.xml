@@ -16,4 +16,5 @@
     <include file="classpath:/db/changelog/changes/009-create-transaction-category-history.xml"/>
 
     <include file="classpath:/db/changelog/changes/010-create-transaction-tags.xml"/>
+    <include file="classpath:/db/changelog/changes/011-create-transaction-tag-rules.xml"/>
 </databaseChangeLog>

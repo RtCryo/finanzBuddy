@@ -59,6 +59,8 @@ describe('AppShell', () => {
     await user.tab()
     expect(screen.getByRole('link', { name: 'Transaction history' })).toHaveFocus()
     await user.tab()
+    expect(screen.getByRole('link', { name: 'Tag rules' })).toHaveFocus()
+    await user.tab()
     expect(screen.getByRole('button', { name: 'Sign out' })).toHaveFocus()
   })
 
@@ -73,6 +75,7 @@ describe('AppShell', () => {
     expect(within(navigation).getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/dashboard')
     expect(within(navigation).getByRole('link', { name: 'Documents' })).toHaveAttribute('href', '/documents')
     expect(within(navigation).getByRole('link', { name: 'Transaction history' })).toHaveAttribute('href', '/transactions')
+    expect(within(navigation).getByRole('link', { name: 'Tag rules' })).toHaveAttribute('href', '/rules')
     expect(within(navigation).queryByRole('link', { name: 'Upload a file' })).not.toBeInTheDocument()
     expect(screen.getAllByText('Your financial data is secure and only accessible to you.')).toHaveLength(1)
   })

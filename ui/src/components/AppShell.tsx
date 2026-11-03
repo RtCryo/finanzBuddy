@@ -50,6 +50,7 @@ function pageLabel(pathname: string) {
   if (pathname === '/dashboard') return 'Dashboard'
   if (pathname === '/documents/upload') return 'Upload'
   if (pathname === '/transactions') return 'Transaction history'
+  if (pathname === '/rules') return 'Tag rules'
   if (pathname.startsWith('/documents/')) return 'Document details'
   if (pathname === '/documents') return 'Documents'
   return 'Dashboard'
@@ -80,6 +81,10 @@ export function AppShell({ children }: AppShellProps) {
           <NavLink to="/transactions" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
             <WorkspaceIcon transactions />
             <span>Transaction history</span>
+          </NavLink>
+          <NavLink to="/rules" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+            <WorkspaceIcon transactions />
+            <span>Tag rules</span>
           </NavLink>
         </nav>
       </aside>

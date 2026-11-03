@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+ <changeSet id="011-create-transaction-tag-rules" author="api-gateway">
+  <addColumn tableName="transaction_tag_assignments">
+   <column name="manual_assignment" type="BOOLEAN" defaultValueBoolean="true"><constraints nullable="false"/></column>
+  </addColumn>
+  <createTable tableName="transaction_tag_rules">
+   <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="user_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="tag_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="mode" type="VARCHAR(3)"><constraints nullable="false"/></column>
+  </createTable>
+  <addUniqueConstraint tableName="transaction_tag_rules" columnNames="user_id,id" constraintName="uk_rules_owner_id"/>
+  <addForeignKeyConstraint baseTableName="transaction_tag_rules" baseColumnNames="user_id,tag_id" referencedTableName="personal_transaction_tags" referencedColumnNames="user_id,id" constraintName="fk_rules_owner_tag"/>
+  <createIndex tableName="transaction_tag_rules" indexName="idx_rules_owner"><column name="user_id"/></createIndex>
+  <createTable tableName="transaction_tag_rule_conditions">
+   <column name="user_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="rule_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="position" type="INT"><constraints nullable="false"/></column>
+   <column name="field_name" type="VARCHAR(20)"><constraints nullable="false"/></column>
+   <column name="operator" type="VARCHAR(10)"><constraints nullable="false"/></column>
+   <column name="match_value" type="VARCHAR(255)"><constraints nullable="false"/></column>
+  </createTable>
+  <addPrimaryKey tableName="transaction_tag_rule_conditions" columnNames="user_id,rule_id,position" constraintName="pk_rule_conditions"/>
+  <addForeignKeyConstraint baseTableName="transaction_tag_rule_conditions" baseColumnNames="user_id,rule_id" referencedTableName="transaction_tag_rules" referencedColumnNames="user_id,id" constraintName="fk_conditions_owner_rule" onDelete="CASCADE"/>
+  <createTable tableName="transaction_tag_rule_contributions">
+   <column name="user_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="rule_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="document_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="transaction_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="tag_id" type="BIGINT"><constraints nullable="false"/></column>
+  </createTable>
+  <addPrimaryKey tableName="transaction_tag_rule_contributions" columnNames="user_id,rule_id,transaction_id,tag_id" constraintName="pk_rule_contributions"/>
+  <addForeignKeyConstraint baseTableName="transaction_tag_rule_contributions" baseColumnNames="user_id,rule_id" referencedTableName="transaction_tag_rules" referencedColumnNames="user_id,id" constraintName="fk_contributions_owner_rule" onDelete="CASCADE"/>
+  <addForeignKeyConstraint baseTableName="transaction_tag_rule_contributions" baseColumnNames="user_id,tag_id" referencedTableName="personal_transaction_tags" referencedColumnNames="user_id,id" constraintName="fk_contributions_owner_tag"/>
+  <addForeignKeyConstraint baseTableName="transaction_tag_rule_contributions" baseColumnNames="user_id,document_id" referencedTableName="documents" referencedColumnNames="user_id,id" constraintName="fk_contributions_owner_document"/>
+  <createIndex tableName="transaction_tag_rule_contributions" indexName="idx_contributions_owner_transaction_tag"><column name="user_id"/><column name="transaction_id"/><column name="tag_id"/></createIndex>
+  <rollback>
+   <dropTable tableName="transaction_tag_rule_contributions"/>
+   <dropTable tableName="transaction_tag_rule_conditions"/>
+   <dropTable tableName="transaction_tag_rules"/>
+   <dropColumn tableName="transaction_tag_assignments" columnName="manual_assignment"/>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

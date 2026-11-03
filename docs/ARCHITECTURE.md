@@ -54,7 +54,7 @@ The API Gateway and parser service use the same PostgreSQL database and S3 bucke
 | Component | Responsibility | Main implementation areas |
 |---|---|---|
 | UI | Registration/login, dashboard, document upload/list/detail, transaction history and editing | `ui/src/pages/`, `ui/src/components/`, `ui/src/api/` |
-| API Gateway | JWT auth, document upload and ownership, document status, dashboard/history APIs, transaction category/version and tag operations, outbox delivery | `api-gateway/src/main/java/com/finanzbuddy/api/` |
+| API Gateway | JWT auth, document upload and ownership, document status, dashboard/history APIs, transaction category/version, tag and rule operations, import-time rule application, outbox delivery | `api-gateway/src/main/java/com/finanzbuddy/api/` |
 | Parser Service | Kafka consumption, object download, format-specific parsing, deduplication, transaction persistence, status reporting | `parser-service/src/main/java/com/finanzbuddy/parser/` |
 | PostgreSQL | Shared relational store; each service applies its own Liquibase changelog | `api-gateway/src/main/resources/db/changelog/`, `parser-service/src/main/resources/db/changelog/` |
 | SeaweedFS | S3-compatible storage for original documents; Compose keeps the service name `minio` and `MINIO_*` settings for client compatibility | `docker-compose.yml`, each service's storage configuration |
@@ -73,6 +73,7 @@ Both services connect to the same database/schema. IDs crossing service boundari
 | `transactions`, `processed_documents` | Parser Service | Gateway reads transactions for document details, dashboard, history, and ownership-scoped category edits; the processed marker makes event handling idempotent |
 | `transaction_versions`, `personal_transaction_categories` | API Gateway | Full snapshots for category edits/history and each user's reusable category list |
 | `personal_transaction_tags`, `transaction_tag_assignments` | API Gateway | Owner-scoped reusable tag dictionary and current transaction assignments, independent of snapshots |
+| `transaction_tag_rules`, `transaction_tag_rule_conditions`, `transaction_tag_rule_contributions` | API Gateway | Owner-scoped rules, ordered text conditions, and rule sources for effective tag assignments |
 
 The gateway intentionally accesses parser-owned transactions through JDBC (`TransactionReadRepository` and `TransactionCategoryRepository`) rather than mapping the `transactions` table as a JPA entity. This keeps gateway Hibernate schema validation from requiring a table that the parser service creates and permits the gateway to start before the parser. The gateway migration for category/version tables likewise does not require a foreign-key constraint to a parser-owned table.
 
@@ -80,16 +81,21 @@ History and document transaction reads project the latest saved version when one
 
 Gateway migration 010 adds personal tags and assignments without a foreign key to parser-owned `transactions`, so the gateway can start before parser tables exist. Tag reads and writes verify ownership through the transaction and document join. The shared transaction editor saves category and tags in one database transaction, locking the gateway-owned document row; legacy category writes use the same lock. Category changes create snapshots, while tag-only edits leave version history unchanged. Tag metadata never appears in snapshot payloads. Deploy the additive schema and backend before the UI; rolling back migration 010 explicitly deletes tag data.
 
+Gateway migration 011 adds owner-scoped rules, ordered conditions, and per-rule contributions. It also marks existing assignments as manual. An assignment remains visible while it has a manual source or any rule contribution. Both migrations avoid foreign keys to parser-owned `transactions`; rule and assignment rows use owner-consistent references to gateway-owned users, tags, rules, and documents. Rule mutations and editor saves lock the owner row before changing assignments. Deleting a rule without cleanup promotes its contributions to manual assignments; cleanup removes only that rule's source. Rule changes do not create category versions.
+
 ## Document processing flow
 
 1. The user authenticates against the gateway and uploads a file through `POST /documents`. The default accepted upload type is `CSV`; PDF/XML are recognized by the gateway but rejected unless configured and supported by a running parser. The gateway's multipart limit is 10 MB per file.
 2. The gateway creates a `PENDING` document row, stores the original under `users/{userId}/{documentId}-{originalFilename}` in the configured S3 bucket, then stores the object path and upload event in one database transaction. Failed finalization cleans up the orphaned object/row where possible.
 3. The scheduled outbox relay publishes the persisted JSON event to `documents.{type}` with the document ID as the Kafka key, then marks it delivered. Failed sends are retried with backoff and eventually dead-lettered in the outbox. Delivery is at-least-once; the gateway relay assumes one gateway instance, while the parser deduplicates by document ID.
 4. The parser's configured listener downloads the object, routes it to the format-specific parser, and writes a `processed_documents` marker plus extracted rows to `transactions` transactionally. CSV is enabled by default; PDF and XML listeners are disabled and their parsers are stubs.
-5. The parser reports `PROCESSING`, `PROCESSED`, or `FAILED` to `PUT /internal/documents/{id}/status` using `X-Internal-Api-Key`. The gateway validates state transitions, retains failure detail only for `FAILED`, and can enqueue another upload event when a failed document is reset to `PENDING`.
+5. The parser reports `PROCESSING`, `PROCESSED`, or `FAILED` to `PUT /internal/documents/{id}/status` using `X-Internal-Api-Key`. On the first `PROCESSING` to `PROCESSED` report, the gateway locks the owner and document, evaluates that owner's current rules against the committed imported rows, and commits contributions, effective assignments, and status together. If application fails, the status remains `PROCESSING` and the parser's status retry can repeat the call. Duplicate `PROCESSED` reports do not rerun rules. The gateway retains failure detail only for `FAILED` and can enqueue another upload event when a failed document is reset to `PENDING`.
 6. The UI polls document/dashboard data while relevant screens are open and queries processed transactions through the gateway. User-facing reads are scoped to the authenticated owner.
 
 ## HTTP interface
+
+Rule create and update requests accept an existing owned tag ID or a new tag name. The Gateway resolves a new name and saves the rule within one transaction, so failures roll back both.
+Category conditions may also request new personal category names. The Gateway validates that each name belongs to a Category condition and saves those dictionary entries with the rule in the same transaction. Rule authoring never assigns a transaction category or creates a category version.
 
 The UI sends API requests to `/api`; Vite rewrites that prefix in development and Nginx proxies it to `api-gateway:8080` in the production UI container.
 
@@ -104,6 +110,7 @@ The UI sends API requests to `/api`; Vite rewrites that prefix in development an
 | `GET /transactions/categories`, `POST /transactions/categories` | User JWT | Read categories or atomically create a personal category and assign it |
 | `GET /transactions/{id}/versions`, `PUT /transactions/{id}/category` | User JWT | Read snapshots or update the latest category |
 | `GET /transactions/tags`, `GET /transactions/{id}/tags` | User JWT | Read the owner's reusable tags or current assignments for an owned transaction |
+| `GET/POST /transactions/rules`, `PUT/DELETE /transactions/rules/{id}` | User JWT | Manage owner-scoped tag rules with an atomic choice about existing transactions |
 | `PUT /transactions/{id}` | User JWT | Atomically save optional category change and the complete desired current tag set; returns tag-free transaction plus tags |
 | `PUT /internal/documents/{id}/status` | Internal API key | Parser-to-gateway status reporting |
 | `/actuator/health`, `/actuator/info`, `/actuator/prometheus` | Service endpoint configuration | Health checks and Prometheus scraping; parser also exposes `/actuator/metrics` |

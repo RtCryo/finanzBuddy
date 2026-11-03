@@ -147,6 +147,10 @@ The service reports the following statuses to `PUT /internal/documents/{id}/stat
 All status calls include the `X-Internal-Api-Key` header when the key is configured.
 
 Status reporting uses the modern `RestClient` with configurable connect/read timeouts and retries failed requests up to 3 times with exponential backoff.
+On a `PROCESSED` report, the Gateway applies the owner's current tag rules to the already committed
+transactions before it commits the document status. If rule application fails, that status call
+fails and the Gateway leaves the document in `PROCESSING`; a retry can complete it. Repeating a
+successful `PROCESSED` report does not apply rules again. The parser does not store or evaluate rules.
 
 ## Monitoring
 

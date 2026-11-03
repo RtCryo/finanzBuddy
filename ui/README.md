@@ -12,6 +12,7 @@ Documentation map: [UI implementation, capabilities, and history](../docs/README
 - View normalized transactions for processed documents.
 - Review transaction history with combined text, date, category, and reusable personal-tag filters; tag matching supports all selected tags (AND) or any selected tag (OR).
 - Edit a transaction's category and current tags together in its detail panel. Personal tags remain available for reuse after their last assignment is removed.
+- Manage personal tag rules at `/rules`: choose an existing tag or create one while saving a rule, combine Counterparty, Description, or Category conditions with AND/OR, choose an available category or create a personal category in a Category condition, and decide whether create, edit, or delete should affect existing transactions. Rules apply automatically to future imports.
 - Inspect transactions from history or processed documents and browse snapshots.
 - Compare other expenses with the same counterparty inside the shared details panel. The section
   shows latest negative expenses across owned processed documents using exact case/whitespace
@@ -100,3 +101,13 @@ ui/
 ├── vite.config.ts      # Vite + Tailwind + API proxy config
 └── src/                # Application source
 ```
+
+The [documentation map](../docs/README.md#subsystem-map), [current rule requirements](../openspec/specs/transaction-tag-rules/spec.md), and [archived change](../openspec/changes/archive/2026-11-03-add-transaction-tag-rules/) connect this page to its implementation and behavior history.
+
+The authenticated `/rules` page is implemented in `src/pages/RulesPage.tsx`; its API calls live in
+`src/api/rules.ts`. The rule list has loading, empty, and recoverable error states. The editor uses
+repeatable flat condition rows and shows AND/OR only after a second condition is added. Before
+submitting a mutation, a separate choice defaults to leaving existing transaction tags unchanged.
+Category rows load choices from `/transactions/categories`, retain older condition values not in
+that list, and offer creation of a personal category within the rule mutation. The choice travels
+in the mutation request, and the rule, tag, and category lists refresh after a successful save.
