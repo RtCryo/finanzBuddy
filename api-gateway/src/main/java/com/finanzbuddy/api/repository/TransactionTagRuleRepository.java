@@ -15,8 +15,8 @@ public class TransactionTagRuleRepository {
 
     public TransactionTagRuleRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
-        String product = jdbc.execute(
-                (java.sql.Connection c) -> c.getMetaData().getDatabaseProductName());
+        String product =
+                jdbc.execute((java.sql.Connection c) -> c.getMetaData().getDatabaseProductName());
         this.ownerLockClause =
                 "PostgreSQL".equalsIgnoreCase(product) ? "FOR NO KEY UPDATE" : "FOR UPDATE";
     }
@@ -37,7 +37,8 @@ public class TransactionTagRuleRepository {
                         + " WHERE user_id = ? ORDER BY rule_id, position",
                 rs -> {
                     conditions
-                            .computeIfAbsent(rs.getLong("rule_id"), id -> new java.util.ArrayList<>())
+                            .computeIfAbsent(
+                                    rs.getLong("rule_id"), id -> new java.util.ArrayList<>())
                             .add(condition(rs));
                 },
                 userId);
