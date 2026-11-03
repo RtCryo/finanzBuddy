@@ -19,6 +19,7 @@ See the [documentation map](../docs/README.md#subsystem-map) for UI entry points
 | Document list | summary metrics, toolbar/search, contained document table, text status badge, pager, empty/loading/error states; [list contract](../openspec/specs/document-list-ui/spec.md) | row hover/focus/navigation, status polling, disabled previous/next, no-results search |
 | Document detail | back link, filename/status heading, icon-only download action, information surface, transaction table, transaction detail dialog; [transaction view contract](../openspec/specs/transaction-view-ui/spec.md) | loading/error; pending/processing; failure details; processed/empty; download disabled/error; dialog read/edit/history/focus return |
 | Transaction history | page heading, full-width search/date/category/tag filters, with tag checkboxes and match mode in one popover; sortable contained table, semantic amount text, numbered pagination, transaction detail dialog; [transaction view contract](../openspec/specs/transaction-view-ui/spec.md) | loading/error/empty/no matches; filter and sort focus; active sort/page; disabled pagination; dialog read/edit/history/focus return |
+| Tag rules (`/rules`) | workspace page heading, rule list, flat condition editor, explicit existing-transaction choice using shared surfaces, fields, buttons, and notices; [current rule requirements](../openspec/specs/transaction-tag-rules/spec.md) | loading/empty/error, create/edit/delete, condition validation, yes/no choice, pending submission and retry |
 
 The shared CSS selectors in `ui/src/index.css` define the current implementation families: `.app-shell`, `.sidebar`, `.workspace-nav`, `.topbar`, `.page-heading`, `.surface`, `.button`, `.field`, `.notice`, `.status-badge`, `.document-table-wrap`, `.transaction-table-wrap`, `.history-filters`, and `.transaction-details-dialog`. React shell/layout components are in `ui/src/components/`; page composition is in `ui/src/pages/`.
 
@@ -99,6 +100,7 @@ Contrast audit adjustments from the observed stylesheet: muted `#718096` becomes
 | Transaction detail panel | Right-side dialog; heading/close; summary; version selector/comparison; detail fields; related expenses; optional editor/footer actions | read-only, edit, loading, error; focus returns to opener; scroll stays inside panel; full viewport width on narrow screens; footer actions remain reachable |
 | Personal tag chips and picker | Wrapping semantic chips; selected count; labeled search field; contained suggestion list; separate create choice during editing; named remove buttons | selected, empty, searching, no matches, create, disabled, and focus states; choices stay within the panel/filter card; long names wrap; keyboard supports search, selection, and removal |
 | Related expenses in details | Named section after transaction fields; compact date and amount/currency button rows; secondary Load more / retry action | Independent initial/append status and inline error; preserve rows on append failure; explicit empty/missing-counterparty text; keyboard row navigation; latest source regardless of selected snapshot |
+| Tag rule editor and historical choice | Labeled tag/mode selectors with a chevron inset 12 px from the right edge; repeatable field/operator/value rows; Category uses the shared category selector and optional new-name input; add/remove actions use secondary buttons; separate fieldset with two radio choices before submission | Show the mode selector when there are multiple conditions; flat rows use three controls wide, two on tablet, and one on narrow screens; the remove action sits below its row and does not compress the value control; form actions align to the right with secondary Cancel or Back before the primary action; the review and final submission buttons name their specific steps; radio choice defaults to leaving history unchanged; native keyboard controls and shared focus tokens; errors remain visible for retry |
 
 Product-specific behavior such as polling intervals, upload constraints, transaction sorting/filtering/editing, routing, and pagination semantics remains defined by each capability spec rather than this visual catalog.
 
@@ -119,6 +121,15 @@ uses the existing 5.76:1 pair; values/headings use the 14.10:1 strong pair, noti
 reuse their audited semantic tokens. No new motion or palette exception is introduced.
 
 ## Responsive rules
+
+The tag-rule page follows the shared workspace width and gutters. Source review of its grid
+confirms three condition controls on wide screens, two columns through tablet widths, and one
+column at 680 px and below; rule actions wrap and long values break within their card. Native
+selects, text inputs, radio buttons, and buttons are keyboard operable, with the shared focus
+outline and a focused default history choice. The editor uses the existing strong/muted text on
+white (14.10:1 and 5.76:1), the 4.02:1 control border, and named notice colors. The global
+reduced-motion rule covers the page; no new animation or palette exception was needed. UI DOM
+tests cover focus, validation, loading/error states, and all history choices.
 
 | Viewport | Rules |
 |---|---|

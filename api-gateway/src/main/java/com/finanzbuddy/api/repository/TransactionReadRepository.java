@@ -48,6 +48,36 @@ public class TransactionReadRepository {
                 documentId);
     }
 
+    public List<RuleCandidate> findRuleCandidates(
+            long userId, Long documentId, long afterId, int limit) {
+        String where =
+                documentId == null ? " AND d.status = 'PROCESSED'" : " AND t.document_id = ?";
+        String sql =
+                "SELECT t.id, t.document_id, t.counterparty, t.description, t.category FROM ("
+                        + currentTransactionsSelect()
+                        + ") t JOIN documents d ON d.id = t.document_id"
+                        + " WHERE d.user_id = ? AND t.user_id = ?"
+                        + where
+                        + " AND t.id > ? ORDER BY t.id LIMIT ?";
+        Object[] args =
+                documentId == null
+                        ? new Object[] {userId, userId, afterId, limit}
+                        : new Object[] {userId, userId, documentId, afterId, limit};
+        return jdbcTemplate.query(
+                sql,
+                (rs, row) ->
+                        new RuleCandidate(
+                                rs.getLong("id"),
+                                rs.getLong("document_id"),
+                                rs.getString("counterparty"),
+                                rs.getString("description"),
+                                rs.getString("category")),
+                args);
+    }
+
+    public record RuleCandidate(
+            long id, long documentId, String counterparty, String description, String category) {}
+
     public java.util.Optional<TransactionResponse> findOwnedProcessedSource(Long userId, Long id) {
         return jdbcTemplate
                 .query(

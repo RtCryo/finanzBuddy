@@ -15,6 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class TransactionTagService {
     private final UserRepository users;
     private final TransactionTagRepository tags;
+    private final TransactionTagRuleRepository rules;
     private final TransactionCategoryRepository categories;
     private final TransactionCategoryService categoryService;
     private final TransactionTemplate transaction;
@@ -22,11 +23,13 @@ public class TransactionTagService {
     public TransactionTagService(
             UserRepository users,
             TransactionTagRepository tags,
+            TransactionTagRuleRepository rules,
             TransactionCategoryRepository categories,
             TransactionCategoryService categoryService,
             PlatformTransactionManager manager) {
         this.users = users;
         this.tags = tags;
+        this.rules = rules;
         this.categories = categories;
         this.categoryService = categoryService;
         transaction = new TransactionTemplate(manager);
@@ -83,6 +86,7 @@ public class TransactionTagService {
             try {
                 return transaction.execute(
                         status -> {
+                            rules.lockOwner(userId);
                             var source = categoryService.lockOwnedTransaction(userId, id);
                             Map<Long, TransactionTag> available = new HashMap<>();
                             tags.findAll(userId).forEach(tag -> available.put(tag.id(), tag));

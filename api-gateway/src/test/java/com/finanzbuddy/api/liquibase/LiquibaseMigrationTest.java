@@ -50,7 +50,10 @@ class LiquibaseMigrationTest {
                         "PUBLIC.PERSONAL_TRANSACTION_CATEGORIES",
                         "PUBLIC.TRANSACTION_VERSIONS",
                         "PUBLIC.PERSONAL_TRANSACTION_TAGS",
-                        "PUBLIC.TRANSACTION_TAG_ASSIGNMENTS")
+                        "PUBLIC.TRANSACTION_TAG_ASSIGNMENTS",
+                        "PUBLIC.TRANSACTION_TAG_RULES",
+                        "PUBLIC.TRANSACTION_TAG_RULE_CONDITIONS",
+                        "PUBLIC.TRANSACTION_TAG_RULE_CONTRIBUTIONS")
                 .doesNotContain("PUBLIC.TRANSACTIONS");
     }
 
@@ -167,6 +170,30 @@ class LiquibaseMigrationTest {
                                         + " WHERE UPPER(table_name) = 'TRANSACTION_TAG_ASSIGNMENTS'",
                                 String.class))
                 .contains("IDX_ASSIGNMENTS_OWNER_TAG_TRANSACTION");
+    }
+
+    @Test
+    void ruleTablesHaveOwnerConsistentConstraintsWithoutParserForeignKey() {
+        assertThat(columnNullability("TRANSACTION_TAG_ASSIGNMENTS"))
+                .containsEntry("MANUAL_ASSIGNMENT", "NO");
+        assertThat(columnNullability("TRANSACTION_TAG_RULES").values()).containsOnly("NO");
+        assertThat(columnNullability("TRANSACTION_TAG_RULE_CONDITIONS").values())
+                .containsOnly("NO");
+        assertThat(columnNullability("TRANSACTION_TAG_RULE_CONTRIBUTIONS").values())
+                .containsOnly("NO");
+        assertThat(
+                        jdbcTemplate.queryForList(
+                                "SELECT UPPER(constraint_name) FROM information_schema.table_constraints"
+                                        + " WHERE UPPER(table_name) IN ('TRANSACTION_TAG_RULES',"
+                                        + " 'TRANSACTION_TAG_RULE_CONDITIONS', 'TRANSACTION_TAG_RULE_CONTRIBUTIONS')",
+                                String.class))
+                .contains(
+                        "FK_RULES_OWNER_TAG",
+                        "FK_CONDITIONS_OWNER_RULE",
+                        "FK_CONTRIBUTIONS_OWNER_RULE",
+                        "FK_CONTRIBUTIONS_OWNER_TAG",
+                        "FK_CONTRIBUTIONS_OWNER_DOCUMENT",
+                        "PK_RULE_CONTRIBUTIONS");
     }
 
     private Map<String, String> columnNullability(String table) {

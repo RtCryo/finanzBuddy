@@ -26,6 +26,8 @@ import io.minio.GetObjectResponse;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.LocalDate;
@@ -63,6 +65,9 @@ public class DocumentService {
     private final UserRepository userRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final TransactionReadRepository transactionReadRepository;
+    private final TransactionTagRuleService ruleService;
+    private final com.finanzbuddy.api.repository.TransactionTagRuleRepository ruleRepository;
+    private final EntityManager entityManager;
     private final DocumentUploadMetrics documentUploadMetrics;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate txTemplate;
@@ -76,6 +81,9 @@ public class DocumentService {
             UserRepository userRepository,
             OutboxEventRepository outboxEventRepository,
             TransactionReadRepository transactionReadRepository,
+            TransactionTagRuleService ruleService,
+            com.finanzbuddy.api.repository.TransactionTagRuleRepository ruleRepository,
+            EntityManager entityManager,
             DocumentUploadMetrics documentUploadMetrics,
             ObjectMapper objectMapper,
             PlatformTransactionManager txManager,
@@ -87,6 +95,9 @@ public class DocumentService {
         this.userRepository = userRepository;
         this.outboxEventRepository = outboxEventRepository;
         this.transactionReadRepository = transactionReadRepository;
+        this.ruleService = ruleService;
+        this.ruleRepository = ruleRepository;
+        this.entityManager = entityManager;
         this.documentUploadMetrics = documentUploadMetrics;
         this.objectMapper = objectMapper;
         this.txTemplate = new TransactionTemplate(txManager);
@@ -394,6 +405,10 @@ public class DocumentService {
                                             new ResponseStatusException(
                                                     HttpStatus.NOT_FOUND, "Document not found"));
 
+            // All assignment writers take the owner lock before a document lock.
+            ruleRepository.lockOwner(document.getUser().getId());
+            entityManager.refresh(document, LockModeType.PESSIMISTIC_WRITE);
+
             if (document.getStatus() == request.status()) {
                 // Idempotent redelivery of the current status from an at-least-once parser: return
                 // 200 instead of a 400 that would push the parser into a retry loop, and do not
@@ -406,6 +421,10 @@ public class DocumentService {
             }
 
             validateStatusTransition(document.getStatus(), request.status());
+            if (document.getStatus() == DocumentStatus.PROCESSING
+                    && request.status() == DocumentStatus.PROCESSED) {
+                ruleService.applyImport(document.getUser().getId(), documentId);
+            }
             document.setStatus(request.status());
             // Clear any stale failure reason on non-FAILED transitions (e.g. FAILED->PENDING
             // reprocess) so a later success never keeps showing an old error message.

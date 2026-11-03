@@ -145,7 +145,31 @@ curl -X PUT http://localhost:8080/transactions/14 \
   -d '{"category":"Travel","tags":[{"id":4},{"name":"Work"}]}'
 ```
 
-`tags` is the required **complete desired set**; `[]` clears assignments but keeps dictionary entries for reuse. Each item contains either an owned `id` or a `name`, never both. Names are trimmed, nonblank, at most 255 characters, and reused case-insensitively per owner. Omit both `category` and `newCategoryName` to preserve the category, including an uncategorized transaction; to create a personal category, send `newCategoryName` instead of `category`. The response is `{ "transaction": { ...existing transaction fields... }, "tags": [{ "id": 4, "name": "Travel" }] }`. A category change creates the usual version; a tag-only or unchanged save creates none. The entire edit commits or rolls back together. Existing `PUT /transactions/{id}/category` and `POST /transactions/categories` remain available, and `GET /transactions/{id}/versions` stays tag-free.
+`tags` is the required **complete desired set**; `[]` clears assignments but keeps dictionary entries for reuse. Each item contains either an owned `id` or a `name`, never both. Names are trimmed, nonblank, at most 255 characters, and reused case-insensitively per owner. Omit both `category` and `newCategoryName` to preserve the category, including an uncategorized transaction; to create a personal category, send `newCategoryName` instead of `category`. The response is `{ "transaction": { ...existing transaction fields... }, "tags": [{ "id": 4, "name": "Travel" }] }`. A category change creates the usual version; a tag-only or unchanged save creates none. The entire edit commits or rolls back together. Existing `PUT /transactions/{id}/category` and `POST /transactions/categories` remain available, and `GET /transactions/{id}/versions` stays tag-free. Migration 011 adds `manual_assignment` to existing assignments (old rows become manual) and Gateway-owned rule, condition, and contribution tables. These tables have owner-consistent Gateway foreign keys and no foreign key to parser-owned `transactions`.
+
+### Personal tag rules
+
+See the [documentation map](../docs/README.md#subsystem-map), [current rule requirements](../openspec/specs/transaction-tag-rules/spec.md), and [archived change](../openspec/changes/archive/2026-11-03-add-transaction-tag-rules/) for implementation and behavior history.
+
+Create and update accept exactly one of an existing owned `tagId` or a `tagName` to create or reuse a personal tag atomically with the rule. Tag names are trimmed, nonblank, at most 255 characters, and reused case-insensitively per owner. A failed rule mutation leaves no new tag. For example, a create request may use `{"tagName":"Groceries","mode":"AND","conditions":[{"field":"CATEGORY","operator":"CONTAINS","value":"grocer"}],"applyExisting":false}`.
+
+All rule routes require the user JWT. `GET /transactions/rules` returns only the owner's rules with `id`, `tagId`, `mode`, and ordered `conditions`. Conditions use `field` `COUNTERPARTY`, `DESCRIPTION`, or `CATEGORY`, `operator` `EXACT` or `CONTAINS`, and a nonblank `value` of at most 255 characters. `mode` is `AND` or `OR` across one or more flat conditions. Both matching modes trim the rule value and latest transaction field and ignore case; a missing or blank field never matches. Historical rule application reads the latest saved category; new imports use their imported category. Rules never change a category or create a category version. Nested groups and unrecognized fields are rejected.
+
+For a Category condition, create and update may include `newCategoryNames` containing names entered through the rule editor's create-category option. Each trimmed, nonblank name (at most 255 characters) must match a Category condition value. The Gateway creates or reuses those personal categories for the owner in the same transaction as the rule; failure rolls back both. This adds category choices for later editing without assigning a category to any transaction. For example, `{"tagId":4,"mode":"AND","conditions":[{"field":"CATEGORY","operator":"EXACT","value":"Utilities"}],"newCategoryNames":["Utilities"],"applyExisting":false}`.
+
+```bash
+curl -X POST http://localhost:8080/transactions/rules \
+  -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' \
+  -d '{"tagId":4,"mode":"AND","conditions":[{"field":"COUNTERPARTY","operator":"EXACT","value":"X"},{"field":"DESCRIPTION","operator":"CONTAINS","value":"YUPI"}],"applyExisting":true}'
+curl -X PUT http://localhost:8080/transactions/rules/7 \
+  -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' \
+  -d '{"tagId":4,"mode":"OR","conditions":[{"field":"DESCRIPTION","operator":"CONTAINS","value":"YUPI"}],"applyExisting":false}'
+curl -X DELETE http://localhost:8080/transactions/rules/7 \
+  -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' \
+  -d '{"removeExisting":true}'
+```
+
+Create and update accept `applyExisting` (default `false`). `true` applies a new rule to all processed owner transactions or reconciles an edited rule's old contributions against its new conditions and target; `false` changes future imports only. Delete requires `removeExisting`: `true` removes that rule's contributions, while `false` preserves existing effective assignments as manual. Each mutation and its optional historical work is one database transaction. The effective tag set is the union of manual assignments and rule contributions. An unchanged editor save preserves existing sources; removing a tag in the complete-set editor removes its manual and current rule sources for that transaction. A later explicit rule reconciliation can restore a matching tag. Rule operations never create transaction category versions.
 
 ### Related transaction expenses
 
@@ -184,6 +208,10 @@ Allowed status values: `PENDING`, `PROCESSING`, `PROCESSED`, `FAILED`. Allowed t
 `PENDING→PROCESSING`, `PROCESSING→PROCESSED`, `PROCESSING→FAILED`, `PENDING→FAILED`,
 `FAILED→PENDING`. When reporting `FAILED`, include an optional `"message"` field to record the
 error. Status updates reference documents by id only (they are not scoped to the uploading user).
+On the first `PROCESSING→PROCESSED` transition, the Gateway applies current owner rules to the
+committed imported rows and commits assignments with the status. An application failure rolls back
+the status and tags so a parser retry can complete the same report. Duplicate `PROCESSED` reports
+do not reevaluate rules. The parser remains the sole writer of imported transaction rows.
 
 ### Health & Metrics
 

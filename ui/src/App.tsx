@@ -7,6 +7,7 @@ import { DocumentsPage } from './pages/DocumentsPage'
 import { DocumentDetailPage } from './pages/DocumentDetailPage'
 import { TransactionHistoryPage } from './pages/TransactionHistoryPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { RulesPage } from './pages/RulesPage'
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
           <Route path="/documents/upload" element={<UploadPage />} />
           <Route path="/documents/:id" element={<DocumentDetailPage />} />
           <Route path="/transactions" element={<TransactionHistoryPage />} />
+          <Route path="/rules" element={<RulesPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

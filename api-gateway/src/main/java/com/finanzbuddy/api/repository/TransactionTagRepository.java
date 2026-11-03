@@ -50,25 +50,72 @@ public class TransactionTagRepository {
                 normalized);
     }
 
-    public void replace(
-            long userId, long documentId, long transactionId, List<TransactionTag> tags) {
-        if (findAssigned(userId, transactionId).stream()
-                .map(TransactionTag::id)
-                .collect(java.util.stream.Collectors.toSet())
-                .equals(
-                        tags.stream()
-                                .map(TransactionTag::id)
-                                .collect(java.util.stream.Collectors.toSet()))) return;
-        jdbc.update(
-                "DELETE FROM transaction_tag_assignments WHERE user_id = ? AND transaction_id = ?",
-                userId,
-                transactionId);
-        for (TransactionTag tag : tags)
+    public boolean ownedTagExists(long userId, long tagId) {
+        Integer count =
+                jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM personal_transaction_tags WHERE user_id = ? AND id = ?",
+                        Integer.class,
+                        userId,
+                        tagId);
+        return count != null && count > 0;
+    }
+
+    public void ensureRuleAssignment(long userId, long documentId, long transactionId, long tagId) {
+        Integer count =
+                jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM transaction_tag_assignments"
+                                + " WHERE user_id = ? AND transaction_id = ? AND tag_id = ?",
+                        Integer.class,
+                        userId,
+                        transactionId,
+                        tagId);
+        if (count == null || count == 0) {
             jdbc.update(
-                    "INSERT INTO transaction_tag_assignments (user_id, document_id, transaction_id, tag_id) VALUES (?, ?, ?, ?)",
+                    "INSERT INTO transaction_tag_assignments"
+                            + " (user_id, document_id, transaction_id, tag_id, manual_assignment)"
+                            + " VALUES (?, ?, ?, ?, FALSE)",
                     userId,
                     documentId,
                     transactionId,
-                    tag.id());
+                    tagId);
+        }
+    }
+
+    public void replace(
+            long userId, long documentId, long transactionId, List<TransactionTag> tags) {
+        var current =
+                findAssigned(userId, transactionId).stream()
+                        .map(TransactionTag::id)
+                        .collect(java.util.stream.Collectors.toSet());
+        var desired =
+                tags.stream().map(TransactionTag::id).collect(java.util.stream.Collectors.toSet());
+        for (Long tagId : current) {
+            if (!desired.contains(tagId)) {
+                jdbc.update(
+                        "DELETE FROM transaction_tag_rule_contributions"
+                                + " WHERE user_id = ? AND transaction_id = ? AND tag_id = ?",
+                        userId,
+                        transactionId,
+                        tagId);
+                jdbc.update(
+                        "DELETE FROM transaction_tag_assignments"
+                                + " WHERE user_id = ? AND transaction_id = ? AND tag_id = ?",
+                        userId,
+                        transactionId,
+                        tagId);
+            }
+        }
+        for (Long tagId : desired) {
+            if (!current.contains(tagId)) {
+                jdbc.update(
+                        "INSERT INTO transaction_tag_assignments"
+                                + " (user_id, document_id, transaction_id, tag_id, manual_assignment)"
+                                + " VALUES (?, ?, ?, ?, TRUE)",
+                        userId,
+                        documentId,
+                        transactionId,
+                        tagId);
+            }
+        }
     }
 }

@@ -7,7 +7,7 @@ Enable private reusable labels on transactions and precise multi-tag searches wi
 ## Requirements
 
 ### Requirement: Transactions have a persistent personal tag set
-The system SHALL allow an authenticated owner to assign zero, one, or multiple distinct personal tags to a transaction. Assignments SHALL persist across closing and reopening details and new sessions. Removing a tag from a transaction SHALL remove only that assignment; the personal tag SHALL remain available for reuse.
+The system SHALL allow an authenticated owner to assign zero, one, or multiple distinct personal tags to a transaction. The visible tag set SHALL be the union of manual assignments and rule contributions, with each tag shown once. Assignments SHALL persist across closing and reopening details and new sessions. Removing a tag through the transaction editor SHALL remove that tag's manual assignment and current rule contributions for that transaction; the personal tag SHALL remain available for reuse. A later explicit retroactive rule application or reconciliation MAY assign the tag again if the rule still matches.
 
 #### Scenario: Save several tags and reopen details
 - **WHEN** an owner saves two tags on a transaction and later reopens its details
@@ -16,6 +16,10 @@ The system SHALL allow an authenticated owner to assign zero, one, or multiple d
 #### Scenario: Remove the last assignment
 - **WHEN** the owner removes a transaction's last tag and saves
 - **THEN** the transaction has no tags and the removed tag remains in the owner's reusable list
+
+#### Scenario: Manually remove a rule-assigned tag
+- **WHEN** the owner removes a tag currently contributed by a rule and saves the transaction
+- **THEN** that tag is absent from the transaction's current tag set, other tags remain, and no transaction version is created
 
 ### Requirement: Users can create and reuse private tags
 The system SHALL offer the user's existing tags and allow creating a tag while editing a transaction. Names SHALL be trimmed, nonblank, and at most 255 characters. Names SHALL be unique per user ignoring case after trimming; entering an existing name SHALL reuse that tag without a duplicate assignment. Invalid names SHALL reject the save without changes. Unassigned draft tags SHALL NOT be created on cancel.
@@ -85,4 +89,4 @@ The system SHALL require authentication and verify transaction ownership and tag
 
 - Documentation: [documentation map](../../../docs/README.md#subsystem-map), [Gateway README](../../../api-gateway/README.md), [UI README](../../../ui/README.md), [architecture](../../../docs/ARCHITECTURE.md)
 - Implementation: [tag service](../../../api-gateway/src/main/java/com/finanzbuddy/api/document/service/TransactionTagService.java), [tag repository](../../../api-gateway/src/main/java/com/finanzbuddy/api/repository/TransactionTagRepository.java), [detail editor](../../../ui/src/components/TransactionDetailsDialog.tsx), [history filter](../../../ui/src/components/HistoryTagFilter.tsx)
-- History: [add transaction tags](../../changes/archive/2026-11-01-add-transaction-tags/)
+- History: [add transaction tags](../../changes/archive/2026-11-01-add-transaction-tags/), [add transaction tag rules](../../changes/archive/2026-11-03-add-transaction-tag-rules/)
