@@ -7,14 +7,17 @@ import { AppShell } from '../components/AppShell'
 import { PageHeading } from '../components/PageHeading'
 import type { TransactionTag } from '../types/transaction'
 
-type RuleConditionForm = RuleCondition & { createCategory?: boolean }
+type RuleConditionForm = RuleCondition & { createCategory?: boolean; key?: number }
+let nextConditionKey = 0
+const withKey = (condition: RuleConditionForm): RuleConditionForm =>
+  ({ ...condition, key: nextConditionKey++ })
 type RuleForm = { tagId: number; mode: TagRule['mode']; conditions: RuleConditionForm[] }
 const createCategoryOption = '__create_category__'
 
 const emptyDraft = (): RuleForm => ({
   tagId: 0,
   mode: 'AND',
-  conditions: [{ field: 'COUNTERPARTY', operator: 'CONTAINS', value: '' }],
+  conditions: [withKey({ field: 'COUNTERPARTY', operator: 'CONTAINS', value: '' })],
 })
 
 type Pending = { action: 'create' | 'update' | 'delete'; id?: number; draft?: RuleDraft }
@@ -47,22 +50,19 @@ export function RulesPage() {
 
   useEffect(() => {
     let active = true
-    void Promise.all([getRules(), getTransactionTags(), getTransactionCategories()])
-      .then(([nextRules, nextTags, nextCategories]) => {
-      if (!active) return
-      setRules(nextRules)
-      setTags(nextTags)
-      setCategories(nextCategories)
-      setError('')
-      setLoadFailed(false)
-    }).catch((failure: unknown) => {
-      if (active) {
-        setLoadFailed(true)
-        setError(getErrorMessage(failure, 'We could not load your rules.'))
-      }
-    }).finally(() => { if (active) setLoading(false) })
+    void refresh()
+      .then(() => {
+        if (!active) return
+        setError('')
+        setLoadFailed(false)
+      }).catch((failure: unknown) => {
+        if (active) {
+          setLoadFailed(true)
+          setError(getErrorMessage(failure, 'We could not load your rules.'))
+        }
+      }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [])
+  }, [refresh])
 
   async function retryLoad() {
     setLoading(true)
@@ -91,7 +91,7 @@ export function RulesPage() {
 
   function beginEdit(rule: TagRule) {
     setDraft({ tagId: rule.tagId, mode: rule.mode,
-      conditions: rule.conditions.map((condition) => ({ ...condition, createCategory: false })) })
+      conditions: rule.conditions.map((condition) => withKey({ ...condition, createCategory: false })) })
     setEditingId(rule.id)
     setNewTagName('')
     setValidation('')
@@ -207,7 +207,7 @@ export function RulesPage() {
             onChange={(event) => setDraft({ ...draft, mode: event.target.value as RuleDraft['mode'] })}>
             <option value="AND">Match all (AND)</option><option value="OR">Match any (OR)</option>
           </select></label>}
-          {draft.conditions.map((condition, index) => <div className="rule-condition" key={index}>
+          {draft.conditions.map((condition, index) => <div className="rule-condition" key={condition.key}>
             <label className="field"><span>Field {index + 1}</span><select value={condition.field}
               onChange={(event) => {
                 const field = event.target.value as RuleCondition['field']
@@ -244,7 +244,7 @@ export function RulesPage() {
               aria-label={`Remove condition ${index + 1}`}>Remove condition</button>}
           </div>)}
           <button type="button" className="button button-secondary" onClick={() => setDraft({ ...draft,
-            conditions: [...draft.conditions, { field: 'COUNTERPARTY', operator: 'CONTAINS', value: '' }] })}>
+            conditions: [...draft.conditions, withKey({ field: 'COUNTERPARTY', operator: 'CONTAINS', value: '' })] })}>
             Add condition
           </button>
           {validation && <p className="notice notice-error" role="alert">{validation}</p>}

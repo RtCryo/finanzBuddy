@@ -66,7 +66,6 @@ public class DocumentService {
     private final OutboxEventRepository outboxEventRepository;
     private final TransactionReadRepository transactionReadRepository;
     private final TransactionTagRuleService ruleService;
-    private final com.finanzbuddy.api.repository.TransactionTagRuleRepository ruleRepository;
     private final EntityManager entityManager;
     private final DocumentUploadMetrics documentUploadMetrics;
     private final ObjectMapper objectMapper;
@@ -82,7 +81,6 @@ public class DocumentService {
             OutboxEventRepository outboxEventRepository,
             TransactionReadRepository transactionReadRepository,
             TransactionTagRuleService ruleService,
-            com.finanzbuddy.api.repository.TransactionTagRuleRepository ruleRepository,
             EntityManager entityManager,
             DocumentUploadMetrics documentUploadMetrics,
             ObjectMapper objectMapper,
@@ -96,7 +94,6 @@ public class DocumentService {
         this.outboxEventRepository = outboxEventRepository;
         this.transactionReadRepository = transactionReadRepository;
         this.ruleService = ruleService;
-        this.ruleRepository = ruleRepository;
         this.entityManager = entityManager;
         this.documentUploadMetrics = documentUploadMetrics;
         this.objectMapper = objectMapper;
@@ -405,9 +402,13 @@ public class DocumentService {
                                             new ResponseStatusException(
                                                     HttpStatus.NOT_FOUND, "Document not found"));
 
-            // All assignment writers take the owner lock before a document lock.
-            ruleRepository.lockOwner(document.getUser().getId());
-            entityManager.refresh(document, LockModeType.PESSIMISTIC_WRITE);
+            if (document.getStatus() == DocumentStatus.PROCESSING
+                    && request.status() == DocumentStatus.PROCESSED) {
+                // Only completion writes tag assignments. All assignment writers take the owner
+                // lock before a document lock; re-read the status once both are held.
+                ruleService.lockOwner(document.getUser().getId());
+                entityManager.refresh(document, LockModeType.PESSIMISTIC_WRITE);
+            }
 
             if (document.getStatus() == request.status()) {
                 // Idempotent redelivery of the current status from an at-least-once parser: return

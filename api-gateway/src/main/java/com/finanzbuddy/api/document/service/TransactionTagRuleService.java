@@ -7,6 +7,7 @@ import com.finanzbuddy.api.repository.TransactionReadRepository;
 import com.finanzbuddy.api.repository.TransactionTagRepository;
 import com.finanzbuddy.api.repository.TransactionTagRuleRepository;
 import com.finanzbuddy.api.repository.UserRepository;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import org.springframework.http.HttpStatus;
@@ -56,7 +57,7 @@ public class TransactionTagRuleService {
         createCategories(userId, categoryNames);
         TransactionTagRule saved =
                 rules.create(userId, tagId, proposed.mode(), proposed.conditions());
-        if (Boolean.TRUE.equals(request.applyExisting())) apply(userId, saved, null);
+        if (Boolean.TRUE.equals(request.applyExisting())) apply(userId, List.of(saved), null);
         return saved;
     }
 
@@ -66,7 +67,7 @@ public class TransactionTagRuleService {
         TransactionTagRule proposed = TransactionTagRuleEvaluator.validated(id, request);
         List<String> categoryNames = validatedCategoryNames(request, proposed);
         rules.lockOwner(userId);
-        if (rules.find(userId, id) == null) throw missing();
+        if (!rules.exists(userId, id)) throw missing();
         long tagId = resolveTag(userId, request, proposed.tagId());
         createCategories(userId, categoryNames);
         TransactionTagRule saved =
@@ -74,7 +75,7 @@ public class TransactionTagRuleService {
         if (Boolean.TRUE.equals(request.applyExisting())) {
             rules.deleteContributions(userId, id);
             rules.pruneAssignments(userId);
-            apply(userId, saved, null);
+            apply(userId, List.of(saved), null);
         }
         return saved;
     }
@@ -83,7 +84,7 @@ public class TransactionTagRuleService {
     public void delete(String email, long id, boolean removeExisting) {
         long userId = owner(email);
         rules.lockOwner(userId);
-        if (rules.find(userId, id) == null) throw missing();
+        if (!rules.exists(userId, id)) throw missing();
         if (!removeExisting) rules.promoteContributions(userId, id);
         rules.delete(userId, id);
         if (removeExisting) rules.pruneAssignments(userId);
@@ -92,25 +93,35 @@ public class TransactionTagRuleService {
     @Transactional
     public void applyImport(long userId, long documentId) {
         rules.lockOwner(userId);
-        for (TransactionTagRule rule : rules.findAll(userId)) apply(userId, rule, documentId);
+        List<TransactionTagRule> all = rules.findAll(userId);
+        if (!all.isEmpty()) apply(userId, all, documentId);
     }
 
-    private void apply(long userId, TransactionTagRule rule, Long documentId) {
+    public void lockOwner(long userId) {
+        rules.lockOwner(userId);
+    }
+
+    private void apply(long userId, List<TransactionTagRule> toApply, Long documentId) {
         long after = 0;
         while (true) {
             var page = transactions.findRuleCandidates(userId, documentId, after, BATCH_SIZE);
             if (page.isEmpty()) return;
+            List<long[]> assignments = new ArrayList<>();
+            List<long[]> contributions = new ArrayList<>();
             for (var candidate : page) {
-                if (TransactionTagRuleEvaluator.matches(rule, candidate)) {
-                    tags.ensureRuleAssignment(
-                            userId, candidate.documentId(), candidate.id(), rule.tagId());
-                    rules.addContribution(
-                            userId,
-                            rule.id(),
-                            candidate.documentId(),
-                            candidate.id(),
-                            rule.tagId());
+                for (TransactionTagRule rule : toApply) {
+                    if (!TransactionTagRuleEvaluator.matches(rule, candidate)) continue;
+                    assignments.add(
+                            new long[] {candidate.documentId(), candidate.id(), rule.tagId()});
+                    contributions.add(
+                            new long[] {
+                                rule.id(), candidate.documentId(), candidate.id(), rule.tagId()
+                            });
                 }
+            }
+            if (!assignments.isEmpty()) {
+                tags.ensureRuleAssignments(userId, assignments);
+                rules.addContributions(userId, contributions);
             }
             after = page.getLast().id();
         }

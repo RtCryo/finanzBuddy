@@ -60,25 +60,26 @@ public class TransactionTagRepository {
         return count != null && count > 0;
     }
 
-    public void ensureRuleAssignment(long userId, long documentId, long transactionId, long tagId) {
-        Integer count =
-                jdbc.queryForObject(
-                        "SELECT COUNT(*) FROM transaction_tag_assignments"
-                                + " WHERE user_id = ? AND transaction_id = ? AND tag_id = ?",
-                        Integer.class,
-                        userId,
-                        transactionId,
-                        tagId);
-        if (count == null || count == 0) {
-            jdbc.update(
-                    "INSERT INTO transaction_tag_assignments"
-                            + " (user_id, document_id, transaction_id, tag_id, manual_assignment)"
-                            + " VALUES (?, ?, ?, ?, FALSE)",
-                    userId,
-                    documentId,
-                    transactionId,
-                    tagId);
-        }
+    /** Rows are {documentId, transactionId, tagId}; existing assignments are kept as they are. */
+    public void ensureRuleAssignments(long userId, List<long[]> rows) {
+        jdbc.batchUpdate(
+                "INSERT INTO transaction_tag_assignments"
+                        + " (user_id, document_id, transaction_id, tag_id, manual_assignment)"
+                        + " SELECT CAST(? AS BIGINT), CAST(? AS BIGINT), CAST(? AS BIGINT),"
+                        + " CAST(? AS BIGINT), FALSE WHERE NOT EXISTS"
+                        + " (SELECT 1 FROM transaction_tag_assignments"
+                        + " WHERE user_id = ? AND transaction_id = ? AND tag_id = ?)",
+                rows,
+                rows.size(),
+                (statement, row) -> {
+                    statement.setLong(1, userId);
+                    statement.setLong(2, row[0]);
+                    statement.setLong(3, row[1]);
+                    statement.setLong(4, row[2]);
+                    statement.setLong(5, userId);
+                    statement.setLong(6, row[1]);
+                    statement.setLong(7, row[2]);
+                });
     }
 
     public void replace(

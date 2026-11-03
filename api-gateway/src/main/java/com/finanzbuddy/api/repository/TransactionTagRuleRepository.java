@@ -11,16 +11,36 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class TransactionTagRuleRepository {
     private final JdbcTemplate jdbc;
+    private final String ownerLockClause;
 
     public TransactionTagRuleRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
+        String product = jdbc.execute(
+                (java.sql.Connection c) -> c.getMetaData().getDatabaseProductName());
+        this.ownerLockClause =
+                "PostgreSQL".equalsIgnoreCase(product) ? "FOR NO KEY UPDATE" : "FOR UPDATE";
     }
 
     public void lockOwner(long userId) {
-        jdbc.queryForObject("SELECT id FROM users WHERE id = ? FOR UPDATE", Long.class, userId);
+        // NO KEY UPDATE serializes owners without conflicting with the FOR KEY SHARE locks that
+        // foreign-key inserts (versions, documents, tags) take on the users row. H2 (tests) only
+        // knows FOR UPDATE.
+        jdbc.queryForObject(
+                "SELECT id FROM users WHERE id = ? " + ownerLockClause, Long.class, userId);
     }
 
     public List<TransactionTagRule> findAll(long userId) {
+        var conditions = new java.util.HashMap<Long, List<Condition>>();
+        jdbc.query(
+                "SELECT rule_id, field_name, operator, match_value"
+                        + " FROM transaction_tag_rule_conditions"
+                        + " WHERE user_id = ? ORDER BY rule_id, position",
+                rs -> {
+                    conditions
+                            .computeIfAbsent(rs.getLong("rule_id"), id -> new java.util.ArrayList<>())
+                            .add(condition(rs));
+                },
+                userId);
         return jdbc.query(
                 "SELECT id, tag_id, mode FROM transaction_tag_rules WHERE user_id = ? ORDER BY id",
                 (rs, row) ->
@@ -28,25 +48,23 @@ public class TransactionTagRuleRepository {
                                 rs.getLong("id"),
                                 rs.getLong("tag_id"),
                                 rs.getString("mode"),
-                                findConditions(userId, rs.getLong("id"))),
+                                conditions.getOrDefault(rs.getLong("id"), List.of())),
                 userId);
     }
 
-    public TransactionTagRule find(long userId, long id) {
-        return findAll(userId).stream().filter(rule -> rule.id() == id).findFirst().orElse(null);
+    public boolean exists(long userId, long id) {
+        Integer count =
+                jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM transaction_tag_rules WHERE user_id = ? AND id = ?",
+                        Integer.class,
+                        userId,
+                        id);
+        return count != null && count > 0;
     }
 
-    private List<Condition> findConditions(long userId, long ruleId) {
-        return jdbc.query(
-                "SELECT field_name, operator, match_value FROM transaction_tag_rule_conditions"
-                        + " WHERE user_id = ? AND rule_id = ? ORDER BY position",
-                (rs, row) ->
-                        new Condition(
-                                rs.getString("field_name"),
-                                rs.getString("operator"),
-                                rs.getString("match_value")),
-                userId,
-                ruleId);
+    private static Condition condition(java.sql.ResultSet rs) throws java.sql.SQLException {
+        return new Condition(
+                rs.getString("field_name"), rs.getString("operator"), rs.getString("match_value"));
     }
 
     public TransactionTagRule create(
@@ -106,17 +124,28 @@ public class TransactionTagRuleRepository {
         jdbc.update("DELETE FROM transaction_tag_rules WHERE user_id = ? AND id = ?", userId, id);
     }
 
-    public void addContribution(
-            long userId, long ruleId, long documentId, long transactionId, long tagId) {
-        jdbc.update(
+    /** Rows are {ruleId, documentId, transactionId, tagId}; existing contributions are kept. */
+    public void addContributions(long userId, List<long[]> rows) {
+        jdbc.batchUpdate(
                 "INSERT INTO transaction_tag_rule_contributions"
                         + " (user_id, rule_id, document_id, transaction_id, tag_id)"
-                        + " VALUES (?, ?, ?, ?, ?)",
-                userId,
-                ruleId,
-                documentId,
-                transactionId,
-                tagId);
+                        + " SELECT CAST(? AS BIGINT), CAST(? AS BIGINT), CAST(? AS BIGINT),"
+                        + " CAST(? AS BIGINT), CAST(? AS BIGINT) WHERE NOT EXISTS"
+                        + " (SELECT 1 FROM transaction_tag_rule_contributions WHERE user_id = ?"
+                        + " AND rule_id = ? AND transaction_id = ? AND tag_id = ?)",
+                rows,
+                rows.size(),
+                (statement, row) -> {
+                    statement.setLong(1, userId);
+                    statement.setLong(2, row[0]);
+                    statement.setLong(3, row[1]);
+                    statement.setLong(4, row[2]);
+                    statement.setLong(5, row[3]);
+                    statement.setLong(6, userId);
+                    statement.setLong(7, row[0]);
+                    statement.setLong(8, row[2]);
+                    statement.setLong(9, row[3]);
+                });
     }
 
     public void deleteContributions(long userId, long ruleId) {
@@ -124,15 +153,6 @@ public class TransactionTagRuleRepository {
                 "DELETE FROM transaction_tag_rule_contributions WHERE user_id = ? AND rule_id = ?",
                 userId,
                 ruleId);
-    }
-
-    public void deleteContributions(long userId, long transactionId, long tagId) {
-        jdbc.update(
-                "DELETE FROM transaction_tag_rule_contributions"
-                        + " WHERE user_id = ? AND transaction_id = ? AND tag_id = ?",
-                userId,
-                transactionId,
-                tagId);
     }
 
     public void promoteContributions(long userId, long ruleId) {
