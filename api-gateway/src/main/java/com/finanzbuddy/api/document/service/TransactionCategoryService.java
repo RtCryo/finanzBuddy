@@ -32,13 +32,13 @@ public class TransactionCategoryService {
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    public List<String> getAvailableCategories(String userEmail) {
-        User user = getUser(userEmail);
+    public List<String> getAvailableCategories(long userId) {
+        User user = getUser(userId);
         return categoryRepository.findAvailableCategories(user.getId());
     }
 
-    public List<TransactionVersionResponse> getVersions(String userEmail, long transactionId) {
-        User user = getUser(userEmail);
+    public List<TransactionVersionResponse> getVersions(long userId, long transactionId) {
+        User user = getUser(userId);
         TransactionSnapshot transaction = requireOwnedTransaction(user.getId(), transactionId);
         List<TransactionVersionResponse> versions =
                 categoryRepository.findVersions(user.getId(), transactionId);
@@ -47,9 +47,9 @@ public class TransactionCategoryService {
     }
 
     public TransactionResponse updateCategory(
-            String userEmail, long transactionId, String requestedCategory) {
+            long userId, long transactionId, String requestedCategory) {
         String category = normalizeCategory(requestedCategory);
-        User user = getUser(userEmail);
+        User user = getUser(userId);
         try {
             return transactionTemplate.execute(
                     status -> changeCategory(user.getId(), transactionId, category));
@@ -59,9 +59,9 @@ public class TransactionCategoryService {
     }
 
     public PersonalCategoryResponse createCategoryAndAssign(
-            String userEmail, long transactionId, String requestedName) {
+            long userId, long transactionId, String requestedName) {
         String name = normalizeCategory(requestedName);
-        User user = getUser(userEmail);
+        User user = getUser(userId);
         try {
             return transactionTemplate.execute(
                     status -> {
@@ -122,9 +122,9 @@ public class TransactionCategoryService {
         return transaction;
     }
 
-    private User getUser(String userEmail) {
+    private User getUser(long userId) {
         return userRepository
-                .findByEmail(userEmail)
+                .findById(userId)
                 .orElseThrow(
                         () ->
                                 new ResponseStatusException(

@@ -4,11 +4,11 @@ import com.finanzbuddy.api.document.dto.TransactionTagRule;
 import com.finanzbuddy.api.document.dto.TransactionTagRule.Condition;
 import com.finanzbuddy.api.document.dto.TransactionTagRuleRequest;
 import com.finanzbuddy.api.document.service.TransactionTagRuleService;
+import com.finanzbuddy.api.security.AccountPrincipal;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,29 +31,29 @@ public class TransactionTagRuleController {
     }
 
     @GetMapping
-    public List<TransactionTagRule> list(@AuthenticationPrincipal UserDetails user) {
-        return service.list(user.getUsername());
+    public List<TransactionTagRule> list(@AuthenticationPrincipal AccountPrincipal user) {
+        return service.list(user.userId());
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public TransactionTagRule create(
-            @AuthenticationPrincipal UserDetails user, @RequestBody JsonNode request) {
-        return service.create(user.getUsername(), parse(request));
+            @AuthenticationPrincipal AccountPrincipal user, @RequestBody JsonNode request) {
+        return service.create(user.userId(), parse(request));
     }
 
     @PutMapping("/{id}")
     public TransactionTagRule update(
-            @AuthenticationPrincipal UserDetails user,
+            @AuthenticationPrincipal AccountPrincipal user,
             @PathVariable long id,
             @RequestBody JsonNode request) {
-        return service.update(user.getUsername(), id, parse(request));
+        return service.update(user.userId(), id, parse(request));
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(
-            @AuthenticationPrincipal UserDetails user,
+            @AuthenticationPrincipal AccountPrincipal user,
             @PathVariable long id,
             @RequestBody JsonNode request) {
         if (request == null
@@ -63,7 +63,7 @@ public class TransactionTagRuleController {
                 || !request.get("removeExisting").isBoolean())
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "Existing transaction choice required");
-        service.delete(user.getUsername(), id, request.get("removeExisting").booleanValue());
+        service.delete(user.userId(), id, request.get("removeExisting").booleanValue());
     }
 
     private static TransactionTagRuleRequest parse(JsonNode body) {

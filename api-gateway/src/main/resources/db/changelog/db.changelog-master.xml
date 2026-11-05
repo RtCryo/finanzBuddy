@@ -18,4 +18,5 @@
     <include file="classpath:/db/changelog/changes/010-create-transaction-tags.xml"/>
     <include file="classpath:/db/changelog/changes/011-create-transaction-tag-rules.xml"/>
     <include file="classpath:/db/changelog/changes/012-link-homebuddy-accounts.xml"/>
+    <include file="classpath:/db/changelog/changes/013-drop-users-email-uniqueness.xml"/>
 </databaseChangeLog>

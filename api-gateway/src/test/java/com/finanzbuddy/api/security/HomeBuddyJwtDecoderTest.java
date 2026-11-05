@@ -22,6 +22,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidationException;
 
 class HomeBuddyJwtDecoderTest {
 
@@ -59,6 +60,29 @@ class HomeBuddyJwtDecoderTest {
         }
     }
 
+    @Test
+    void rejectsTokensWithoutAudienceOrExpiryAsInvalidTokens() throws Exception {
+        RSAKey key = key("current");
+        HttpServer server = server(new AtomicReference<>(new JWKSet(key.toPublicJWK())));
+        try {
+            JwtDecoder decoder = decoder(server);
+            JWTClaimsSet noAudience =
+                    new JWTClaimsSet.Builder(claims("homebuddy-auth", "finanzbuddy"))
+                            .audience((String) null)
+                            .build();
+            JWTClaimsSet noExpiry =
+                    new JWTClaimsSet.Builder(claims("homebuddy-auth", "finanzbuddy"))
+                            .expirationTime(null)
+                            .build();
+            assertThatThrownBy(() -> decoder.decode(sign(key, noAudience)))
+                    .isInstanceOf(JwtValidationException.class);
+            assertThatThrownBy(() -> decoder.decode(sign(key, noExpiry)))
+                    .isInstanceOf(JwtValidationException.class);
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private RSAKey key(String kid) throws Exception {
         return new RSAKeyGenerator(2048).keyID(kid).generate();
     }
@@ -87,10 +111,14 @@ class HomeBuddyJwtDecoderTest {
     }
 
     private String token(RSAKey key, String issuer, String audience) throws Exception {
+        return sign(key, claims(issuer, audience));
+    }
+
+    private String sign(RSAKey key, JWTClaimsSet claims) throws Exception {
         SignedJWT jwt =
                 new SignedJWT(
                         new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(key.getKeyID()).build(),
-                        claims(issuer, audience));
+                        claims);
         jwt.sign(new RSASSASigner(key));
         return jwt.serialize();
     }

@@ -33,7 +33,7 @@ The system SHALL authenticate a homeBuddy account through `POST /auth/login` on 
 - **THEN** the token is accepted by the gateway and the user sees their existing documents and transactions
 
 ### Requirement: Authenticated requests are authorized
-The system SHALL reject requests to protected endpoints when the JWT is missing, expired, invalid, not signed by a key from the identity service's JWKS, not issued by `homebuddy-auth`, or not intended for the `finanzbuddy` audience. An accepted token SHALL be mapped to exactly one local user by account id, linking an unlinked local user with the same email on first use or creating a new local user.
+The system SHALL reject requests to protected endpoints when the JWT is missing, expired, invalid, not signed by a key from the identity service's JWKS, not issued by `homebuddy-auth`, not intended for the `finanzbuddy` audience, or missing the `exp`, `sub`, or `email` claim. An accepted token SHALL be mapped to exactly one local user by account id only, creating a new local user when none exists. The gateway SHALL NOT link an existing local user to an account by email at request time; existing users SHALL be linked by the operator migration step before registration opens, and a token whose email matches a local user that is not linked SHALL be rejected. The stored email SHALL follow the token claim and SHALL NOT be unique.
 
 #### Scenario: Missing token
 - **WHEN** a request reaches a protected endpoint without an Authorization header
@@ -46,6 +46,18 @@ The system SHALL reject requests to protected endpoints when the JWT is missing,
 #### Scenario: Legacy gateway token
 - **WHEN** a request carries an HS256 token issued by the gateway before the migration
 - **THEN** the system returns a 401 Unauthorized error
+
+#### Scenario: Token without expiry or audience
+- **WHEN** a request carries a correctly signed token that has no `exp` or no `aud` claim
+- **THEN** the system returns a 401 Unauthorized error
+
+#### Scenario: Account whose email matches an unlinked legacy user
+- **WHEN** an account that was not linked by the migration presents an email stored on an unlinked local user
+- **THEN** the system returns a 401 Unauthorized error and the local user stays unlinked
+
+#### Scenario: Email taken over from another account
+- **WHEN** an account's email changes to an address that another local user still stores
+- **THEN** the request succeeds and both local users keep their data
 
 #### Scenario: New homeBuddy account opens finanzBuddy
 - **WHEN** an account registered through calendarBuddy makes its first finanzBuddy request

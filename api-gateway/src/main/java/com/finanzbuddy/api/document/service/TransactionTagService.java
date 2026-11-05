@@ -13,7 +13,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class TransactionTagService {
-    private final UserRepository users;
     private final TransactionTagRepository tags;
     private final TransactionTagRuleRepository rules;
     private final TransactionCategoryRepository categories;
@@ -21,13 +20,11 @@ public class TransactionTagService {
     private final TransactionTemplate transaction;
 
     public TransactionTagService(
-            UserRepository users,
             TransactionTagRepository tags,
             TransactionTagRuleRepository rules,
             TransactionCategoryRepository categories,
             TransactionCategoryService categoryService,
             PlatformTransactionManager manager) {
-        this.users = users;
         this.tags = tags;
         this.rules = rules;
         this.categories = categories;
@@ -36,25 +33,17 @@ public class TransactionTagService {
         transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    private long owner(String email) {
-        return users.findByEmail(email)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED))
-                .getId();
+    public List<TransactionTag> list(long userId) {
+        return tags.findAll(userId);
     }
 
-    public List<TransactionTag> list(String email) {
-        return tags.findAll(owner(email));
-    }
-
-    public List<TransactionTag> assigned(String email, long id) {
-        long userId = owner(email);
+    public List<TransactionTag> assigned(long userId, long id) {
         categoryService.requireOwnedTransaction(userId, id);
         return tags.findAssigned(userId, id);
     }
 
-    public List<Long> validateSelection(String email, List<Long> ids, String mode) {
+    public List<Long> validateSelection(long userId, List<Long> ids, String mode) {
         if (!Set.of("AND", "OR").contains(mode)) throw invalidSelection();
-        long userId = owner(email);
         if (ids == null || ids.isEmpty()) return List.of();
         Set<Long> available = new HashSet<>();
         tags.findAll(userId).forEach(tag -> available.add(tag.id()));
@@ -63,7 +52,7 @@ public class TransactionTagService {
         return new ArrayList<>(new LinkedHashSet<>(ids));
     }
 
-    public TransactionEditResponse save(String email, long id, TransactionEditRequest request) {
+    public TransactionEditResponse save(long userId, long id, TransactionEditRequest request) {
         if (request == null
                 || request.tags() == null
                 || (request.category() != null && request.newCategoryName() != null))
@@ -81,7 +70,6 @@ public class TransactionTagService {
                 throw invalidSelection();
             if (entry.name() != null) validName(entry.name());
         }
-        long userId = owner(email);
         for (int attempt = 0; attempt < 3; attempt++) {
             try {
                 return transaction.execute(

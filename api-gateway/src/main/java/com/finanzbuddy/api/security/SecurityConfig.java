@@ -4,6 +4,7 @@ import com.finanzbuddy.api.entity.User;
 import com.finanzbuddy.api.security.apikey.InternalApiKeyAuthFilter;
 import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,13 +17,12 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
-import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
-import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimNames;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
@@ -80,18 +80,22 @@ public class SecurityConfig {
                 NimbusJwtDecoder.withJwkSetUri(jwksUri)
                         .jwsAlgorithm(SignatureAlgorithm.RS256)
                         .build();
-        OAuth2TokenValidator<Jwt> audience =
-                jwt ->
-                        jwt.getAudience().contains("finanzbuddy")
-                                ? OAuth2TokenValidatorResult.success()
-                                : OAuth2TokenValidatorResult.failure(
-                                        new OAuth2Error("invalid_token", "Wrong audience", null));
         decoder.setJwtValidator(
                 new DelegatingOAuth2TokenValidator<>(
                         new JwtTimestampValidator(Duration.ofSeconds(60)),
                         new JwtIssuerValidator(issuer),
-                        audience));
+                        new JwtClaimValidator<List<String>>(
+                                JwtClaimNames.AUD,
+                                aud -> aud != null && aud.contains("finanzbuddy")),
+                        required(JwtClaimNames.EXP),
+                        required(JwtClaimNames.SUB),
+                        required("email")));
         return decoder;
+    }
+
+    /** JwtTimestampValidator accepts a token without exp, so every mandatory claim is checked. */
+    private static OAuth2TokenValidator<Jwt> required(String claim) {
+        return new JwtClaimValidator<Object>(claim, Objects::nonNull);
     }
 
     @Bean
@@ -99,13 +103,11 @@ public class SecurityConfig {
             HomeBuddyAccountResolver resolver) {
         return jwt -> {
             User localUser = resolver.resolve(jwt);
-            UserDetails principal =
-                    new org.springframework.security.core.userdetails.User(
-                            localUser.getEmail(),
-                            "",
-                            List.of(new SimpleGrantedAuthority("ROLE_USER")));
+            AccountPrincipal principal =
+                    new AccountPrincipal(
+                            localUser.getId(), localUser.getAccountId(), localUser.getEmail());
             return new UsernamePasswordAuthenticationToken(
-                    principal, jwt, principal.getAuthorities());
+                    principal, jwt, List.of(new SimpleGrantedAuthority("ROLE_USER")));
         };
     }
 

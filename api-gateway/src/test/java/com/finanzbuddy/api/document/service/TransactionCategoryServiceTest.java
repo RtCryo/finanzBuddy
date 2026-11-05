@@ -78,7 +78,7 @@ class TransactionCategoryServiceTest {
         User user = new User();
         user.setId(7L);
         user.setEmail("owner@example.com");
-        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(user));
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
         service =
                 new TransactionCategoryService(
                         userRepository,
@@ -93,7 +93,6 @@ class TransactionCategoryServiceTest {
                 "CREATE TABLE transaction_tag_rule_contributions (user_id BIGINT, rule_id BIGINT, document_id BIGINT, transaction_id BIGINT, tag_id BIGINT)");
         tagService =
                 new TransactionTagService(
-                        userRepository,
                         new com.finanzbuddy.api.repository.TransactionTagRepository(jdbcTemplate),
                         new com.finanzbuddy.api.repository.TransactionTagRuleRepository(
                                 jdbcTemplate),
@@ -109,28 +108,28 @@ class TransactionCategoryServiceTest {
 
     @Test
     void materializesInitialSnapshotAndAppendsEveryLaterCategoryEdit() {
-        TransactionResponse first = service.updateCategory("owner@example.com", 101, "Housing");
-        TransactionResponse second = service.updateCategory("owner@example.com", 101, "Bills");
+        TransactionResponse first = service.updateCategory(7L, 101, "Housing");
+        TransactionResponse second = service.updateCategory(7L, 101, "Bills");
 
         assertThat(first.category()).isEqualTo("Housing");
         assertThat(second.category()).isEqualTo("Bills");
-        assertThat(service.getVersions("owner@example.com", 101))
+        assertThat(service.getVersions(7L, 101))
                 .extracting(TransactionVersionResponse::versionNumber)
                 .containsExactly(1, 2, 3);
-        assertThat(service.getVersions("owner@example.com", 101))
+        assertThat(service.getVersions(7L, 101))
                 .extracting(version -> version.transaction().category())
                 .containsExactly("Parsed", "Housing", "Bills");
     }
 
     @Test
     void rejectsBlankCategoriesAndKeepsPersonalNamesUniqueIgnoringCase() {
-        assertThatThrownBy(() -> service.updateCategory("owner@example.com", 101, "  "))
+        assertThatThrownBy(() -> service.updateCategory(7L, 101, "  "))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
 
-        service.createCategoryAndAssign("owner@example.com", 101, "Travel");
-        var duplicate = service.createCategoryAndAssign("owner@example.com", 102, " travel ");
+        service.createCategoryAndAssign(7L, 101, "Travel");
+        var duplicate = service.createCategoryAndAssign(7L, 102, " travel ");
 
         assertThat(duplicate.name()).isEqualTo("Travel");
         assertThat(duplicate.transaction().category()).isEqualTo("Travel");
@@ -144,8 +143,7 @@ class TransactionCategoryServiceTest {
 
     @Test
     void rollsBackBaselineAndPersonalCategoryWhenSnapshotAppendFails() {
-        assertThatThrownBy(
-                        () -> service.createCategoryAndAssign("owner@example.com", 101, "Broken"))
+        assertThatThrownBy(() -> service.createCategoryAndAssign(7L, 101, "Broken"))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
@@ -171,7 +169,7 @@ class TransactionCategoryServiceTest {
                         racingRepository,
                         new DataSourceTransactionManager(database));
 
-        assertThatThrownBy(() -> racingService.updateCategory("owner@example.com", 101, "Changed"))
+        assertThatThrownBy(() -> racingService.updateCategory(7L, 101, "Changed"))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
@@ -190,27 +188,27 @@ class TransactionCategoryServiceTest {
                                         .TagSelection(null, "travel"),
                                 new com.finanzbuddy.api.document.dto.TransactionEditRequest
                                         .TagSelection(null, "Work")));
-        var saved = tagService.save("owner@example.com", 101, request);
+        var saved = tagService.save(7L, 101, request);
         assertThat(saved.tags())
                 .extracting(com.finanzbuddy.api.document.dto.TransactionTag::name)
                 .containsExactly("Travel", "Work");
         assertThat(count("transaction_versions")).isZero();
         tagService.save(
-                "owner@example.com",
+                7L,
                 101,
                 new com.finanzbuddy.api.document.dto.TransactionEditRequest(null, null, List.of()));
-        assertThat(tagService.assigned("owner@example.com", 101)).isEmpty();
-        assertThat(tagService.list("owner@example.com")).hasSize(2);
+        assertThat(tagService.assigned(7L, 101)).isEmpty();
+        assertThat(tagService.list(7L)).hasSize(2);
         assertThat(count("transaction_versions")).isZero();
     }
 
     @Test
     void reusesSeveralOwnedTagsAcrossTransactionsWithoutLosingUnassignedChoices() {
-        assertThat(tagService.list("owner@example.com")).isEmpty();
-        assertThat(tagService.assigned("owner@example.com", 101)).isEmpty();
+        assertThat(tagService.list(7L)).isEmpty();
+        assertThat(tagService.assigned(7L, 101)).isEmpty();
         var created =
                 tagService.save(
-                        "owner@example.com",
+                        7L,
                         101,
                         new com.finanzbuddy.api.document.dto.TransactionEditRequest(
                                 null,
@@ -228,22 +226,21 @@ class TransactionCategoryServiceTest {
                                                 .TagSelection(tag.id(), null))
                         .toList();
         tagService.save(
-                "owner@example.com",
+                7L,
                 102,
                 new com.finanzbuddy.api.document.dto.TransactionEditRequest(
                         null, null, selections));
-        assertThat(tagService.assigned("owner@example.com", 102))
-                .containsExactlyElementsOf(created.tags());
+        assertThat(tagService.assigned(7L, 102)).containsExactlyElementsOf(created.tags());
 
         tagService.save(
-                "owner@example.com",
+                7L,
                 101,
                 new com.finanzbuddy.api.document.dto.TransactionEditRequest(null, null, List.of()));
         tagService.save(
-                "owner@example.com",
+                7L,
                 102,
                 new com.finanzbuddy.api.document.dto.TransactionEditRequest(null, null, List.of()));
-        assertThat(tagService.list("owner@example.com")).containsExactlyElementsOf(created.tags());
+        assertThat(tagService.list(7L)).containsExactlyElementsOf(created.tags());
         assertThat(count("transaction_tag_assignments")).isZero();
     }
 
@@ -252,7 +249,7 @@ class TransactionCategoryServiceTest {
         User foreign = new User();
         foreign.setId(8L);
         foreign.setEmail("foreign@example.com");
-        when(userRepository.findByEmail("foreign@example.com")).thenReturn(Optional.of(foreign));
+        when(userRepository.findById(8L)).thenReturn(Optional.of(foreign));
         jdbcTemplate.update("INSERT INTO documents VALUES (4, 8, 'PROCESSED')");
         jdbcTemplate.update(
                 "INSERT INTO transactions VALUES (201, 4, 8, DATE '2024-01-01',"
@@ -260,7 +257,7 @@ class TransactionCategoryServiceTest {
         var foreignTag =
                 tagService
                         .save(
-                                "foreign@example.com",
+                                8L,
                                 201,
                                 new com.finanzbuddy.api.document.dto.TransactionEditRequest(
                                         null,
@@ -272,15 +269,15 @@ class TransactionCategoryServiceTest {
                         .tags()
                         .getFirst();
 
-        assertThat(tagService.list("owner@example.com")).isEmpty();
-        assertThatThrownBy(() -> tagService.assigned("owner@example.com", 201))
+        assertThat(tagService.list(7L)).isEmpty();
+        assertThatThrownBy(() -> tagService.assigned(7L, 201))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(error -> ((ResponseStatusException) error).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
         assertThatThrownBy(
                         () ->
                                 tagService.save(
-                                        "owner@example.com",
+                                        7L,
                                         101,
                                         new com.finanzbuddy.api.document.dto.TransactionEditRequest(
                                                 "Changed",
@@ -294,7 +291,7 @@ class TransactionCategoryServiceTest {
                 .extracting(error -> ((ResponseStatusException) error).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(count("transaction_versions")).isZero();
-        assertThat(tagService.assigned("foreign@example.com", 201)).containsExactly(foreignTag);
+        assertThat(tagService.assigned(8L, 201)).containsExactly(foreignTag);
     }
 
     @Test
@@ -305,7 +302,7 @@ class TransactionCategoryServiceTest {
         assertThatThrownBy(
                         () ->
                                 tagService.save(
-                                        "owner@example.com",
+                                        7L,
                                         101,
                                         new com.finanzbuddy.api.document.dto.TransactionEditRequest(
                                                 null, "Broken", List.of(tag))))
@@ -316,9 +313,9 @@ class TransactionCategoryServiceTest {
         var request =
                 new com.finanzbuddy.api.document.dto.TransactionEditRequest(
                         "Housing", null, List.of(tag));
-        tagService.save("owner@example.com", 101, request);
-        tagService.save("owner@example.com", 101, request);
-        assertThat(service.getVersions("owner@example.com", 101))
+        tagService.save(7L, 101, request);
+        tagService.save(7L, 101, request);
+        assertThat(service.getVersions(7L, 101))
                 .extracting(v -> v.transaction().category())
                 .containsExactly("Parsed", "Housing");
         assertThat(count("transaction_tag_assignments")).isEqualTo(1);
@@ -333,8 +330,8 @@ class TransactionCategoryServiceTest {
                         List.of(
                                 new com.finanzbuddy.api.document.dto.TransactionEditRequest
                                         .TagSelection(null, "Work")));
-        var first = tagService.save("owner@example.com", 101, request);
-        var second = tagService.save("owner@example.com", 101, request);
+        var first = tagService.save(7L, 101, request);
+        var second = tagService.save(7L, 101, request);
 
         assertThat(first.transaction().category()).isEqualTo("Travel");
         assertThat(second.transaction()).isEqualTo(first.transaction());
@@ -342,7 +339,7 @@ class TransactionCategoryServiceTest {
         assertThat(count("personal_transaction_categories")).isEqualTo(1);
         assertThat(count("personal_transaction_tags")).isEqualTo(1);
         assertThat(count("transaction_tag_assignments")).isEqualTo(1);
-        assertThat(service.getVersions("owner@example.com", 101))
+        assertThat(service.getVersions(7L, 101))
                 .extracting(v -> v.transaction().category())
                 .containsExactly("Parsed", "Travel");
     }
@@ -351,7 +348,7 @@ class TransactionCategoryServiceTest {
     void supportsUncategorizedSavesAndRejectsMalformedOrForeignSelections() {
         jdbcTemplate.update("UPDATE transactions SET category = NULL WHERE id = 101");
         tagService.save(
-                "owner@example.com",
+                7L,
                 101,
                 new com.finanzbuddy.api.document.dto.TransactionEditRequest(
                         null,
@@ -364,7 +361,7 @@ class TransactionCategoryServiceTest {
             assertThatThrownBy(
                             () ->
                                     tagService.save(
-                                            "owner@example.com",
+                                            7L,
                                             101,
                                             new com.finanzbuddy.api.document.dto
                                                     .TransactionEditRequest(
@@ -379,7 +376,7 @@ class TransactionCategoryServiceTest {
         assertThatThrownBy(
                         () ->
                                 tagService.save(
-                                        "owner@example.com",
+                                        7L,
                                         101,
                                         new com.finanzbuddy.api.document.dto.TransactionEditRequest(
                                                 "Changed",
@@ -389,17 +386,11 @@ class TransactionCategoryServiceTest {
                                                                 .TransactionEditRequest
                                                                 .TagSelection(999L, null)))))
                 .isInstanceOf(ResponseStatusException.class);
-        assertThatThrownBy(() -> tagService.assigned("owner@example.com", 999))
+        assertThatThrownBy(() -> tagService.assigned(7L, 999))
                 .isInstanceOf(ResponseStatusException.class);
-        assertThatThrownBy(() -> tagService.list("unknown@example.com"))
+        assertThatThrownBy(() -> tagService.validateSelection(7L, List.of(999L), "AND"))
                 .isInstanceOf(ResponseStatusException.class);
-        assertThatThrownBy(
-                        () ->
-                                tagService.validateSelection(
-                                        "owner@example.com", List.of(999L), "AND"))
-                .isInstanceOf(ResponseStatusException.class);
-        assertThatThrownBy(
-                        () -> tagService.validateSelection("owner@example.com", List.of(), "bad"))
+        assertThatThrownBy(() -> tagService.validateSelection(7L, List.of(), "bad"))
                 .isInstanceOf(ResponseStatusException.class);
         assertThat(count("transaction_versions")).isZero();
     }
@@ -418,7 +409,7 @@ class TransactionCategoryServiceTest {
                                     Thread.currentThread().interrupt();
                                     throw new RuntimeException(error);
                                 }
-                                return service.updateCategory("owner@example.com", 101, "Housing");
+                                return service.updateCategory(7L, 101, "Housing");
                             });
             var tagEdit =
                     pool.submit(
@@ -430,7 +421,7 @@ class TransactionCategoryServiceTest {
                                     throw new RuntimeException(error);
                                 }
                                 return tagService.save(
-                                        "owner@example.com",
+                                        7L,
                                         101,
                                         new com.finanzbuddy.api.document.dto.TransactionEditRequest(
                                                 null,
@@ -443,10 +434,10 @@ class TransactionCategoryServiceTest {
             start.countDown();
             categoryEdit.get(10, java.util.concurrent.TimeUnit.SECONDS);
             tagEdit.get(10, java.util.concurrent.TimeUnit.SECONDS);
-            assertThat(service.getVersions("owner@example.com", 101))
+            assertThat(service.getVersions(7L, 101))
                     .extracting(v -> v.transaction().category())
                     .containsExactly("Parsed", "Housing");
-            assertThat(tagService.assigned("owner@example.com", 101))
+            assertThat(tagService.assigned(7L, 101))
                     .extracting(com.finanzbuddy.api.document.dto.TransactionTag::name)
                     .containsExactly("Work");
         } finally {
@@ -469,7 +460,6 @@ class TransactionCategoryServiceTest {
         when(tagRepository.findAssigned(7L, 101L)).thenReturn(List.of(winningTag));
         var collisionService =
                 new TransactionTagService(
-                        userRepository,
                         tagRepository,
                         new com.finanzbuddy.api.repository.TransactionTagRuleRepository(
                                 jdbcTemplate),
@@ -479,7 +469,7 @@ class TransactionCategoryServiceTest {
 
         var saved =
                 collisionService.save(
-                        "owner@example.com",
+                        7L,
                         101,
                         new com.finanzbuddy.api.document.dto.TransactionEditRequest(
                                 null,

@@ -4,6 +4,8 @@ import com.finanzbuddy.api.entity.User;
 import com.finanzbuddy.api.repository.UserRepository;
 import java.util.Locale;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -11,8 +13,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+/**
+ * Maps a homeBuddy token to its local {@code users} row by account id only.
+ *
+ * <p>Legacy rows are linked to their imported accounts by the operator link step of the migration
+ * runbook, never by a matching email at request time. A new account whose email still belongs to an
+ * unlinked legacy row is rejected so that it cannot take over that row's data.
+ */
 @Service
 public class HomeBuddyAccountResolver {
+
+    private static final Logger log = LoggerFactory.getLogger(HomeBuddyAccountResolver.class);
 
     private final UserRepository users;
     private final TransactionTemplate transactions;
@@ -38,6 +49,7 @@ public class HomeBuddyAccountResolver {
             try {
                 return transactions.execute(status -> resolveOnce(accountId, email));
             } catch (DataIntegrityViolationException e) {
+                // Only a concurrent first request for the same account can collide (account_id).
                 if (attempt == 2) {
                     throw new BadCredentialsException("Account link conflict", e);
                 }
@@ -55,17 +67,16 @@ public class HomeBuddyAccountResolver {
             }
             return user;
         }
-        user = users.findByEmailIgnoreCase(email).orElse(null);
-        if (user != null) {
-            if (user.getAccountId() != null) {
-                throw new BadCredentialsException("Email belongs to another account");
-            }
-            user.setAccountId(accountId);
-        } else {
-            user = new User();
-            user.setAccountId(accountId);
-            user.setEmail(email);
+        if (users.existsByEmailIgnoreCaseAndAccountIdIsNull(email)) {
+            log.warn(
+                    "Rejected account {}: its email belongs to an unlinked legacy user. Run the"
+                            + " link step of docs/HOMEBUDDY_IDENTITY_MIGRATION.md.",
+                    accountId);
+            throw new BadCredentialsException("Email belongs to an unlinked legacy user");
         }
+        user = new User();
+        user.setAccountId(accountId);
+        user.setEmail(email);
         return users.saveAndFlush(user);
     }
 }

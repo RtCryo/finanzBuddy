@@ -51,7 +51,7 @@ This starts PostgreSQL, Kafka, SeaweedFS (S3-compatible object storage), and the
 
 ### Authentication
 
-Registration and login are served by authBuddy at `/api/auth/register` and `/api/auth/login` on the UI origin. The gateway has no `/auth/**` handlers and stores no new passwords. It validates RS256 tokens against authBuddy's JWKS, requires issuer `homebuddy-auth` and audience `finanzbuddy`, and resolves `sub` to the local `users.account_id`. An existing user is linked by email on first use without changing its numeric owner ID. An account new to finanzBuddy receives a local owner row with no password hash. See the [migration runbook](../docs/HOMEBUDDY_IDENTITY_MIGRATION.md).
+Registration and login are served by authBuddy at `/api/auth/register` and `/api/auth/login` on the UI origin. The gateway has no `/auth/**` handlers and stores no new passwords. It validates RS256 tokens against authBuddy's JWKS, requires issuer `homebuddy-auth`, audience `finanzbuddy`, and the `exp`, `sub`, and `email` claims, and resolves `sub` to the local `users.account_id`. Controllers receive the local user id in the principal and never look users up by email. Existing users are linked to their imported accounts by the operator link step of the runbook, without changing their numeric owner ID; the gateway never links by email at request time and rejects a token whose email still belongs to an unlinked local user. An account new to finanzBuddy receives a local owner row with no password hash. The stored email is a projection that follows the token and is not unique. See the [migration runbook](../docs/HOMEBUDDY_IDENTITY_MIGRATION.md).
 
 ### Documents
 

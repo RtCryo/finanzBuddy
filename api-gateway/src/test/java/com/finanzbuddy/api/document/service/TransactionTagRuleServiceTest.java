@@ -77,22 +77,22 @@ class TransactionTagRuleServiceTest {
 
     @Test
     void createChoicesAndOwnerIsolation() {
-        var future = rules.create("one@example.com", request(1000, false, "X"));
+        var future = rules.create(1L, request(1000, false, "X"));
         assertThat(assigned(1, 100)).isZero();
-        assertThat(rules.list("one@example.com")).containsExactly(future);
-        assertThat(rules.list("two@example.com")).isEmpty();
-        rules.create("one@example.com", request(1001, true, "X"));
+        assertThat(rules.list(1L)).containsExactly(future);
+        assertThat(rules.list(2L)).isEmpty();
+        rules.create(1L, request(1001, true, "X"));
         assertThat(assigned(1, 100)).isEqualTo(1);
         assertThat(assigned(2, 200)).isZero();
-        assertThatThrownBy(() -> rules.create("one@example.com", request(2000, true, "X")))
+        assertThatThrownBy(() -> rules.create(1L, request(2000, true, "X")))
                 .isInstanceOf(ResponseStatusException.class);
-        assertThat(rules.list("one@example.com")).hasSize(2);
+        assertThat(rules.list(1L)).hasSize(2);
     }
 
     @Test
     void distinctMatchingTargetsProduceDistinctEffectiveTags() {
-        rules.create("one@example.com", request(1000, true, "X"));
-        rules.create("one@example.com", request(1001, true, "X"));
+        rules.create(1L, request(1000, true, "X"));
+        rules.create(1L, request(1001, true, "X"));
         assertThat(assigned(1, 100)).isEqualTo(2);
     }
 
@@ -101,12 +101,12 @@ class TransactionTagRuleServiceTest {
         var conditions = List.of(new Condition("COUNTERPARTY", "EXACT", "X"));
         var created =
                 rules.create(
-                        "one@example.com",
+                        1L,
                         new TransactionTagRuleRequest(null, " New tag ", "AND", conditions, true));
         assertThat(assigned(1, 100, created.tagId())).isEqualTo(1);
         var reused =
                 rules.create(
-                        "one@example.com",
+                        1L,
                         new TransactionTagRuleRequest(null, " new TAG ", "AND", conditions, false));
         assertThat(reused.tagId()).isEqualTo(created.tagId());
         assertThat(
@@ -117,7 +117,7 @@ class TransactionTagRuleServiceTest {
         assertThatThrownBy(
                         () ->
                                 rules.create(
-                                        "one@example.com",
+                                        1L,
                                         new TransactionTagRuleRequest(
                                                 null, "   ", "AND", conditions, false)))
                 .isInstanceOf(ResponseStatusException.class);
@@ -127,7 +127,7 @@ class TransactionTagRuleServiceTest {
             assertThatThrownBy(
                             () ->
                                     rules.create(
-                                            "one@example.com",
+                                            1L,
                                             new TransactionTagRuleRequest(
                                                     null,
                                                     "Rollback",
@@ -154,13 +154,13 @@ class TransactionTagRuleServiceTest {
     void categoryRuleUsesLatestSavedCategoryWithoutWritingVersionsOrCrossingOwners() {
         jdbc.update("UPDATE transactions SET category = 'Other' WHERE id = 100");
         jdbc.update("UPDATE transactions SET category = 'Travel' WHERE id = 200");
-        editor.save("one@example.com", 100, new TransactionEditRequest("Travel", null, List.of()));
+        editor.save(1L, 100, new TransactionEditRequest("Travel", null, List.of()));
         int versions =
                 jdbc.queryForObject(
                         "SELECT COUNT(*) FROM transaction_versions WHERE transaction_id = 100",
                         Integer.class);
         rules.create(
-                "one@example.com",
+                1L,
                 new TransactionTagRuleRequest(
                         1000L,
                         "AND",
@@ -185,7 +185,7 @@ class TransactionTagRuleServiceTest {
                         List.of(new Condition("CATEGORY", "EXACT", " Utilities ")),
                         false,
                         List.of(" Utilities "));
-        var created = rules.create("one@example.com", request);
+        var created = rules.create(1L, request);
         assertThat(created.conditions().getFirst().value()).isEqualTo("Utilities");
         assertThat(
                         jdbc.queryForObject(
@@ -193,7 +193,7 @@ class TransactionTagRuleServiceTest {
                                 String.class))
                 .isEqualTo("Utilities");
         rules.update(
-                "one@example.com",
+                1L,
                 created.id(),
                 new TransactionTagRuleRequest(
                         1000L,
@@ -210,7 +210,7 @@ class TransactionTagRuleServiceTest {
         assertThatThrownBy(
                         () ->
                                 rules.create(
-                                        "one@example.com",
+                                        1L,
                                         new TransactionTagRuleRequest(
                                                 1000L,
                                                 null,
@@ -227,7 +227,7 @@ class TransactionTagRuleServiceTest {
             assertThatThrownBy(
                             () ->
                                     rules.create(
-                                            "one@example.com",
+                                            1L,
                                             new TransactionTagRuleRequest(
                                                     1000L,
                                                     null,
@@ -255,7 +255,7 @@ class TransactionTagRuleServiceTest {
     void categoryRuleMatchesImportedCategoryAtCompletion() {
         jdbc.update("UPDATE transactions SET category = 'Groceries' WHERE id = 100");
         rules.create(
-                "one@example.com",
+                1L,
                 new TransactionTagRuleRequest(
                         1000L,
                         "AND",
@@ -278,27 +278,22 @@ class TransactionTagRuleServiceTest {
                 "ALTER TABLE transaction_tag_rule_contributions"
                         + " ADD CONSTRAINT reject_create CHECK (transaction_id <> 100)");
         try {
-            assertThatThrownBy(() -> rules.create("one@example.com", request(1000, true, "X")))
+            assertThatThrownBy(() -> rules.create(1L, request(1000, true, "X")))
                     .isInstanceOf(RuntimeException.class);
-            assertThat(rules.list("one@example.com")).isEmpty();
+            assertThat(rules.list(1L)).isEmpty();
             assertThat(assigned(1, 100)).isZero();
         } finally {
             jdbc.execute(
                     "ALTER TABLE transaction_tag_rule_contributions DROP CONSTRAINT reject_create");
         }
-        var saved = rules.create("one@example.com", request(1000, true, "X"));
+        var saved = rules.create(1L, request(1000, true, "X"));
         jdbc.execute(
                 "ALTER TABLE transaction_tag_rule_contributions"
                         + " ADD CONSTRAINT reject_edit CHECK (tag_id <> 1001)");
         try {
-            assertThatThrownBy(
-                            () ->
-                                    rules.update(
-                                            "one@example.com",
-                                            saved.id(),
-                                            request(1001, true, "X")))
+            assertThatThrownBy(() -> rules.update(1L, saved.id(), request(1001, true, "X")))
                     .isInstanceOf(RuntimeException.class);
-            assertThat(rules.list("one@example.com").getFirst().tagId()).isEqualTo(1000);
+            assertThat(rules.list(1L).getFirst().tagId()).isEqualTo(1000);
             assertThat(assigned(1, 100, 1000)).isEqualTo(1);
             assertThat(contributions(1, 100)).isEqualTo(1);
         } finally {
@@ -309,16 +304,16 @@ class TransactionTagRuleServiceTest {
 
     @Test
     void failedCleanupRollsBackDelete() {
-        var saved = rules.create("one@example.com", request(1000, true, "X"));
+        var saved = rules.create(1L, request(1000, true, "X"));
         jdbc.execute(
                 "CREATE TABLE assignment_guard (user_id BIGINT, transaction_id BIGINT,"
                         + " tag_id BIGINT, FOREIGN KEY (user_id,transaction_id,tag_id)"
                         + " REFERENCES transaction_tag_assignments(user_id,transaction_id,tag_id))");
         jdbc.update("INSERT INTO assignment_guard VALUES (1,100,1000)");
         try {
-            assertThatThrownBy(() -> rules.delete("one@example.com", saved.id(), true))
+            assertThatThrownBy(() -> rules.delete(1L, saved.id(), true))
                     .isInstanceOf(RuntimeException.class);
-            assertThat(rules.list("one@example.com")).hasSize(1);
+            assertThat(rules.list(1L)).hasSize(1);
             assertThat(assigned(1, 100)).isEqualTo(1);
             assertThat(contributions(1, 100)).isEqualTo(1);
         } finally {
@@ -328,28 +323,27 @@ class TransactionTagRuleServiceTest {
 
     @Test
     void editChoicesPreserveOrReconcileOldContributions() {
-        var rule = rules.create("one@example.com", request(1000, true, "X"));
-        rules.update("one@example.com", rule.id(), request(1001, false, "X"));
+        var rule = rules.create(1L, request(1000, true, "X"));
+        rules.update(1L, rule.id(), request(1001, false, "X"));
         assertThat(assigned(1, 100, 1000)).isEqualTo(1);
         assertThat(assigned(1, 100, 1001)).isZero();
-        rules.update("one@example.com", rule.id(), request(1001, true, "X"));
+        rules.update(1L, rule.id(), request(1001, true, "X"));
         assertThat(assigned(1, 100, 1000)).isZero();
         assertThat(assigned(1, 100, 1001)).isEqualTo(1);
-        assertThatThrownBy(
-                        () -> rules.update("two@example.com", rule.id(), request(2000, true, "X")))
+        assertThatThrownBy(() -> rules.update(2L, rule.id(), request(2000, true, "X")))
                 .isInstanceOf(ResponseStatusException.class);
     }
 
     @Test
     void cleanupKeepsManualAndOtherRuleSources() {
-        var first = rules.create("one@example.com", request(1000, true, "X"));
-        var second = rules.create("one@example.com", request(1000, true, "X"));
-        rules.delete("one@example.com", first.id(), true);
+        var first = rules.create(1L, request(1000, true, "X"));
+        var second = rules.create(1L, request(1000, true, "X"));
+        rules.delete(1L, first.id(), true);
         assertThat(assigned(1, 100)).isEqualTo(1);
-        rules.delete("one@example.com", second.id(), true);
+        rules.delete(1L, second.id(), true);
         assertThat(assigned(1, 100)).isZero();
-        var retained = rules.create("one@example.com", request(1000, true, "X"));
-        rules.delete("one@example.com", retained.id(), false);
+        var retained = rules.create(1L, request(1000, true, "X"));
+        rules.delete(1L, retained.id(), false);
         assertThat(assigned(1, 100)).isEqualTo(1);
         assertThat(
                         jdbc.queryForObject(
@@ -364,8 +358,8 @@ class TransactionTagRuleServiceTest {
         jdbc.update(
                 "INSERT INTO transaction_tag_assignments"
                         + " (user_id,document_id,transaction_id,tag_id) VALUES (1,10,100,1000)");
-        var rule = rules.create("one@example.com", request(1000, true, "X"));
-        rules.delete("one@example.com", rule.id(), true);
+        var rule = rules.create(1L, request(1000, true, "X"));
+        rules.delete(1L, rule.id(), true);
         assertThat(assigned(1, 100)).isEqualTo(1);
         assertThat(
                         jdbc.queryForObject(
@@ -377,8 +371,8 @@ class TransactionTagRuleServiceTest {
 
     @Test
     void importCompletionIsAtomicAndDuplicateDoesNotReevaluate() {
-        var rule = rules.create("one@example.com", request(1000, false, "X"));
-        rules.create("one@example.com", request(1001, false, "X"));
+        var rule = rules.create(1L, request(1000, false, "X"));
+        rules.create(1L, request(1001, false, "X"));
         jdbc.update("UPDATE documents SET status = 'PROCESSING' WHERE id = 10");
         jdbc.execute(
                 "ALTER TABLE transaction_tag_rule_contributions"
@@ -405,7 +399,7 @@ class TransactionTagRuleServiceTest {
         assertThat(assigned(1, 100)).isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT status FROM documents WHERE id = 10", String.class))
                 .isEqualTo("PROCESSED");
-        rules.update("one@example.com", rule.id(), request(1001, false, "X"));
+        rules.update(1L, rule.id(), request(1001, false, "X"));
         documents.updateDocumentStatus(
                 10L, new DocumentStatusUpdateRequest(DocumentStatus.PROCESSED, null));
         assertThat(assigned(1, 100, 1000)).isEqualTo(1);
@@ -415,34 +409,34 @@ class TransactionTagRuleServiceTest {
 
     @Test
     void editorKeepsVisibleRuleSourcesOnUnchangedSaveAndRemovesThemOnOmission() {
-        var first = rules.create("one@example.com", request(1000, true, "X"));
-        var second = rules.create("one@example.com", request(1000, true, "X"));
+        var first = rules.create(1L, request(1000, true, "X"));
+        var second = rules.create(1L, request(1000, true, "X"));
         editor.save(
-                "one@example.com",
+                1L,
                 100,
                 new TransactionEditRequest(
                         null, null, List.of(new TransactionEditRequest.TagSelection(1000L, null))));
         assertThat(assigned(1, 100)).isEqualTo(1);
         assertThat(contributions(1, 100)).isEqualTo(2);
-        editor.save("one@example.com", 100, new TransactionEditRequest(null, null, List.of()));
+        editor.save(1L, 100, new TransactionEditRequest(null, null, List.of()));
         assertThat(assigned(1, 100)).isZero();
         assertThat(contributions(1, 100)).isZero();
-        rules.update("one@example.com", first.id(), request(1000, true, "X"));
+        rules.update(1L, first.id(), request(1000, true, "X"));
         assertThat(assigned(1, 100)).isEqualTo(1);
-        rules.delete("one@example.com", second.id(), true);
+        rules.delete(1L, second.id(), true);
         assertThat(assigned(1, 100)).isEqualTo(1);
     }
 
     @Test
     void concurrentImportAndRuleEditConvergeOnNewTarget() throws Exception {
-        var rule = rules.create("one@example.com", request(1000, false, "X"));
+        var rule = rules.create(1L, request(1000, false, "X"));
         jdbc.update("UPDATE documents SET status = 'PROCESSING' WHERE id = 10");
         race(
                 () ->
                         documents.updateDocumentStatus(
                                 10L,
                                 new DocumentStatusUpdateRequest(DocumentStatus.PROCESSED, null)),
-                () -> rules.update("one@example.com", rule.id(), request(1001, true, "X")));
+                () -> rules.update(1L, rule.id(), request(1001, true, "X")));
         assertThat(assigned(1, 100, 1000)).isZero();
         assertThat(assigned(1, 100, 1001)).isEqualTo(1);
         assertThat(contributions(1, 100)).isEqualTo(1);
@@ -450,28 +444,24 @@ class TransactionTagRuleServiceTest {
 
     @Test
     void concurrentImportAndRuleDeleteLeaveNoRuleTag() throws Exception {
-        var rule = rules.create("one@example.com", request(1000, false, "X"));
+        var rule = rules.create(1L, request(1000, false, "X"));
         jdbc.update("UPDATE documents SET status = 'PROCESSING' WHERE id = 10");
         race(
                 () ->
                         documents.updateDocumentStatus(
                                 10L,
                                 new DocumentStatusUpdateRequest(DocumentStatus.PROCESSED, null)),
-                () -> rules.delete("one@example.com", rule.id(), true));
+                () -> rules.delete(1L, rule.id(), true));
         assertThat(assigned(1, 100)).isZero();
         assertThat(contributions(1, 100)).isZero();
     }
 
     @Test
     void concurrentManualSaveAndReconciliationKeepSourcesConsistent() throws Exception {
-        var rule = rules.create("one@example.com", request(1000, true, "X"));
+        var rule = rules.create(1L, request(1000, true, "X"));
         race(
-                () ->
-                        editor.save(
-                                "one@example.com",
-                                100,
-                                new TransactionEditRequest(null, null, List.of())),
-                () -> rules.update("one@example.com", rule.id(), request(1000, true, "X")));
+                () -> editor.save(1L, 100, new TransactionEditRequest(null, null, List.of())),
+                () -> rules.update(1L, rule.id(), request(1000, true, "X")));
         assertThat(assigned(1, 100)).isBetween(0, 1);
         assertThat(assigned(1, 100)).isEqualTo(contributions(1, 100));
     }

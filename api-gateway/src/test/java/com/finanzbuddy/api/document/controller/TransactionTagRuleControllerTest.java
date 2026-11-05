@@ -7,8 +7,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import com.finanzbuddy.api.document.service.TransactionTagRuleService;
+import com.finanzbuddy.api.security.AccountPrincipal;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -16,11 +17,8 @@ class TransactionTagRuleControllerTest {
     private final TransactionTagRuleService service = mock(TransactionTagRuleService.class);
     private final TransactionTagRuleController controller =
             new TransactionTagRuleController(service);
-    private final UserDetails user =
-            org.springframework.security.core.userdetails.User.withUsername("owner@example.com")
-                    .password("x")
-                    .roles("USER")
-                    .build();
+    private final AccountPrincipal user =
+            new AccountPrincipal(7L, UUID.randomUUID(), "owner@example.com");
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Test
@@ -33,9 +31,9 @@ class TransactionTagRuleControllerTest {
                   {"field":"COUNTERPARTY","operator":"EXACT","value":"X"}],
                   "applyExisting":true}
                 """));
-        verify(service).create(eq("owner@example.com"), any());
+        verify(service).create(eq(7L), any());
         controller.delete(user, 9, mapper.readTree("{" + "\"removeExisting\":false}"));
-        verify(service).delete("owner@example.com", 9, false);
+        verify(service).delete(7L, 9, false);
         controller.create(
                 user,
                 mapper.readTree(
@@ -45,7 +43,7 @@ class TransactionTagRuleControllerTest {
                 """));
         verify(service)
                 .create(
-                        eq("owner@example.com"),
+                        eq(7L),
                         eq(
                                 new com.finanzbuddy.api.document.dto.TransactionTagRuleRequest(
                                         null,
@@ -66,7 +64,7 @@ class TransactionTagRuleControllerTest {
                 """));
         verify(service)
                 .create(
-                        eq("owner@example.com"),
+                        eq(7L),
                         eq(
                                 new com.finanzbuddy.api.document.dto.TransactionTagRuleRequest(
                                         4L,

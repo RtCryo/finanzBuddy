@@ -27,19 +27,40 @@ class HomeBuddyAccountResolverTest {
     @Autowired private UserRepository users;
 
     @Test
-    void linksLegacyUserWithoutChangingItsLocalIdOrPassword() {
-        String email = "legacy-" + UUID.randomUUID() + "@example.com";
-        User legacy = new User();
-        legacy.setEmail(email);
-        legacy.setPasswordHash("legacy-hash");
-        Long localId = users.saveAndFlush(legacy).getId();
+    void resolvesLegacyUserLinkedByTheOperatorWithoutChangingItsIdOrPassword() {
         UUID accountId = UUID.randomUUID();
+        String email = "legacy-" + accountId + "@example.com";
+        User legacy = legacy(email);
+        legacy.setAccountId(accountId);
+        Long localId = users.saveAndFlush(legacy).getId();
 
-        User linked = resolver.resolve(token(accountId, email.toUpperCase()));
+        User linked = resolver.resolve(token(accountId, email));
 
         assertThat(linked.getId()).isEqualTo(localId);
-        assertThat(linked.getAccountId()).isEqualTo(accountId);
         assertThat(linked.getPasswordHash()).isEqualTo("legacy-hash");
+    }
+
+    @Test
+    void neverClaimsAnUnlinkedLegacyUserByEmail() {
+        String email = "unlinked-" + UUID.randomUUID() + "@example.com";
+        Long localId = users.saveAndFlush(legacy(email)).getId();
+        UUID stranger = UUID.randomUUID();
+
+        assertThatThrownBy(() -> resolver.resolve(token(stranger, email.toUpperCase())))
+                .isInstanceOf(BadCredentialsException.class);
+
+        assertThat(users.findById(localId).orElseThrow().getAccountId()).isNull();
+        assertThat(users.findByAccountId(stranger)).isEmpty();
+    }
+
+    @Test
+    void rejectsCaseVariantLegacyDuplicatesWithoutAServerError() {
+        String email = "dup-" + UUID.randomUUID() + "@example.com";
+        users.saveAndFlush(legacy(email));
+        users.saveAndFlush(legacy(email.toUpperCase()));
+
+        assertThatThrownBy(() -> resolver.resolve(token(UUID.randomUUID(), email)))
+                .isInstanceOf(BadCredentialsException.class);
     }
 
     @Test
@@ -57,12 +78,20 @@ class HomeBuddyAccountResolverTest {
     }
 
     @Test
-    void rejectsASecondAccountClaimingAnAlreadyLinkedEmail() {
-        String email = "owned-" + UUID.randomUUID() + "@example.com";
-        resolver.resolve(token(UUID.randomUUID(), email));
+    void emailChangeToAnAddressStillStoredOnAnotherAccountKeepsBothAccountsWorking() {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        String released = "released-" + first + "@example.com";
+        User firstUser = resolver.resolve(token(first, released));
+        User secondUser = resolver.resolve(token(second, "other-" + second + "@example.com"));
 
-        assertThatThrownBy(() -> resolver.resolve(token(UUID.randomUUID(), email)))
-                .isInstanceOf(BadCredentialsException.class);
+        // The first account gave the address up in authBuddy; the second one took it over.
+        User moved = resolver.resolve(token(second, released));
+
+        assertThat(moved.getId()).isEqualTo(secondUser.getId());
+        assertThat(moved.getEmail()).isEqualTo(released);
+        assertThat(resolver.resolve(token(first, "new-" + first + "@example.com")).getId())
+                .isEqualTo(firstUser.getId());
     }
 
     @Test
@@ -87,6 +116,13 @@ class HomeBuddyAccountResolverTest {
             assertThat(first.get(10, TimeUnit.SECONDS)).isEqualTo(second.get(10, TimeUnit.SECONDS));
             assertThat(users.findByAccountId(accountId)).isPresent();
         }
+    }
+
+    private User legacy(String email) {
+        User legacy = new User();
+        legacy.setEmail(email);
+        legacy.setPasswordHash("legacy-hash");
+        return legacy;
     }
 
     private Jwt token(UUID subject, String email) {
