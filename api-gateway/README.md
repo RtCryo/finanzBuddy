@@ -1,6 +1,6 @@
 # API Gateway
 
-Spring Boot 4.1 API Gateway for the finanzBuddy platform. Provides JWT authentication, document upload to S3-compatible object storage (SeaweedFS), Kafka event publishing, and document query endpoints.
+Spring Boot 4.1 API Gateway for the finanzBuddy platform. Validates homeBuddy account tokens, links them to local owners, and provides document upload to S3-compatible object storage (SeaweedFS), Kafka event publishing, and document query endpoints.
 
 Documentation map: [API Gateway implementation, capabilities, and history](../docs/README.md#subsystem-map) · [cross-service architecture](../docs/ARCHITECTURE.md).
 
@@ -24,7 +24,7 @@ From the repository root:
 docker-compose up --build
 ```
 
-This starts PostgreSQL, Kafka, SeaweedFS (S3-compatible object storage), and the API Gateway.
+This starts PostgreSQL, Kafka, SeaweedFS (S3-compatible object storage), and the API Gateway. Start authBuddy and create the external `homebuddy` network first; see the [identity migration runbook](../docs/HOMEBUDDY_IDENTITY_MIGRATION.md).
 
 ## Environment Variables
 
@@ -41,8 +41,8 @@ This starts PostgreSQL, Kafka, SeaweedFS (S3-compatible object storage), and the
 | `MINIO_ACCESS_KEY` | S3 access key | `minioadmin` |
 | `MINIO_SECRET_KEY` | S3 secret key | `minioadmin` |
 | `MINIO_BUCKET` | Object-storage bucket for documents | `finanzbuddy-documents` |
-| `JWT_SECRET` | Base64-encoded JWT signing secret | **required, no default** — set in `.env` (`openssl rand -base64 32`) |
-| `JWT_EXPIRATION_MS` | JWT expiration in milliseconds | `86400000` |
+| `AUTH_JWKS_URI` | authBuddy JWKS endpoint on the shared network | `http://auth:8080/.well-known/jwks.json` |
+| `AUTH_ISSUER` | Required token issuer | `homebuddy-auth` |
 | `INTERNAL_API_KEY` | Shared key for internal service endpoints (`/internal/**`) | **required, no default** — `/internal/**` is locked until set |
 | `OUTBOX_POLL_INTERVAL_MS` | Interval the outbox relay polls for undelivered events | `5000` |
 | `UPLOAD_ACCEPTED_TYPES` | Comma-separated document types accepted for upload | `CSV` |
@@ -51,25 +51,7 @@ This starts PostgreSQL, Kafka, SeaweedFS (S3-compatible object storage), and the
 
 ### Authentication
 
-#### Register
-
-```bash
-curl -X POST http://localhost:8080/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password123"}'
-```
-
-Returns `201 Created` with a JWT token.
-
-#### Login
-
-```bash
-curl -X POST http://localhost:8080/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password123"}'
-```
-
-Returns `200 OK` with a JWT token.
+Registration and login are served by authBuddy at `/api/auth/register` and `/api/auth/login` on the UI origin. The gateway has no `/auth/**` handlers and stores no new passwords. It validates RS256 tokens against authBuddy's JWKS, requires issuer `homebuddy-auth` and audience `finanzbuddy`, and resolves `sub` to the local `users.account_id`. An existing user is linked by email on first use without changing its numeric owner ID. An account new to finanzBuddy receives a local owner row with no password hash. See the [migration runbook](../docs/HOMEBUDDY_IDENTITY_MIGRATION.md).
 
 ### Documents
 
@@ -275,11 +257,8 @@ re-raised as defects.
   idempotent), but it will produce duplicate publishes. Add `FOR UPDATE SKIP LOCKED` or a
   leader-election mechanism before running multiple gateway instances.
 
-- **Registration returns `409 Conflict` for an existing email (user enumeration).** This is an
-  accepted trade-off: hiding it (returning `201` for a duplicate) would be a functional regression
-  — the client legitimately needs to know registration did not create an account, and there is no
-  out-of-band email flow to compensate. Login is not affected: it returns a generic
-  `401 Unauthorized` for both unknown emails and wrong passwords.
+- **Registration and login responses.** authBuddy owns these endpoints and their error behavior;
+  the UI forwards requests through `/api/auth/` on its own origin.
 
 - **Integration tests run on H2, not Postgres.** Controller/service tests use H2
   (`create-drop`). Entity↔migration drift is caught by `LiquibaseMigrationTest`, which runs the

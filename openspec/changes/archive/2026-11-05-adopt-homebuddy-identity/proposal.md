@@ -2,7 +2,7 @@
 
 ## Why
 
-homeBuddy families should use one account for finanzBuddy and the new calendarBuddy. The new authBuddy identity service ([`add-identity-service`](../../../../authBuddy/openspec/changes/add-identity-service/proposal.md)) owns those accounts. finanzBuddy must accept its tokens and stop issuing its own, while keeping every existing user's data and password.
+homeBuddy families should use one account for finanzBuddy and the new calendarBuddy. The new authBuddy identity service ([`add-identity-service`](../../../../authBuddy/openspec/changes/archive/2026-11-04-add-identity-service/proposal.md)) owns those accounts. finanzBuddy must accept its tokens and stop issuing its own, while keeping every existing user's data and password.
 
 ## What Changes
 

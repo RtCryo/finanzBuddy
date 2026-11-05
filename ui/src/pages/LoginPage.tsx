@@ -40,7 +40,7 @@ export function LoginPage() {
     <AuthLayout
       eyebrow="WELCOME BACK"
       title="Sign in to your account"
-      description="Pick up right where you left off."
+      description="Sign in with your homeBuddy account, also used for calendarBuddy."
       footer={<>Don’t have an account? <Link to="/register">Create account</Link></>}
     >
       <form className="form-stack" onSubmit={handleSubmit}>

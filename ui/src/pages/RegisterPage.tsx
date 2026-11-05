@@ -37,7 +37,7 @@ export function RegisterPage() {
     <AuthLayout
       eyebrow="GET STARTED"
       title="Create your account"
-      description="One secure place for all your financial documents."
+      description="Create a homeBuddy account for finanzBuddy and calendarBuddy."
       footer={<>Already have an account? <Link to="/login">Sign in</Link></>}
     >
       {success ? (

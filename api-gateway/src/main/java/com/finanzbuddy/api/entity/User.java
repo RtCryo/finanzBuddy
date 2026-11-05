@@ -9,6 +9,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "users")
@@ -21,7 +22,10 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(name = "password_hash", nullable = false)
+    @Column(name = "account_id", unique = true)
+    private UUID accountId;
+
+    @Column(name = "password_hash")
     private String passwordHash;
 
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -59,6 +63,14 @@ public class User {
 
     public String getPasswordHash() {
         return passwordHash;
+    }
+
+    public UUID getAccountId() {
+        return accountId;
+    }
+
+    public void setAccountId(UUID accountId) {
+        this.accountId = accountId;
     }
 
     public void setPasswordHash(String passwordHash) {

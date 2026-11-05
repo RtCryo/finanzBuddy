@@ -11,17 +11,19 @@ This document describes the current repository architecture and the boundaries b
 - [Parser Service README](../parser-service/README.md) — parser configuration, format support, retries, and metrics.
 - [UI README](../ui/README.md) — frontend development and build commands.
 - [UI design system](../ui/DESIGN_SYSTEM.md) — visual and interaction standards.
+- [homeBuddy identity migration](HOMEBUDDY_IDENTITY_MIGRATION.md) — import order, cutover, verification, and rollback.
 - `openspec/specs/` — durable capability and behavior requirements.
 
 ## System overview
 
-finanzBuddy is a monorepo application for uploading financial documents, extracting transactions, and reviewing the resulting data. The browser talks to the API Gateway through the UI's `/api` proxy. The gateway owns user-facing authentication and document APIs; the parser consumes upload events asynchronously and reports processing status back to the gateway.
+finanzBuddy is a monorepo application for uploading financial documents, extracting transactions, and reviewing the resulting data. The browser sends `/api/auth/` to authBuddy through the UI and other `/api/` requests to the API Gateway. authBuddy owns account credentials and token issuance; the gateway validates homeBuddy tokens and owns document APIs. The parser consumes upload events asynchronously and reports processing status back to the gateway.
 
 ```text
 Browser
   │ HTTPS / same-origin /api
   ▼
 UI (React SPA, served by Nginx) ── /api proxy ──► API Gateway (Spring Boot)
+          └── /api/auth/ proxy ──► authBuddy (account credentials, RS256 JWT, JWKS)
                                                        │          │
                                   document metadata ───┘          ├──► SeaweedFS S3 gateway
                                                        │          │    original documents
@@ -54,7 +56,7 @@ The API Gateway and parser service use the same PostgreSQL database and S3 bucke
 | Component | Responsibility | Main implementation areas |
 |---|---|---|
 | UI | Registration/login, dashboard, document upload/list/detail, transaction history and editing | `ui/src/pages/`, `ui/src/components/`, `ui/src/api/` |
-| API Gateway | JWT auth, document upload and ownership, document status, dashboard/history APIs, transaction category/version, tag and rule operations, import-time rule application, outbox delivery | `api-gateway/src/main/java/com/finanzbuddy/api/` |
+| API Gateway | JWKS token validation and local account projection, document upload and ownership, document status, dashboard/history APIs, transaction category/version, tag and rule operations, import-time rule application, outbox delivery | `api-gateway/src/main/java/com/finanzbuddy/api/` |
 | Parser Service | Kafka consumption, object download, format-specific parsing, deduplication, transaction persistence, status reporting | `parser-service/src/main/java/com/finanzbuddy/parser/` |
 | PostgreSQL | Shared relational store; each service applies its own Liquibase changelog | `api-gateway/src/main/resources/db/changelog/`, `parser-service/src/main/resources/db/changelog/` |
 | SeaweedFS | S3-compatible storage for original documents; Compose keeps the service name `minio` and `MINIO_*` settings for client compatibility | `docker-compose.yml`, each service's storage configuration |
@@ -67,7 +69,7 @@ Both services connect to the same database/schema. IDs crossing service boundari
 
 | Data | Owner/writer | Readers and purpose |
 |---|---|---|
-| `users` | API Gateway | Authentication and owner lookup |
+| `users` | API Gateway | Local owner projection linked by unique nullable `account_id` to the authBuddy account UUID; existing numeric `id` keeps document and transaction ownership stable. Legacy password hashes remain temporarily for rollback; new users have no local hash. |
 | `documents` | API Gateway | Upload metadata, ownership, status and document list/detail APIs |
 | `outbox_events` | API Gateway | Durable event publication after an upload or reprocess request |
 | `transactions`, `processed_documents` | Parser Service | Gateway reads transactions for document details, dashboard, history, and ownership-scoped category edits; the processed marker makes event handling idempotent |
@@ -85,7 +87,7 @@ Gateway migration 011 adds owner-scoped rules, ordered conditions, and per-rule 
 
 ## Document processing flow
 
-1. The user authenticates against the gateway and uploads a file through `POST /documents`. The default accepted upload type is `CSV`; PDF/XML are recognized by the gateway but rejected unless configured and supported by a running parser. The gateway's multipart limit is 10 MB per file.
+1. The user signs in through authBuddy and uploads a file through `POST /documents` with its homeBuddy token. The default accepted upload type is `CSV`; PDF/XML are recognized by the gateway but rejected unless configured and supported by a running parser. The gateway's multipart limit is 10 MB per file.
 2. The gateway creates a `PENDING` document row, stores the original under `users/{userId}/{documentId}-{originalFilename}` in the configured S3 bucket, then stores the object path and upload event in one database transaction. Failed finalization cleans up the orphaned object/row where possible.
 3. The scheduled outbox relay publishes the persisted JSON event to `documents.{type}` with the document ID as the Kafka key, then marks it delivered. Failed sends are retried with backoff and eventually dead-lettered in the outbox. Delivery is at-least-once; the gateway relay assumes one gateway instance, while the parser deduplicates by document ID.
 4. The parser's configured listener downloads the object, routes it to the format-specific parser, and writes a `processed_documents` marker plus extracted rows to `transactions` transactionally. CSV is enabled by default; PDF and XML listeners are disabled and their parsers are stubs.
@@ -97,11 +99,11 @@ Gateway migration 011 adds owner-scoped rules, ordered conditions, and per-rule 
 Rule create and update requests accept an existing owned tag ID or a new tag name. The Gateway resolves a new name and saves the rule within one transaction, so failures roll back both.
 Category conditions may also request new personal category names. The Gateway validates that each name belongs to a Category condition and saves those dictionary entries with the rule in the same transaction. Rule authoring never assigns a transaction category or creates a category version.
 
-The UI sends API requests to `/api`; Vite rewrites that prefix in development and Nginx proxies it to `api-gateway:8080` in the production UI container.
+The UI sends API requests to `/api`. Vite and Nginx proxy `/api/auth/` to authBuddy (`localhost:8090` in development; `auth:8080` on the shared network), and other `/api/` requests to the gateway. The auth rule precedes the general API rule. Gateway `/auth/**` routes do not exist.
 
 | Route | Authentication | Purpose |
 |---|---|---|
-| `POST /auth/register`, `POST /auth/login` | Public | Create an account and issue a JWT |
+| `POST /api/auth/register`, `POST /api/auth/login` on the UI origin | Public | authBuddy creates or signs in to the shared homeBuddy account and issues a JWT |
 | `GET /dashboard` | User JWT | Owner-scoped aggregate document/transaction metrics |
 | `POST /documents`, `GET /documents`, `GET /documents/{id}` | User JWT | Upload and list/read owned documents |
 | `GET /documents/{id}/transactions`, `GET /documents/{id}/download` | User JWT | Read processed transactions and download the original file for an owned document |
@@ -115,7 +117,7 @@ The UI sends API requests to `/api`; Vite rewrites that prefix in development an
 | `PUT /internal/documents/{id}/status` | Internal API key | Parser-to-gateway status reporting |
 | `/actuator/health`, `/actuator/info`, `/actuator/prometheus` | Service endpoint configuration | Health checks and Prometheus scraping; parser also exposes `/actuator/metrics` |
 
-The gateway uses stateless Spring Security and BCrypt password hashing. `/auth/**` and the configured gateway actuator endpoints are public; user routes require a JWT, and `/internal/**` requires the service-key filter. User document and transaction queries verify ownership before returning data. The internal status endpoint intentionally identifies a document by ID rather than user ownership; its trust boundary is the shared service API key, which must remain server-side and must never be sent to the browser. Original files are accessed through the gateway's owner-checked endpoints, not directly from the browser's S3 credentials.
+The gateway uses stateless Spring Security. It accepts only RS256 tokens from authBuddy's JWKS with issuer `homebuddy-auth` and audience `finanzbuddy`; it resolves the immutable `sub` account UUID to a local `users` row, first linking an unlinked legacy row by email or creating a new row. A later email claim updates that same row. The configured actuator endpoints are public; user routes require a valid token, and `/internal/**` requires the service-key filter. User document and transaction queries verify ownership before returning data. The internal status endpoint intentionally identifies a document by ID rather than user ownership; its trust boundary is the shared service API key, which must remain server-side and must never be sent to the browser. Original files are accessed through the gateway's owner-checked endpoints, not directly from the browser's S3 credentials.
 
 The history tag query uses repeated bare IDs, for example `GET /transactions?tagIds=4&tagIds=8&tagMode=OR`. AND is the default and requires all distinct selected tags; OR requires at least one. An empty selection applies no tag restriction, and either mode combines with the existing text/date/category filters using AND before counting and pagination. Unknown or foreign tag IDs receive the same generic invalid-selection response.
 
@@ -135,9 +137,9 @@ The exact dependency versions and environment-variable defaults live in `ui/pack
 
 ## Local development and deployment
 
-For local development, create `.env` from `.env.example` and run `docker compose up --build` from the repository root. `docker-compose.override.yml` is loaded automatically and publishes local ports for PostgreSQL (`5432`), Kafka (`29092`), SeaweedFS S3 (`9000`), the gateway (`8080`), UI (`3000`), Prometheus (`9090`), and Grafana (`3001`).
+For local development, create the external `homebuddy` network, start authBuddy, create `.env` from `.env.example`, and run `docker compose up --build` from this repository root. The stack fails to start with a message naming `homebuddy` if that network is absent. `docker-compose.override.yml` is loaded automatically and publishes local ports for PostgreSQL (`5432`), Kafka (`29092`), SeaweedFS S3 (`9000`), the gateway (`8080`), UI (`3000`), Prometheus (`9090`), and Grafana (`3001`).
 
-The optional production deployment uses `docker compose -f docker-compose.yml --profile production ...`, which omits the local override and enables Traefik on ports 80/443. Traefik terminates HTTPS and routes to the UI; the UI's Nginx proxy forwards `/api` requests to the gateway on the private Compose network. Prometheus, Grafana, the exporter, and application services are not published as host ports in this mode.
+For a shared host, the root homeBuddy stack provides the only Traefik on ports 80/443. The finanzBuddy UI has labels for `TRAEFIK_DOMAIN` and `traefik.docker.network=homebuddy`; it joins that network as `finanzbuddy-ui`. The gateway also joins `homebuddy` to reach authBuddy's JWKS, while product data services stay on the private Compose network. The service-local `production` Traefik profile is for standalone deployment only. Prometheus, Grafana, the exporter, and application services are not published as host ports in production.
 
 ## Repository map
 

@@ -114,6 +114,19 @@ class LiquibaseMigrationTest {
     }
 
     @Test
+    void usersAccountLinkMatchesEntity() {
+        assertThat(columnNullability("USERS"))
+                .containsEntry("ACCOUNT_ID", "YES")
+                .containsEntry("PASSWORD_HASH", "YES");
+        List<String> constraints =
+                jdbcTemplate.queryForList(
+                        "SELECT UPPER(constraint_name) FROM information_schema.table_constraints"
+                                + " WHERE UPPER(table_name) = 'USERS' AND constraint_type = 'UNIQUE'",
+                        String.class);
+        assertThat(constraints).contains("UK_USERS_ACCOUNT_ID");
+    }
+
+    @Test
     void outboxEventsHasRequiredIndexes() {
         List<String> indexes =
                 jdbcTemplate.queryForList(

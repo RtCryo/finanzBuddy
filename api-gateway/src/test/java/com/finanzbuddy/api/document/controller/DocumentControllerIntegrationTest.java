@@ -7,6 +7,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -18,13 +19,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.finanzbuddy.api.auth.dto.LoginRequest;
-import com.finanzbuddy.api.auth.dto.RegisterRequest;
 import com.finanzbuddy.api.document.dto.DocumentStatusUpdateRequest;
 import com.finanzbuddy.api.document.outbox.OutboxRelay;
 import com.finanzbuddy.api.entity.DocumentStatus;
 import com.finanzbuddy.api.entity.OutboxEvent;
 import com.finanzbuddy.api.repository.OutboxEventRepository;
+import com.finanzbuddy.api.security.HomeBuddyAccountResolver;
 import com.finanzbuddy.api.security.apikey.InternalApiKeyAuthFilter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
@@ -35,6 +35,9 @@ import io.minio.PutObjectArgs;
 import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.sql.Date;
+import java.time.Instant;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import okhttp3.Headers;
 import org.hamcrest.Matchers;
@@ -46,7 +49,10 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -69,6 +75,10 @@ class DocumentControllerIntegrationTest {
     @Autowired private MinioClient minioClient;
 
     @Autowired private JdbcTemplate jdbcTemplate;
+
+    @Autowired private HomeBuddyAccountResolver accountResolver;
+
+    @MockitoBean private JwtDecoder jwtDecoder;
 
     @Autowired private MeterRegistry meterRegistry;
 
@@ -1068,6 +1078,18 @@ class DocumentControllerIntegrationTest {
     }
 
     @Test
+    void gatewayDoesNotServeAuthenticationEndpoints() throws Exception {
+        String token =
+                registerAndLogin("auth-route-" + UUID.randomUUID() + "@example.com", "unused");
+        mockMvc.perform(
+                        post("/auth/login")
+                                .header("Authorization", "Bearer " + token)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void internalStatusUpdateRejectsInvalidTransition() throws Exception {
         String token = registerAndLogin("parserbad@example.com", "password123");
         MockMultipartFile file =
@@ -1348,25 +1370,24 @@ class DocumentControllerIntegrationTest {
     }
 
     private String registerAndLogin(String email, String password) throws Exception {
-        RegisterRequest register = new RegisterRequest(email, password);
-        mockMvc.perform(
-                        post("/auth/register")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(register)))
-                .andExpect(status().isCreated());
-
-        LoginRequest login = new LoginRequest(email, password);
-        MvcResult result =
-                mockMvc.perform(
-                                post("/auth/login")
-                                        .contentType(MediaType.APPLICATION_JSON)
-                                        .content(objectMapper.writeValueAsString(login)))
-                        .andExpect(status().isOk())
-                        .andReturn();
-
-        return objectMapper
-                .readTree(result.getResponse().getContentAsString())
-                .get("token")
-                .asText();
+        String token = UUID.randomUUID().toString();
+        Jwt jwt =
+                new Jwt(
+                        token,
+                        Instant.now(),
+                        Instant.now().plusSeconds(3600),
+                        Map.of("alg", "RS256", "kid", "test"),
+                        Map.of(
+                                "sub",
+                                UUID.randomUUID().toString(),
+                                "email",
+                                email,
+                                "iss",
+                                "homebuddy-auth",
+                                "aud",
+                                java.util.List.of("finanzbuddy")));
+        when(jwtDecoder.decode(token)).thenReturn(jwt);
+        accountResolver.resolve(jwt);
+        return token;
     }
 }

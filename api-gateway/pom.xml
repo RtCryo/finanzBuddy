@@ -17,7 +17,6 @@
 		<java.version>25</java.version>
 		<minio.version>9.0.4</minio.version>
 		<okhttp.version>5.5.1</okhttp.version>
-		<jjwt.version>0.13.0</jjwt.version>
 		<spotless.version>3.11.0</spotless.version>
 		<jacoco.version>0.8.16</jacoco.version>
 		<google-java-format.version>1.36.1</google-java-format.version>
@@ -30,6 +29,10 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -85,24 +88,6 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-liquibase</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>io.jsonwebtoken</groupId>
-			<artifactId>jjwt-api</artifactId>
-			<version>${jjwt.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>io.jsonwebtoken</groupId>
-			<artifactId>jjwt-impl</artifactId>
-			<version>${jjwt.version}</version>
-			<scope>runtime</scope>
-		</dependency>
-		<dependency>
-			<groupId>io.jsonwebtoken</groupId>
-			<artifactId>jjwt-jackson</artifactId>
-			<version>${jjwt.version}</version>
-			<scope>runtime</scope>
-		</dependency>
-
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>

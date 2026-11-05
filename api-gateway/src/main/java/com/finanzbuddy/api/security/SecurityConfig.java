@@ -1,21 +1,32 @@
 package com.finanzbuddy.api.security;
 
+import com.finanzbuddy.api.entity.User;
 import com.finanzbuddy.api.security.apikey.InternalApiKeyAuthFilter;
-import com.finanzbuddy.api.security.jwt.JwtAuthenticationFilter;
+import java.time.Duration;
+import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
@@ -25,29 +36,18 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final InternalApiKeyAuthFilter internalApiKeyAuthFilter;
-    private final UserDetailsService userDetailsService;
-
-    public SecurityConfig(
-            JwtAuthenticationFilter jwtAuthenticationFilter,
-            InternalApiKeyAuthFilter internalApiKeyAuthFilter,
-            UserDetailsService userDetailsService) {
-        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
-        this.internalApiKeyAuthFilter = internalApiKeyAuthFilter;
-        this.userDetailsService = userDetailsService;
-    }
-
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            InternalApiKeyAuthFilter internalApiKeyAuthFilter,
+            Converter<Jwt, AbstractAuthenticationToken> accountAuthenticationConverter)
+            throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(
                         session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(
                         auth ->
-                                auth.requestMatchers("/auth/**")
-                                        .permitAll()
-                                        .requestMatchers("/error")
+                                auth.requestMatchers("/error")
                                         .permitAll()
                                         .requestMatchers(
                                                 "/actuator/health",
@@ -58,38 +58,59 @@ public class SecurityConfig {
                                         .hasRole("SERVICE")
                                         .anyRequest()
                                         .authenticated())
-                .authenticationProvider(authenticationProvider())
                 .addFilterBefore(
                         internalApiKeyAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(
-                        jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .oauth2ResourceServer(
+                        oauth ->
+                                oauth.jwt(
+                                        jwt ->
+                                                jwt.jwtAuthenticationConverter(
+                                                        accountAuthenticationConverter)))
                 .exceptionHandling(
                         exception ->
                                 exception.authenticationEntryPoint(authenticationEntryPoint()));
-
         return http.build();
     }
 
     @Bean
-    public AuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(userDetailsService);
-        authProvider.setPasswordEncoder(passwordEncoder());
-        return authProvider;
+    JwtDecoder jwtDecoder(
+            @Value("${app.auth.jwks-uri}") String jwksUri,
+            @Value("${app.auth.issuer}") String issuer) {
+        NimbusJwtDecoder decoder =
+                NimbusJwtDecoder.withJwkSetUri(jwksUri)
+                        .jwsAlgorithm(SignatureAlgorithm.RS256)
+                        .build();
+        OAuth2TokenValidator<Jwt> audience =
+                jwt ->
+                        jwt.getAudience().contains("finanzbuddy")
+                                ? OAuth2TokenValidatorResult.success()
+                                : OAuth2TokenValidatorResult.failure(
+                                        new OAuth2Error("invalid_token", "Wrong audience", null));
+        decoder.setJwtValidator(
+                new DelegatingOAuth2TokenValidator<>(
+                        new JwtTimestampValidator(Duration.ofSeconds(60)),
+                        new JwtIssuerValidator(issuer),
+                        audience));
+        return decoder;
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config)
-            throws Exception {
-        return config.getAuthenticationManager();
+    Converter<Jwt, AbstractAuthenticationToken> accountAuthenticationConverter(
+            HomeBuddyAccountResolver resolver) {
+        return jwt -> {
+            User localUser = resolver.resolve(jwt);
+            UserDetails principal =
+                    new org.springframework.security.core.userdetails.User(
+                            localUser.getEmail(),
+                            "",
+                            List.of(new SimpleGrantedAuthority("ROLE_USER")));
+            return new UsernamePasswordAuthenticationToken(
+                    principal, jwt, principal.getAuthorities());
+        };
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-
-    @Bean
-    public AuthenticationEntryPoint authenticationEntryPoint() {
+    AuthenticationEntryPoint authenticationEntryPoint() {
         return new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED);
     }
 }

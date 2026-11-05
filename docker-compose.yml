@@ -24,6 +24,8 @@ services:
     depends_on:
       ui:
         condition: service_started
+    networks:
+      - homebuddy
 
   postgres:
     image: postgres:18-alpine
@@ -127,9 +129,12 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: finanzbuddy-documents
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRATION_MS: 86400000
+      AUTH_JWKS_URI: ${AUTH_JWKS_URI:-http://auth:8080/.well-known/jwks.json}
+      AUTH_ISSUER: ${AUTH_ISSUER:-homebuddy-auth}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+    networks:
+      - default
+      - homebuddy
 
   parser-service:
     build:
@@ -197,10 +202,16 @@ services:
         condition: service_started
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=homebuddy"
       - "traefik.http.routers.ui.rule=Host(`${TRAEFIK_DOMAIN}`)"
       - "traefik.http.routers.ui.entrypoints=websecure"
       - "traefik.http.routers.ui.tls.certresolver=letsencrypt"
       - "traefik.http.services.ui.loadbalancer.server.port=80"
+    networks:
+      default:
+      homebuddy:
+        aliases:
+          - finanzbuddy-ui
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1/" ]
       interval: 30s
@@ -214,3 +225,8 @@ volumes:
   traefik-acme:
   prometheus-data:
   grafana-data:
+
+networks:
+  homebuddy:
+    external: true
+    name: homebuddy
