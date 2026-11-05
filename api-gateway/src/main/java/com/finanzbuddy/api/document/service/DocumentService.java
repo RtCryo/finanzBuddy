@@ -103,9 +103,9 @@ public class DocumentService {
         this.acceptedTypes = acceptedTypes;
     }
 
-    public DocumentResponse uploadDocument(String userEmail, MultipartFile file, String type) {
+    public DocumentResponse uploadDocument(long userId, MultipartFile file, String type) {
         try {
-            DocumentResponse response = uploadDocumentInternal(userEmail, file, type);
+            DocumentResponse response = uploadDocumentInternal(userId, file, type);
             documentUploadMetrics.recordSuccess(type);
             return response;
         } catch (RuntimeException exception) {
@@ -114,8 +114,7 @@ public class DocumentService {
         }
     }
 
-    private DocumentResponse uploadDocumentInternal(
-            String userEmail, MultipartFile file, String type) {
+    private DocumentResponse uploadDocumentInternal(long userId, MultipartFile file, String type) {
         DocumentType documentType = parseAndValidateType(type);
 
         if (file.isEmpty()) {
@@ -143,14 +142,7 @@ public class DocumentService {
         Document pending =
                 txTemplate.execute(
                         status -> {
-                            User user =
-                                    userRepository
-                                            .findByEmail(userEmail)
-                                            .orElseThrow(
-                                                    () ->
-                                                            new ResponseStatusException(
-                                                                    HttpStatus.UNAUTHORIZED,
-                                                                    "User not found"));
+                            User user = getUser(userId);
                             Document doc = new Document();
                             doc.setUser(user);
                             doc.setOriginalFilename(originalFilename);
@@ -159,7 +151,6 @@ public class DocumentService {
                             return documentRepository.save(doc);
                         });
 
-        Long userId = pending.getUser().getId();
         Long docId = pending.getId();
         String storagePath = DocumentStorage.objectKey(userId, docId, originalFilename);
 
@@ -211,16 +202,14 @@ public class DocumentService {
     }
 
     @Transactional(readOnly = true)
-    public DocumentListResponse listDocuments(
-            String userEmail, Pageable pageable, String filename) {
-        User user = getUser(userEmail);
+    public DocumentListResponse listDocuments(long userId, Pageable pageable, String filename) {
+        User user = getUser(userId);
         String query = filename == null ? "" : filename.trim();
         Page<Document> page =
                 query.isEmpty()
                         ? documentRepository.findByUserId(user.getId(), pageable)
                         : documentRepository.findByUserIdAndOriginalFilenameContainingIgnoreCase(
                                 user.getId(), query, pageable);
-        long userId = user.getId();
         return new DocumentListResponse(
                 page.getContent().stream().map(this::toResponse).toList(),
                 page.getTotalElements(),
@@ -234,8 +223,8 @@ public class DocumentService {
     }
 
     @Transactional(readOnly = true)
-    public DocumentResponse getDocument(String userEmail, Long documentId) {
-        User user = getUser(userEmail);
+    public DocumentResponse getDocument(long userId, Long documentId) {
+        User user = getUser(userId);
         Document document =
                 documentRepository
                         .findByIdAndUserId(documentId, user.getId())
@@ -247,8 +236,8 @@ public class DocumentService {
     }
 
     @Transactional(readOnly = true)
-    public List<TransactionResponse> getTransactions(String userEmail, Long documentId) {
-        User user = getUser(userEmail);
+    public List<TransactionResponse> getTransactions(long userId, Long documentId) {
+        User user = getUser(userId);
         // Ownership guard: only surface transactions for a document the caller owns.
         documentRepository
                 .findByIdAndUserId(documentId, user.getId())
@@ -261,7 +250,7 @@ public class DocumentService {
 
     @Transactional(readOnly = true)
     public TransactionHistoryResponse getTransactionHistory(
-            String userEmail,
+            long userId,
             Pageable pageable,
             String query,
             LocalDate from,
@@ -270,7 +259,7 @@ public class DocumentService {
             String sortField,
             String sortDirection) {
         return getTransactionHistory(
-                userEmail,
+                userId,
                 pageable,
                 query,
                 from,
@@ -284,7 +273,7 @@ public class DocumentService {
 
     @Transactional(readOnly = true)
     public TransactionHistoryResponse getTransactionHistory(
-            String userEmail,
+            long userId,
             Pageable pageable,
             String query,
             LocalDate from,
@@ -298,7 +287,7 @@ public class DocumentService {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "Start date must be on or before end date");
         }
-        User user = getUser(userEmail);
+        User user = getUser(userId);
         Page<TransactionResponse> page =
                 transactionReadRepository.findHistory(
                         user.getId(),
@@ -323,8 +312,8 @@ public class DocumentService {
 
     @Transactional(readOnly = true)
     public RelatedExpensePageResponse getRelatedExpenses(
-            String userEmail, Long sourceId, Pageable pageable) {
-        User user = getUser(userEmail);
+            long userId, Long sourceId, Pageable pageable) {
+        User user = getUser(userId);
         TransactionResponse source =
                 transactionReadRepository
                         .findOwnedProcessedSource(user.getId(), sourceId)
@@ -347,11 +336,11 @@ public class DocumentService {
      * Streams the owner's original uploaded file from object storage. Ownership is verified in a
      * short transaction; the object-storage I/O then runs without holding a DB connection.
      */
-    public DownloadedFile downloadOriginalFile(String userEmail, Long documentId) {
+    public DownloadedFile downloadOriginalFile(long userId, Long documentId) {
         StoredObject stored =
                 txTemplate.execute(
                         status -> {
-                            User user = getUser(userEmail);
+                            User user = getUser(userId);
                             Document document =
                                     documentRepository
                                             .findByIdAndUserId(documentId, user.getId())
@@ -490,9 +479,9 @@ public class DocumentService {
         }
     }
 
-    private User getUser(String userEmail) {
+    private User getUser(long userId) {
         return userRepository
-                .findByEmail(userEmail)
+                .findById(userId)
                 .orElseThrow(
                         () ->
                                 new ResponseStatusException(

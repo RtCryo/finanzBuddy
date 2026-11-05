@@ -6,7 +6,6 @@ import com.finanzbuddy.api.repository.TransactionCategoryRepository;
 import com.finanzbuddy.api.repository.TransactionReadRepository;
 import com.finanzbuddy.api.repository.TransactionTagRepository;
 import com.finanzbuddy.api.repository.TransactionTagRuleRepository;
-import com.finanzbuddy.api.repository.UserRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -18,38 +17,28 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class TransactionTagRuleService {
     private static final int BATCH_SIZE = 500;
-    private final UserRepository users;
     private final TransactionTagRepository tags;
     private final TransactionCategoryRepository categories;
     private final TransactionTagRuleRepository rules;
     private final TransactionReadRepository transactions;
 
     public TransactionTagRuleService(
-            UserRepository users,
             TransactionTagRepository tags,
             TransactionCategoryRepository categories,
             TransactionTagRuleRepository rules,
             TransactionReadRepository transactions) {
-        this.users = users;
         this.tags = tags;
         this.categories = categories;
         this.rules = rules;
         this.transactions = transactions;
     }
 
-    private long owner(String email) {
-        return users.findByEmail(email)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED))
-                .getId();
-    }
-
-    public List<TransactionTagRule> list(String email) {
-        return rules.findAll(owner(email));
+    public List<TransactionTagRule> list(long userId) {
+        return rules.findAll(userId);
     }
 
     @Transactional
-    public TransactionTagRule create(String email, TransactionTagRuleRequest request) {
-        long userId = owner(email);
+    public TransactionTagRule create(long userId, TransactionTagRuleRequest request) {
         TransactionTagRule proposed = TransactionTagRuleEvaluator.validated(0, request);
         List<String> categoryNames = validatedCategoryNames(request, proposed);
         rules.lockOwner(userId);
@@ -62,8 +51,7 @@ public class TransactionTagRuleService {
     }
 
     @Transactional
-    public TransactionTagRule update(String email, long id, TransactionTagRuleRequest request) {
-        long userId = owner(email);
+    public TransactionTagRule update(long userId, long id, TransactionTagRuleRequest request) {
         TransactionTagRule proposed = TransactionTagRuleEvaluator.validated(id, request);
         List<String> categoryNames = validatedCategoryNames(request, proposed);
         rules.lockOwner(userId);
@@ -81,8 +69,7 @@ public class TransactionTagRuleService {
     }
 
     @Transactional
-    public void delete(String email, long id, boolean removeExisting) {
-        long userId = owner(email);
+    public void delete(long userId, long id, boolean removeExisting) {
         rules.lockOwner(userId);
         if (!rules.exists(userId, id)) throw missing();
         if (!removeExisting) rules.promoteContributions(userId, id);

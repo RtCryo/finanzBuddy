@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!--
+        users.email is a projection of the homeBuddy account email. Accounts are identified by
+        account_id, and authBuddy owns email uniqueness. A unique local email would lock an account
+        out when it takes over an address that another local row still stores.
+    -->
+    <changeSet id="013-drop-users-email-uniqueness" author="api-gateway">
+        <dropUniqueConstraint tableName="users" constraintName="uk_users_email"/>
+        <dropIndex tableName="users" indexName="idx_users_email"/>
+        <createIndex tableName="users" indexName="idx_users_email">
+            <column name="email"/>
+        </createIndex>
+
+        <rollback>
+            <dropIndex tableName="users" indexName="idx_users_email"/>
+            <createIndex tableName="users" indexName="idx_users_email" unique="true">
+                <column name="email"/>
+            </createIndex>
+            <addUniqueConstraint tableName="users" columnNames="email"
+                                 constraintName="uk_users_email"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

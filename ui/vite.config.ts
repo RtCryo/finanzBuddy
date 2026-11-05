@@ -9,6 +9,11 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss()],
     server: {
       proxy: {
+        '/api/auth': {
+          target: env.VITE_AUTH_PROXY_TARGET || 'http://localhost:8090',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api/, '') || '/',
+        },
         '/api': {
           target: env.VITE_API_PROXY_TARGET || 'http://localhost:8080',
           changeOrigin: true,

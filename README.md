@@ -24,7 +24,7 @@ users/documents/outbox and reads the parser-owned `transactions` table to serve 
 - **Document tracking** — every document is tracked in PostgreSQL with statuses (`PENDING`, `PROCESSING`, `PROCESSED`, `FAILED`); the UI polls for status.
 - **Transaction viewing & file download** — processed documents expose their transactions and let the owner download the original file.
 - **Kafka event bus** — successful uploads emit `documents.{type}` events via a transactional outbox.
-- **JWT authentication** — stateless auth with registration and login endpoints.
+- **Shared homeBuddy account** — authBuddy handles registration and login; the gateway validates its tokens and keeps local document ownership.
 - **Containerized deployment** — Docker Compose stack with Postgres, Kafka, SeaweedFS (S3-compatible object storage), a Kafka Prometheus exporter, the API Gateway, the parser service, and the UI.
 - **Local monitoring** — Prometheus scrapes the application metrics and Grafana provides provisioned operational dashboards.
 
@@ -46,11 +46,12 @@ For a navigable map of module documentation, implementation areas, current capab
 Run the full stack from the repository root:
 
 ```bash
-cp .env.example .env   # fill in JWT_SECRET and INTERNAL_API_KEY
+docker network create homebuddy
+cp .env.example .env   # fill in INTERNAL_API_KEY
 docker compose up --build
 ```
 
-`docker compose` automatically loads `docker-compose.override.yml`, which publishes the
+Start authBuddy before the finanzBuddy UI; see the [identity migration runbook](docs/HOMEBUDDY_IDENTITY_MIGRATION.md). `docker compose` automatically loads `docker-compose.override.yml`, which publishes the
 localhost ports. The UI is served on `http://localhost:3000` and the API Gateway on
 `http://localhost:8080`. No domain or TLS certificate is required for local development.
 
@@ -84,24 +85,19 @@ exporter is reachable only inside the Compose network. Monitoring host ports are
 
 ## Production deployment (HTTPS via Traefik)
 
-The production mode puts a [Traefik](https://traefik.io/) reverse proxy in front of the
-stack as the single public entry point on ports 80 and 443. It obtains and renews TLS
-certificates automatically through Let's Encrypt (ACME HTTP-01) and redirects HTTP to
-HTTPS. The UI and API Gateway are not published on host ports; all application traffic
-enters through Traefik, and `/api` requests continue through the UI's existing Nginx proxy
-to the API Gateway.
+The root homeBuddy stack provides the shared [Traefik](https://traefik.io/) proxy for multi-product hosting on ports 80 and 443. The finanzBuddy UI joins `homebuddy` as `finanzbuddy-ui`; its labels route `TRAEFIK_DOMAIN` through the shared proxy. The service-local Traefik profile below is for a standalone finanzBuddy host only. The UI and API Gateway are not published on host ports; `/api/auth/` goes to authBuddy and other `/api/` traffic goes to the gateway.
 
 Prerequisites:
 
 - A public DNS `A`/`AAAA` record for your domain resolving to the deployment host.
 - Inbound TCP ports 80 and 443 reachable from the internet (port 80 is required for ACME
   HTTP-01 validation and the HTTP→HTTPS redirect).
-- `.env` populated with `JWT_SECRET`, `INTERNAL_API_KEY`, strong unique values for
+- `.env` populated with `INTERNAL_API_KEY`, `AUTH_JWKS_URI`, `AUTH_ISSUER`, strong unique values for
   `DB_PASSWORD` and `MINIO_ROOT_PASSWORD` (do not keep the local defaults in production),
   and the production values for `TRAEFIK_DOMAIN` (your real domain) and
   `TRAEFIK_ACME_EMAIL` (a real contact email).
 
-Start the production stack from the repository root:
+For a standalone host, start the production stack from the repository root:
 
 ```bash
 docker compose -f docker-compose.yml --profile production up --build -d

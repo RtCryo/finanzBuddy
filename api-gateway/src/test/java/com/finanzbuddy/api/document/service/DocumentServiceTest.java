@@ -32,13 +32,11 @@ class DocumentServiceTest {
     void relatedExpensesResolveAuthenticatedOwnerAndGuardBeforeMatching() {
         var user = new com.finanzbuddy.api.entity.User();
         user.setId(7L);
-        when(userRepository.findByEmail("owner@example.com"))
-                .thenReturn(java.util.Optional.of(user));
+        when(userRepository.findById(7L)).thenReturn(java.util.Optional.of(user));
         var pageable = org.springframework.data.domain.PageRequest.of(0, 20);
         when(transactionReadRepository.findOwnedProcessedSource(7L, 1L))
                 .thenReturn(java.util.Optional.empty());
-        assertThatThrownBy(
-                        () -> documentService.getRelatedExpenses("owner@example.com", 1L, pageable))
+        assertThatThrownBy(() -> documentService.getRelatedExpenses(7L, 1L, pageable))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(
                         ex ->
@@ -57,7 +55,7 @@ class DocumentServiceTest {
                 .thenReturn(java.util.Optional.of(source));
         when(transactionReadRepository.findRelatedExpenses(7L, 1L, " \t", pageable))
                 .thenReturn(org.springframework.data.domain.Page.empty(pageable));
-        var response = documentService.getRelatedExpenses("owner@example.com", 1L, pageable);
+        var response = documentService.getRelatedExpenses(7L, 1L, pageable);
         assertThat(response.items()).isEmpty();
         assertThat(response.page()).isZero();
         assertThat(response.size()).isEqualTo(20);

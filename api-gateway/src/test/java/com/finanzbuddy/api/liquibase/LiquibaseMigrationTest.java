@@ -104,13 +104,37 @@ class LiquibaseMigrationTest {
     }
 
     @Test
-    void usersEmailHasUniqueConstraint() {
+    void usersEmailIsAnIndexedProjectionWithoutUniqueness() {
         List<String> constraints =
                 jdbcTemplate.queryForList(
                         "SELECT UPPER(constraint_name) FROM information_schema.table_constraints"
                                 + " WHERE UPPER(table_name) = 'USERS' AND constraint_type = 'UNIQUE'",
                         String.class);
-        assertThat(constraints).contains("UK_USERS_EMAIL");
+        assertThat(constraints).doesNotContain("UK_USERS_EMAIL");
+        jdbcTemplate.update(
+                "INSERT INTO users (email, password_hash, created_at, updated_at)"
+                        + " VALUES ('same@example.com', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),"
+                        + " ('same@example.com', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
+        assertThat(
+                        jdbcTemplate.queryForObject(
+                                "SELECT COUNT(*) FROM information_schema.indexes"
+                                        + " WHERE UPPER(index_name) = 'IDX_USERS_EMAIL'",
+                                Integer.class))
+                .isPositive();
+        jdbcTemplate.update("DELETE FROM users WHERE email = 'same@example.com'");
+    }
+
+    @Test
+    void usersAccountLinkMatchesEntity() {
+        assertThat(columnNullability("USERS"))
+                .containsEntry("ACCOUNT_ID", "YES")
+                .containsEntry("PASSWORD_HASH", "YES");
+        List<String> constraints =
+                jdbcTemplate.queryForList(
+                        "SELECT UPPER(constraint_name) FROM information_schema.table_constraints"
+                                + " WHERE UPPER(table_name) = 'USERS' AND constraint_type = 'UNIQUE'",
+                        String.class);
+        assertThat(constraints).contains("UK_USERS_ACCOUNT_ID");
     }
 
     @Test

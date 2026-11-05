@@ -6,7 +6,7 @@ Documentation map: [UI implementation, capabilities, and history](../docs/README
 
 ## What it does
 
-- User registration and login against the API Gateway.
+- User registration and login through the UI's authBuddy proxy, using a shared homeBuddy account.
 - Upload financial documents (`CSV`) with a document type tag.
 - List uploaded documents and poll for processing status updates.
 - View normalized transactions for processed documents.
@@ -27,7 +27,7 @@ Documentation map: [UI implementation, capabilities, and history](../docs/README
 
 - Node.js 26+ (the production image uses `node:26-alpine`)
 - npm
-- A running API Gateway at `http://localhost:8080` for local development (see the root [`docker-compose.yml`](../docker-compose.yml))
+- A running API Gateway at `http://localhost:8080` and authBuddy at `http://localhost:8090` for local development (see the root [`docker-compose.yml`](../docker-compose.yml))
 
 ## Local development
 
@@ -37,7 +37,7 @@ npm install
 npm run dev
 ```
 
-The Vite dev server starts on `http://localhost:5173` and proxies all `/api` requests to the API Gateway.
+The Vite dev server starts on `http://localhost:5173`. It proxies `/api/auth/` to authBuddy and other `/api/` requests to the API Gateway.
 
 ## Available scripts
 
@@ -55,7 +55,8 @@ All variables are optional for the UI build.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `VITE_API_PROXY_TARGET` | Target URL for the Vite dev proxy on `/api`. | `http://localhost:8080` |
+| `VITE_API_PROXY_TARGET` | Target URL for other `/api/` requests in Vite. | `http://localhost:8080` |
+| `VITE_AUTH_PROXY_TARGET` | Target URL for `/api/auth/` in Vite. | `http://localhost:8090` |
 
 Create `ui/.env` if you need to override the proxy target:
 
@@ -63,7 +64,7 @@ Create `ui/.env` if you need to override the proxy target:
 VITE_API_PROXY_TARGET=http://localhost:8080
 ```
 
-The backend secrets (`JWT_SECRET`, `INTERNAL_API_KEY`) are configured in the root `.env` file for the Docker Compose stack. See [`.env.example`](../.env.example).
+The backend service key and authBuddy JWKS settings are configured in the root `.env` file for the Docker Compose stack. See [`.env.example`](../.env.example).
 
 ## Docker
 
@@ -83,11 +84,11 @@ Run the full stack (the `ui` service depends on `api-gateway`):
 
 ```bash
 # From the repository root
-cp .env.example .env   # fill in JWT_SECRET and INTERNAL_API_KEY
+cp .env.example .env   # fill in INTERNAL_API_KEY
 docker compose up -d
 ```
 
-The UI is served on port `3000` and proxies `/api` to the API Gateway inside the container network.
+The UI is served on port `3000`, proxies `/api/auth/` to `auth:8080` on `homebuddy`, and sends other `/api/` requests to the API Gateway on the private Compose network. Start the [homeBuddy network and authBuddy](../docs/HOMEBUDDY_IDENTITY_MIGRATION.md) first.
 
 ## Project structure
 

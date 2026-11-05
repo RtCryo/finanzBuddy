@@ -30,9 +30,13 @@ describe('LoginPage', () => {
 
     await userEvent.type(screen.getByLabelText('Email address'), 'alex@example.com')
     await userEvent.type(screen.getByLabelText('Password'), 'password123')
+    expect(screen.getByText(/homeBuddy account, also used for calendarBuddy/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     expect(await screen.findByText('at:/documents/9?page=2#row')).toBeInTheDocument()
+    expect(api.post).toHaveBeenCalledWith('/auth/login', {
+      email: 'alex@example.com', password: 'password123',
+    })
   })
 
   it('returns to a requested transaction route with its query and hash', async () => {

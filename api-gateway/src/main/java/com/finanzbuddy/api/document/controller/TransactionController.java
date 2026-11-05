@@ -13,6 +13,7 @@ import com.finanzbuddy.api.document.dto.TransactionVersionResponse;
 import com.finanzbuddy.api.document.service.DocumentService;
 import com.finanzbuddy.api.document.service.TransactionCategoryService;
 import com.finanzbuddy.api.document.service.TransactionTagService;
+import com.finanzbuddy.api.security.AccountPrincipal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -20,7 +21,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -54,7 +54,7 @@ public class TransactionController {
 
     @GetMapping
     public ResponseEntity<TransactionHistoryResponse> listTransactions(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal AccountPrincipal userDetails,
             @RequestParam(required = false) String query,
             @RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to,
@@ -79,7 +79,7 @@ public class TransactionController {
         int boundedSize = Math.min(size, MAX_PAGE_SIZE);
         TransactionHistoryResponse response =
                 documentService.getTransactionHistory(
-                        userDetails.getUsername(),
+                        userDetails.userId(),
                         PageRequest.of(page, boundedSize),
                         query,
                         from,
@@ -87,33 +87,33 @@ public class TransactionController {
                         category,
                         sortField,
                         normalizedDirection,
-                        tagService.validateSelection(userDetails.getUsername(), tagIds, tagMode),
+                        tagService.validateSelection(userDetails.userId(), tagIds, tagMode),
                         tagMode);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/tags")
-    public List<TransactionTag> listTags(@AuthenticationPrincipal UserDetails user) {
-        return tagService.list(user.getUsername());
+    public List<TransactionTag> listTags(@AuthenticationPrincipal AccountPrincipal user) {
+        return tagService.list(user.userId());
     }
 
     @GetMapping("/{id}/tags")
     public List<TransactionTag> assignedTags(
-            @AuthenticationPrincipal UserDetails user, @PathVariable long id) {
-        return tagService.assigned(user.getUsername(), id);
+            @AuthenticationPrincipal AccountPrincipal user, @PathVariable long id) {
+        return tagService.assigned(user.userId(), id);
     }
 
     @PutMapping("/{id}")
     public TransactionEditResponse editTransaction(
-            @AuthenticationPrincipal UserDetails user,
+            @AuthenticationPrincipal AccountPrincipal user,
             @PathVariable long id,
             @RequestBody TransactionEditRequest request) {
-        return tagService.save(user.getUsername(), id, request);
+        return tagService.save(user.userId(), id, request);
     }
 
     @GetMapping("/{id}/related-expenses")
     public ResponseEntity<RelatedExpensePageResponse> relatedExpenses(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal AccountPrincipal userDetails,
             @PathVariable Long id,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -123,21 +123,21 @@ public class TransactionController {
         }
         return ResponseEntity.ok(
                 documentService.getRelatedExpenses(
-                        userDetails.getUsername(),
+                        userDetails.userId(),
                         id,
                         PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE))));
     }
 
     @GetMapping("/categories")
     public ResponseEntity<List<String>> listCategories(
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @AuthenticationPrincipal AccountPrincipal userDetails) {
         return ResponseEntity.ok(
-                transactionCategoryService.getAvailableCategories(userDetails.getUsername()));
+                transactionCategoryService.getAvailableCategories(userDetails.userId()));
     }
 
     @PostMapping("/categories")
     public ResponseEntity<PersonalCategoryResponse> createCategory(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal AccountPrincipal userDetails,
             @RequestBody PersonalCategoryCreateRequest request) {
         if (request == null || request.transactionId() == null) {
             throw new ResponseStatusException(
@@ -145,20 +145,19 @@ public class TransactionController {
         }
         PersonalCategoryResponse response =
                 transactionCategoryService.createCategoryAndAssign(
-                        userDetails.getUsername(), request.transactionId(), request.name());
+                        userDetails.userId(), request.transactionId(), request.name());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/{id}/versions")
     public ResponseEntity<List<TransactionVersionResponse>> listVersions(
-            @AuthenticationPrincipal UserDetails userDetails, @PathVariable Long id) {
-        return ResponseEntity.ok(
-                transactionCategoryService.getVersions(userDetails.getUsername(), id));
+            @AuthenticationPrincipal AccountPrincipal userDetails, @PathVariable Long id) {
+        return ResponseEntity.ok(transactionCategoryService.getVersions(userDetails.userId(), id));
     }
 
     @PutMapping("/{id}/category")
     public ResponseEntity<TransactionResponse> updateCategory(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal AccountPrincipal userDetails,
             @PathVariable Long id,
             @RequestBody TransactionCategoryUpdateRequest request) {
         if (request == null) {
@@ -166,6 +165,6 @@ public class TransactionController {
         }
         return ResponseEntity.ok(
                 transactionCategoryService.updateCategory(
-                        userDetails.getUsername(), id, request.category()));
+                        userDetails.userId(), id, request.category()));
     }
 }
