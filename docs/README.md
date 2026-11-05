@@ -13,7 +13,7 @@ Start here when exploring this repository in Obsidian, GitHub, or another Markdo
 
 Architecture references service responsibilities and boundaries. Source code and deployment configuration are authoritative for current implementation details; the current capability specs remain authoritative for behavior requirements.
 
-The [homeBuddy identity migration runbook](HOMEBUDDY_IDENTITY_MIGRATION.md) coordinates the gateway account projection, authBuddy import, UI auth proxy, and shared network. See the [active identity change](../openspec/changes/adopt-homebuddy-identity/proposal.md) until it is archived.
+The [homeBuddy identity migration runbook](HOMEBUDDY_IDENTITY_MIGRATION.md) coordinates the gateway account projection, authBuddy import, UI auth proxy, and shared network. See the [archived identity change](../openspec/changes/archive/2026-11-05-adopt-homebuddy-identity/).
 
 ## Subsystem map
 
