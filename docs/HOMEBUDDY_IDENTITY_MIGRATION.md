@@ -1,6 +1,6 @@
 # Migrating finanzBuddy to homeBuddy identity
 
-This runbook covers the finanzBuddy side of the coordinated [homeBuddy rollout](../../openspec/changes/establish-homebuddy-platform/proposal.md). Follow the [authBuddy legacy import runbook](../../authBuddy/docs/MIGRATION.md) for the export and import commands. The export contains password hashes; keep it private and delete it after verification.
+This runbook covers the finanzBuddy side of the coordinated [homeBuddy rollout](../../openspec/changes/archive/2026-11-05-establish-homebuddy-platform/proposal.md). Follow the [authBuddy legacy import runbook](../../authBuddy/docs/MIGRATION.md) for the export and import commands. The export contains password hashes; keep it private and delete it after verification.
 
 ## Order of operations
 
