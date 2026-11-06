@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for motivation. Docker registers a container's service name and container name on every network it joins, so aliases cannot hide the gateway on `homebuddy`; only network membership can. The gateway reads `AUTH_JWKS_URI` (default `http://auth:8080/.well-known/jwks.json`) and caches the key set. The root [design](../../../../../openspec/changes/archive/2026-11-06-isolate-product-apis/design.md) records the rationale for per-API identity networks.
+See proposal.md for motivation. Docker registers a container's service name and container name on every network it joins, so aliases cannot hide the gateway on `homebuddy`; only network membership can. The gateway reads `AUTH_JWKS_URI` (default `http://auth:8080/.well-known/jwks.json`) and caches the key set. The root [design](https://github.com/RtCryo/homeBuddy/blob/main/openspec/changes/archive/2026-11-06-isolate-product-apis/design.md) records the rationale for per-API identity networks.
 
 ## Decisions
 

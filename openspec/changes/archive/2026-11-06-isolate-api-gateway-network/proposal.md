@@ -2,7 +2,7 @@
 
 ## Why
 
-The root capability `homebuddy-deployment` says a product API SHALL NOT be reachable from another stack, and the root change [`isolate-product-apis`](../../../../../openspec/changes/archive/2026-11-06-isolate-product-apis/proposal.md) closes the gap. The API Gateway still joins the shared `homebuddy` network only to fetch authBuddy's JWKS, so every container of every stack can call it, including its `/internal/**` endpoints that only the service API key protects.
+The root capability `homebuddy-deployment` says a product API SHALL NOT be reachable from another stack, and the root change [`isolate-product-apis`](https://github.com/RtCryo/homeBuddy/blob/main/openspec/changes/archive/2026-11-06-isolate-product-apis/proposal.md) closes the gap. The API Gateway still joins the shared `homebuddy` network only to fetch authBuddy's JWKS, so every container of every stack can call it, including its `/internal/**` endpoints that only the service API key protects.
 
 ## What Changes
 
@@ -28,4 +28,4 @@ The root capability `homebuddy-deployment` says a product API SHALL NOT be reach
 ## Impact
 
 - `docker-compose.yml`, `README.md`, `docs/HOMEBUDDY_IDENTITY_MIGRATION.md`, `docs/ARCHITECTURE.md` where it names networks, and the `compose-deployment` spec.
-- Rollout: apply only after authBuddy's [`join-identity-networks`](../../../../../authBuddy/openspec/changes/archive/2026-11-06-join-identity-networks/proposal.md) is deployed; otherwise every request returns 401.
+- Rollout: apply only after authBuddy's [`join-identity-networks`](https://github.com/RtCryo/authBuddy/blob/main/openspec/changes/archive/2026-11-06-join-identity-networks/proposal.md) is deployed; otherwise every request returns 401.
