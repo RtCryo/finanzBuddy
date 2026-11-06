@@ -47,6 +47,7 @@ Run the full stack from the repository root:
 
 ```bash
 docker network create homebuddy
+docker network create --internal finanzbuddy-identity
 cp .env.example .env   # fill in INTERNAL_API_KEY
 docker compose up --build
 ```

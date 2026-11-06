@@ -4,7 +4,7 @@ This runbook covers the finanzBuddy side of the coordinated [homeBuddy rollout](
 
 ## Order of operations
 
-1. Create the external Docker network `homebuddy` with `docker network create homebuddy`, or start the root homeBuddy Compose stack. Start authBuddy with `AUTH_REGISTRATION_ENABLED=false`.
+1. Create the external Docker network `homebuddy` with `docker network create homebuddy`, or start the root homeBuddy Compose stack, and create the internal identity network with `docker network create --internal finanzbuddy-identity` (the gateway reaches authBuddy's JWKS only over it). Start authBuddy with `AUTH_REGISTRATION_ENABLED=false`.
 2. Export every existing finanzBuddy user and import them into authBuddy using its runbook. Check that `created + skipped` equals the export count and `invalid=0`. Sign in with a known old password against authBuddy before switching the gateway.
 3. Deploy finanzBuddy migrations `012` and `013`, the gateway resource-server configuration, the UI auth proxy, and the shared-network Compose changes together. Set `AUTH_JWKS_URI=http://auth:8080/.well-known/jwks.json` and `AUTH_ISSUER=homebuddy-auth` in `.env`. The gateway no longer needs `JWT_SECRET`. Until step 4 is done, existing users receive 401 because their rows are not linked yet.
 4. Link the existing finanzBuddy users to their imported accounts (see [Link legacy users](#link-legacy-users)). The step must report `still_unlinked = 0`.
