@@ -42,7 +42,7 @@ These are the 20 current capability specs. Each link opens the normative require
 
 ## Historical change archive
 
-The repository currently has 22 archived change folders. Artifact links below are limited to files that exist in each folder; no missing artifact is implied. The folder link is included for each change so additional extant files remain discoverable.
+The repository currently has 24 archived change folders. Artifact links below are limited to files that exist in each folder; no missing artifact is implied. The folder link is included for each change so additional extant files remain discoverable.
 
 | Archived change | Existing artifacts |
 |---|---|
@@ -69,6 +69,7 @@ The repository currently has 22 archived change folders. Artifact links below ar
 
 | [2026-11-01 counterparty expenses in transaction details](../openspec/changes/archive/2026-11-01-show-counterparty-expenses-in-transaction-details/) | [proposal](../openspec/changes/archive/2026-11-01-show-counterparty-expenses-in-transaction-details/proposal.md) · [design](../openspec/changes/archive/2026-11-01-show-counterparty-expenses-in-transaction-details/design.md) · [tasks](../openspec/changes/archive/2026-11-01-show-counterparty-expenses-in-transaction-details/tasks.md) · [transaction-view-ui spec](../openspec/changes/archive/2026-11-01-show-counterparty-expenses-in-transaction-details/specs/transaction-view-ui/spec.md) |
 | [2026-11-03 transaction tag rules](../openspec/changes/archive/2026-11-03-add-transaction-tag-rules/) | [proposal](../openspec/changes/archive/2026-11-03-add-transaction-tag-rules/proposal.md) · [design](../openspec/changes/archive/2026-11-03-add-transaction-tag-rules/design.md) · [tasks](../openspec/changes/archive/2026-11-03-add-transaction-tag-rules/tasks.md) · specs: [transaction-tag-rules](../openspec/changes/archive/2026-11-03-add-transaction-tag-rules/specs/transaction-tag-rules/spec.md), [transaction-tags](../openspec/changes/archive/2026-11-03-add-transaction-tag-rules/specs/transaction-tags/spec.md) |
+| [2026-11-06 isolate the API Gateway network](../openspec/changes/archive/2026-11-06-isolate-api-gateway-network/) | [proposal](../openspec/changes/archive/2026-11-06-isolate-api-gateway-network/proposal.md) · [design](../openspec/changes/archive/2026-11-06-isolate-api-gateway-network/design.md) · [tasks](../openspec/changes/archive/2026-11-06-isolate-api-gateway-network/tasks.md) · [compose-deployment spec](../openspec/changes/archive/2026-11-06-isolate-api-gateway-network/specs/compose-deployment/spec.md) |
 
 ## Documentation maintenance
 

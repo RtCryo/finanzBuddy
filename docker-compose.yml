@@ -134,7 +134,7 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY}
     networks:
       - default
-      - homebuddy
+      - finanzbuddy-identity
 
   parser-service:
     build:
@@ -230,3 +230,9 @@ networks:
   homebuddy:
     external: true
     name: homebuddy
+  # Internal-only network shared with authBuddy for the JWKS fetch (root
+  # capability homebuddy-deployment). Create it once per host:
+  #   docker network create --internal finanzbuddy-identity
+  finanzbuddy-identity:
+    external: true
+    name: finanzbuddy-identity
