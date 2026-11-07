@@ -113,8 +113,7 @@ class LiquibaseMigrationTest {
     @Test
     void deduplicationCountsMigrationRollsBackAndReapplies() throws Exception {
         String url = "jdbc:h2:mem:rollbacktestdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1";
-        try (java.sql.Connection connection =
-                java.sql.DriverManager.getConnection(url, "sa", "")) {
+        try (java.sql.Connection connection = java.sql.DriverManager.getConnection(url, "sa", "")) {
             var database =
                     liquibase.database.DatabaseFactory.getInstance()
                             .findCorrectDatabaseImplementation(

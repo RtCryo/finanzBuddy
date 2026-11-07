@@ -1,7 +1,7 @@
 package com.finanzbuddy.api.document.dto;
 
-import com.finanzbuddy.api.entity.DocumentStatus;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.finanzbuddy.api.entity.DocumentStatus;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;

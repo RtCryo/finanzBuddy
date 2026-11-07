@@ -26,6 +26,7 @@ class KafkaConfigDeadLetterTest {
     private final GatewayStatusClient gatewayStatusClient = mock(GatewayStatusClient.class);
     private final TransactionPersistenceService persistence =
             mock(TransactionPersistenceService.class);
+
     @SuppressWarnings("unchecked")
     private final KafkaTemplate<String, Object> template = mock(KafkaTemplate.class);
 
@@ -64,7 +65,10 @@ class KafkaConfigDeadLetterTest {
         recoverer().accept(record(), new IllegalArgumentException("bad file"));
 
         verify(gatewayStatusClient)
-                .reportStatus(eq(1L), eq(DocumentStatus.FAILED), eq("IllegalArgumentException: bad file"));
+                .reportStatus(
+                        eq(1L),
+                        eq(DocumentStatus.FAILED),
+                        eq("IllegalArgumentException: bad file"));
         verify(gatewayStatusClient, never()).reportProcessed(any(), any(), any());
     }
 }

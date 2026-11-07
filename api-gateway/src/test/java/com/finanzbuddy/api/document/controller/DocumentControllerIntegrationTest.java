@@ -1334,8 +1334,11 @@ class DocumentControllerIntegrationTest {
         mockMvc.perform(get("/documents/" + documentId).header("Authorization", "Bearer " + token))
                 .andExpect(jsonPath("$.savedTransactions").value((Object) null));
 
-        sendStatus(documentId, "{\"status\":\"PROCESSED\",\"savedTransactions\":28,"
-                + "\"skippedDuplicates\":300}", 200);
+        sendStatus(
+                documentId,
+                "{\"status\":\"PROCESSED\",\"savedTransactions\":28,"
+                        + "\"skippedDuplicates\":300}",
+                200);
 
         mockMvc.perform(get("/documents/" + documentId).header("Authorization", "Bearer " + token))
                 .andExpect(jsonPath("$.savedTransactions").value(28))
@@ -1381,8 +1384,10 @@ class DocumentControllerIntegrationTest {
         String token = registerAndLogin("dedup-zero@example.com", "password123");
         long documentId = uploadDocument(token, csvFile("zero.csv"), "CSV");
         transition(documentId, DocumentStatus.PROCESSING, null);
-        sendStatus(documentId, "{\"status\":\"PROCESSED\",\"savedTransactions\":0,"
-                + "\"skippedDuplicates\":328}", 200);
+        sendStatus(
+                documentId,
+                "{\"status\":\"PROCESSED\",\"savedTransactions\":0," + "\"skippedDuplicates\":328}",
+                200);
 
         mockMvc.perform(get("/documents/" + documentId).header("Authorization", "Bearer " + token))
                 .andExpect(jsonPath("$.savedTransactions").value(0))
@@ -1395,10 +1400,14 @@ class DocumentControllerIntegrationTest {
         long documentId = uploadDocument(token, csvFile("invalid.csv"), "CSV");
         transition(documentId, DocumentStatus.PROCESSING, null);
 
-        sendStatus(documentId, "{\"status\":\"PROCESSED\",\"savedTransactions\":-1,"
-                + "\"skippedDuplicates\":3}", 400);
-        sendStatus(documentId, "{\"status\":\"PROCESSED\",\"savedTransactions\":1,"
-                + "\"skippedDuplicates\":-3}", 400);
+        sendStatus(
+                documentId,
+                "{\"status\":\"PROCESSED\",\"savedTransactions\":-1," + "\"skippedDuplicates\":3}",
+                400);
+        sendStatus(
+                documentId,
+                "{\"status\":\"PROCESSED\",\"savedTransactions\":1," + "\"skippedDuplicates\":-3}",
+                400);
         sendStatus(documentId, "{\"status\":\"PROCESSED\",\"savedTransactions\":5}", 400);
         sendStatus(documentId, "{\"status\":\"PROCESSED\",\"skippedDuplicates\":5}", 400);
 

@@ -8,8 +8,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Serializes work per owner with a transaction-scoped PostgreSQL advisory lock. The lock is
- * released automatically when the surrounding transaction commits or rolls back. On other
- * databases (the in-memory test database) it does nothing.
+ * released automatically when the surrounding transaction commits or rolls back. On other databases
+ * (the in-memory test database) it does nothing.
  */
 @Component
 public class OwnerLock {

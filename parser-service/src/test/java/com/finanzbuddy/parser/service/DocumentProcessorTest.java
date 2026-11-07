@@ -138,7 +138,8 @@ class DocumentProcessorTest {
         when(parserRouter.route("CSV")).thenReturn(parser);
         when(parser.parse(any(InputStream.class), any(), any()))
                 .thenReturn(List.of(new Transaction(), new Transaction()));
-        when(transactionPersistenceService.saveIfNotProcessed(any(), any(), any())).thenReturn(new PersistenceOutcome(2, 0));
+        when(transactionPersistenceService.saveIfNotProcessed(any(), any(), any()))
+                .thenReturn(new PersistenceOutcome(2, 0));
 
         processor.process(event);
 
@@ -354,8 +355,7 @@ class DocumentProcessorTest {
         processor.process(event);
 
         verify(gatewayStatusClient).reportProcessed(1L, 0, 2);
-        verify(gatewayStatusClient, never())
-                .reportStatus(eq(1L), eq(DocumentStatus.FAILED), any());
+        verify(gatewayStatusClient, never()).reportStatus(eq(1L), eq(DocumentStatus.FAILED), any());
         assertCounter("parser.documents.processed", 1.0);
         assertCounter("parser.documents.failed", 0.0);
     }

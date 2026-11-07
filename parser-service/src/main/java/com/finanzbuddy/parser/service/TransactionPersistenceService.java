@@ -59,9 +59,7 @@ public class TransactionPersistenceService {
      */
     @Transactional(readOnly = true)
     public List<Long> findUnconfirmedDocuments(Long userId, Long excludingDocumentId) {
-        return processedDocumentRepository
-                .findUnconfirmedIds(userId)
-                .stream()
+        return processedDocumentRepository.findUnconfirmedIds(userId).stream()
                 .filter(id -> !id.equals(excludingDocumentId))
                 .toList();
     }
@@ -75,7 +73,8 @@ public class TransactionPersistenceService {
     public PersistenceOutcome saveIfNotProcessed(
             Long documentId, Long userId, List<Transaction> transactions) {
         ownerLock.acquire(userId);
-        // Checked under the owner lock: saveAndFlush merges an existing id instead of failing, which
+        // Checked under the owner lock: saveAndFlush merges an existing id instead of failing,
+        // which
         // would overwrite the recorded outcome of an already processed document.
         if (processedDocumentRepository.existsById(documentId)) {
             throw new DuplicateDocumentException(documentId);

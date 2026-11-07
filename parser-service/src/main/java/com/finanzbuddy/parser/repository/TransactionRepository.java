@@ -24,9 +24,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                    or (t.bookingDate >= :from and t.bookingDate <= :to))
             """)
     List<StoredTransactionKey> findKeysInBookingRange(
-            @Param("userId") Long userId,
-            @Param("from") LocalDate from,
-            @Param("to") LocalDate to);
+            @Param("userId") Long userId, @Param("from") LocalDate from, @Param("to") LocalDate to);
 
     /** Key columns of an owner's transactions that have no booking date. */
     @Query(

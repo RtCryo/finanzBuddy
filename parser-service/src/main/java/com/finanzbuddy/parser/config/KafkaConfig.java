@@ -102,8 +102,7 @@ public class KafkaConfig {
                     if (record.value() instanceof DocumentUploadedEvent event) {
                         try {
                             if (event.documentId() != null) {
-                                if (transactionPersistenceService.isProcessed(
-                                        event.documentId())) {
+                                if (transactionPersistenceService.isProcessed(event.documentId())) {
                                     statusReporter.reportStored(event.documentId());
                                 } else {
                                     gatewayStatusClient.reportStatus(

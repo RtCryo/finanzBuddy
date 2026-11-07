@@ -6,9 +6,9 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 
 /**
- * Identity of a transaction for one owner: booking date, value date, amount, currency,
- * counterparty and description. Strings are trimmed and a missing string equals an empty one; the
- * amount is normalized to scale 4 so that equal values compare equal.
+ * Identity of a transaction for one owner: booking date, value date, amount, currency, counterparty
+ * and description. Strings are trimmed and a missing string equals an empty one; the amount is
+ * normalized to scale 4 so that equal values compare equal.
  */
 public record StoredTransactionKey(
         LocalDate bookingDate,

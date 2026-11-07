@@ -26,8 +26,8 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * Proves the per-owner advisory lock against a real PostgreSQL. Runs only when the environment
- * variable PARSER_TEST_POSTGRES_URL points to an empty database, for example
- * {@code jdbc:postgresql://localhost:5432/parser_test}; user and password come from
+ * variable PARSER_TEST_POSTGRES_URL points to an empty database, for example {@code
+ * jdbc:postgresql://localhost:5432/parser_test}; user and password come from
  * PARSER_TEST_POSTGRES_USER and PARSER_TEST_POSTGRES_PASSWORD. Skipped otherwise.
  */
 @SpringBootTest(properties = "parser.formats.csv=false")
