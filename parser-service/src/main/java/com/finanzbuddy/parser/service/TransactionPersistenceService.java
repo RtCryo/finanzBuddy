@@ -47,6 +47,26 @@ public class TransactionPersistenceService {
                 .map(d -> new PersistenceOutcome(d.getSavedCount(), d.getSkippedCount()));
     }
 
+    /** Records that the gateway accepted the PROCESSED status of the document. */
+    @Transactional
+    public void markStatusConfirmed(Long documentId) {
+        processedDocumentRepository.markConfirmed(documentId);
+    }
+
+    /**
+     * Ids of the owner's documents that were saved but whose PROCESSED status never reached the
+     * gateway, oldest first.
+     */
+    @Transactional(readOnly = true)
+    public List<Long> findUnconfirmedDocuments(Long userId, Long excludingDocumentId) {
+        return processedDocumentRepository
+                .findTop20ByUserIdAndStatusConfirmedFalseOrderByProcessedAtAsc(userId)
+                .stream()
+                .map(ProcessedDocument::getDocumentId)
+                .filter(id -> !id.equals(excludingDocumentId))
+                .toList();
+    }
+
     /**
      * Saves the transactions the owner does not have yet. Identical transactions are compared by
      * quantity: only the surplus of an identity key over the stored count is saved, taking the
@@ -63,7 +83,9 @@ public class TransactionPersistenceService {
         }
         ProcessedDocument processed;
         try {
-            processed = processedDocumentRepository.saveAndFlush(new ProcessedDocument(documentId));
+            processed =
+                    processedDocumentRepository.saveAndFlush(
+                            new ProcessedDocument(documentId, userId));
         } catch (DataIntegrityViolationException e) {
             throw new DuplicateDocumentException(documentId);
         }

@@ -197,6 +197,20 @@ class TransactionPersistenceServiceTest {
         assertThat(service.findOutcome(1L)).contains(new PersistenceOutcome(1, 0));
     }
 
+    @Test
+    void savedDocumentStaysUnconfirmedUntilMarkedAndIsFoundPerOwner() {
+        service.saveIfNotProcessed(1L, 1L, List.of(tx(1, DAY, "-3", "Cafe", "c")));
+        service.saveIfNotProcessed(2L, 1L, List.of(tx(2, DAY, "-3", "Cafe", "c")));
+        service.saveIfNotProcessed(3L, 2L, List.of(tx(3, DAY, "-3", "Cafe", "c", 2L)));
+
+        assertThat(service.findUnconfirmedDocuments(1L, 2L)).containsExactly(1L);
+        assertThat(service.findUnconfirmedDocuments(2L, 99L)).containsExactly(3L);
+
+        service.markStatusConfirmed(1L);
+
+        assertThat(service.findUnconfirmedDocuments(1L, 99L)).containsExactly(2L);
+    }
+
     private static List<Transaction> copyOf(long documentId, List<Transaction> source) {
         return source.stream()
                 .map(

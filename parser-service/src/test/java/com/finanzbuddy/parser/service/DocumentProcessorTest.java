@@ -45,8 +45,56 @@ class DocumentProcessorTest {
                     minioStorageService,
                     parserRouter,
                     gatewayStatusClient,
+                    new ProcessedStatusReporter(transactionPersistenceService, gatewayStatusClient),
                     Locale.GERMANY,
                     meterRegistry);
+
+    @Test
+    void successfulReportMarksStatusConfirmedAndRecoversEarlierUnconfirmedDocument() {
+        DocumentUploadedEvent event = new DocumentUploadedEvent(2L, 7L, "CSV", "csv/2");
+        when(minioStorageService.download("csv/2"))
+                .thenReturn(new ByteArrayInputStream("data".getBytes(StandardCharsets.UTF_8)));
+        when(parserRouter.route("CSV")).thenReturn(parser);
+        when(parser.parse(any(InputStream.class), any(), any()))
+                .thenReturn(List.of(new Transaction()));
+        when(transactionPersistenceService.saveIfNotProcessed(eq(2L), eq(7L), any()))
+                .thenReturn(new PersistenceOutcome(0, 1));
+        when(transactionPersistenceService.findUnconfirmedDocuments(7L, 2L))
+                .thenReturn(List.of(1L));
+        when(transactionPersistenceService.findOutcome(1L))
+                .thenReturn(Optional.of(new PersistenceOutcome(5, 0)));
+
+        processor.process(event);
+
+        verify(gatewayStatusClient).reportProcessed(2L, 0, 1);
+        verify(transactionPersistenceService).markStatusConfirmed(2L);
+        verify(gatewayStatusClient).reportProcessed(1L, 5, 0);
+        verify(transactionPersistenceService).markStatusConfirmed(1L);
+    }
+
+    @Test
+    void failedRecoveryDoesNotFailTheCurrentDocumentAndStaysUnconfirmed() {
+        DocumentUploadedEvent event = new DocumentUploadedEvent(2L, 7L, "CSV", "csv/2");
+        when(minioStorageService.download("csv/2"))
+                .thenReturn(new ByteArrayInputStream("data".getBytes(StandardCharsets.UTF_8)));
+        when(parserRouter.route("CSV")).thenReturn(parser);
+        when(parser.parse(any(InputStream.class), any(), any()))
+                .thenReturn(List.of(new Transaction()));
+        when(transactionPersistenceService.saveIfNotProcessed(eq(2L), eq(7L), any()))
+                .thenReturn(new PersistenceOutcome(1, 0));
+        when(transactionPersistenceService.findUnconfirmedDocuments(7L, 2L))
+                .thenReturn(List.of(1L));
+        when(transactionPersistenceService.findOutcome(1L))
+                .thenReturn(Optional.of(new PersistenceOutcome(5, 0)));
+        doThrow(new IllegalStateException("gateway down"))
+                .when(gatewayStatusClient)
+                .reportProcessed(1L, 5, 0);
+
+        processor.process(event);
+
+        verify(transactionPersistenceService).markStatusConfirmed(2L);
+        verify(transactionPersistenceService, never()).markStatusConfirmed(1L);
+    }
 
     @Test
     void ignoresDuplicateEvent() {

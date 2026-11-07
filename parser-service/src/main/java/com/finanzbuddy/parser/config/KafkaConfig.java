@@ -6,6 +6,7 @@ import com.finanzbuddy.parser.document.DocumentStatus;
 import com.finanzbuddy.parser.document.ErrorMessageTruncator;
 import com.finanzbuddy.parser.event.DocumentUploadedEvent;
 import com.finanzbuddy.parser.event.DocumentUploadedEventDeserializer;
+import com.finanzbuddy.parser.service.ProcessedStatusReporter;
 import com.finanzbuddy.parser.service.TransactionPersistenceService;
 import java.util.HashMap;
 import java.util.Map;
@@ -86,6 +87,7 @@ public class KafkaConfig {
     public DeadLetterPublishingRecoverer deadLetterPublishingRecoverer(
             KafkaTemplate<String, Object> kafkaTemplate,
             GatewayStatusClient gatewayStatusClient,
+            ProcessedStatusReporter statusReporter,
             TransactionPersistenceService transactionPersistenceService) {
         return new DeadLetterPublishingRecoverer(
                 kafkaTemplate,
@@ -100,17 +102,15 @@ public class KafkaConfig {
                     if (record.value() instanceof DocumentUploadedEvent event) {
                         try {
                             if (event.documentId() != null) {
-                                boolean alreadyProcessed =
-                                        transactionPersistenceService.isProcessed(
-                                                event.documentId());
-                                gatewayStatusClient.reportStatus(
-                                        event.documentId(),
-                                        alreadyProcessed
-                                                ? DocumentStatus.PROCESSED
-                                                : DocumentStatus.FAILED,
-                                        alreadyProcessed
-                                                ? null
-                                                : ErrorMessageTruncator.truncate(exception, 4000));
+                                if (transactionPersistenceService.isProcessed(
+                                        event.documentId())) {
+                                    statusReporter.reportStored(event.documentId());
+                                } else {
+                                    gatewayStatusClient.reportStatus(
+                                            event.documentId(),
+                                            DocumentStatus.FAILED,
+                                            ErrorMessageTruncator.truncate(exception, 4000));
+                                }
                             }
                         } catch (Exception statusException) {
                             logger.error(

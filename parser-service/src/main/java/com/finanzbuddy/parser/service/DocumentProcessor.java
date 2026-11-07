@@ -39,6 +39,7 @@ public class DocumentProcessor {
     private final MinioStorageService minioStorageService;
     private final DocumentParserRouter parserRouter;
     private final GatewayStatusClient gatewayStatusClient;
+    private final ProcessedStatusReporter statusReporter;
     private final MeterRegistry meterRegistry;
     private final Locale defaultLocale;
 
@@ -47,8 +48,10 @@ public class DocumentProcessor {
             MinioStorageService minioStorageService,
             DocumentParserRouter parserRouter,
             GatewayStatusClient gatewayStatusClient,
+            ProcessedStatusReporter statusReporter,
             @Value("${parser.formats.csv-locale:de-DE}") Locale defaultLocale,
             MeterRegistry meterRegistry) {
+        this.statusReporter = statusReporter;
         this.transactionPersistenceService = transactionPersistenceService;
         this.minioStorageService = minioStorageService;
         this.parserRouter = parserRouter;
@@ -78,7 +81,8 @@ public class DocumentProcessor {
         try {
             if (transactionPersistenceService.isProcessed(event.documentId())) {
                 logger.info("Duplicate event ignored for documentId={}", event.documentId());
-                reportProcessedAgain(event.documentId());
+                statusReporter.reportStored(event.documentId());
+                statusReporter.retryUnconfirmed(event.userId(), event.documentId());
                 documentCounter("parser.documents.duplicate", type).increment();
                 return;
             }
@@ -102,8 +106,8 @@ public class DocumentProcessor {
                         .tag("type", type)
                         .register(meterRegistry)
                         .increment(transactions.size());
-                gatewayStatusClient.reportProcessed(
-                        event.documentId(), outcome.saved(), outcome.skipped());
+                statusReporter.report(event.documentId(), outcome.saved(), outcome.skipped());
+                statusReporter.retryUnconfirmed(event.userId(), event.documentId());
                 documentCounter("parser.documents.processed", type).increment();
                 logger.info(
                         "Document processed successfully: documentId={}, parsed={}, saved={},"
@@ -115,7 +119,8 @@ public class DocumentProcessor {
             }
         } catch (DuplicateDocumentException e) {
             logger.info("Duplicate event ignored for documentId={}", event.documentId());
-            reportProcessedAgain(event.documentId());
+            statusReporter.reportStored(event.documentId());
+            statusReporter.retryUnconfirmed(event.userId(), event.documentId());
             documentCounter("parser.documents.duplicate", type).increment();
         } catch (IllegalArgumentException | UnsupportedOperationException e) {
             documentCounter("parser.documents.failed", type).increment();
@@ -151,16 +156,6 @@ public class DocumentProcessor {
         if (event.storagePath() == null || event.storagePath().isBlank()) {
             throw new IllegalArgumentException("Document event must contain a storage path");
         }
-    }
-
-    /** Reports PROCESSED again with the counts recorded earlier, if any. */
-    private void reportProcessedAgain(Long documentId) {
-        PersistenceOutcome outcome =
-                transactionPersistenceService.findOutcome(documentId).orElse(null);
-        gatewayStatusClient.reportProcessed(
-                documentId,
-                outcome == null ? null : outcome.saved(),
-                outcome == null ? null : outcome.skipped());
     }
 
     private void reportStatus(Long documentId, DocumentStatus status, String message) {

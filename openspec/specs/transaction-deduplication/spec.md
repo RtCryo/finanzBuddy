@@ -65,6 +65,17 @@ The system SHALL give the same result when a document event is redelivered and S
 - **WHEN** a user uploads the same file twice at nearly the same time
 - **THEN** after both are processed the owner has the transactions of one copy only
 
+### Requirement: A saved document whose status was not delivered is recovered
+Because deduplication counts every stored transaction of the owner, a document whose transactions were saved but whose `PROCESSED` status the gateway never accepted SHALL NOT stay unfinished. The parser SHALL remember per document whether the gateway accepted `PROCESSED`, SHALL report every unconfirmed document of the owner again, with its recorded counts, whenever it handles another document of that owner, and SHALL send the recorded counts whenever it reports `PROCESSED` after retries are exhausted. A failed recovery attempt SHALL NOT fail the document being handled.
+
+#### Scenario: Re-upload after a lost status report
+- **WHEN** the first upload was saved but its `PROCESSED` report failed, and the user uploads the same file again
+- **THEN** the second document ends `PROCESSED` with 0 saved, and the first document is reported `PROCESSED` with its original counts so its transactions become visible
+
+#### Scenario: Terminal report after retries
+- **WHEN** retries for a saved document are exhausted and the parser reports its terminal status
+- **THEN** `PROCESSED` is sent with the saved and skipped numbers recorded for the document
+
 ### Requirement: Existing stored data is not changed
 The system SHALL NOT delete, merge, or rewrite transactions stored before this behavior exists. Documents processed before this behavior exists SHALL report no saved and skipped numbers.
 
