@@ -76,6 +76,9 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+    networks:
+      - default
+      - finanzbuddy-metrics
 
   minio:
     # S3-compatible object storage. Replaced the unmaintained bitnamilegacy/minio image with
@@ -135,6 +138,7 @@ services:
     networks:
       - default
       - finanzbuddy-identity
+      - finanzbuddy-metrics
 
   parser-service:
     build:
@@ -167,30 +171,9 @@ services:
       PARSER_FORMAT_CSV: "true"
       PARSER_FORMAT_PDF: "false"
       PARSER_FORMAT_XML: "false"
-
-  prometheus:
-    image: prom/prometheus:v3.16.0
-    container_name: finanzbuddy-prometheus
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=15d"
-    volumes:
-      - ./monitoring/prometheus:/etc/prometheus:ro
-      - prometheus-data:/prometheus
-
-  grafana:
-    image: grafana/grafana:13.3.0
-    container_name: finanzbuddy-grafana
-    depends_on:
-      prometheus:
-        condition: service_started
-    environment:
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/finanzbuddy-health.json
-    volumes:
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - grafana-data:/var/lib/grafana
+    networks:
+      - default
+      - finanzbuddy-metrics
 
   ui:
     build:
@@ -223,8 +206,6 @@ volumes:
   postgres-data:
   minio-data:
   traefik-acme:
-  prometheus-data:
-  grafana-data:
 
 networks:
   homebuddy:
@@ -236,3 +217,10 @@ networks:
   finanzbuddy-identity:
     external: true
     name: finanzbuddy-identity
+  # Internal-only network shared only with the central Prometheus, which scrapes
+  # the metrics targets (root capability homebuddy-monitoring). Create it once
+  # per host:
+  #   docker network create --internal finanzbuddy-metrics
+  finanzbuddy-metrics:
+    external: true
+    name: finanzbuddy-metrics

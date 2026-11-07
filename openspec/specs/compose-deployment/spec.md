@@ -98,21 +98,6 @@ When the object-storage backend is changed (replaced, upgraded, or moved to a ma
 - **WHEN** the object-storage backend has been changed
 - **THEN** `docker compose config` is valid, all services reach a healthy state, and an end-to-end document upload, parse, and download round-trip succeeds against the new backend before the change is considered done
 
-### Requirement: Run monitoring services within the Compose deployment
-The Docker Compose deployment SHALL include Prometheus and Grafana configured to monitor the API Gateway, parser service, and Kafka through a Kafka exporter on the internal Compose network. In local development, Grafana SHALL be reachable at `http://localhost:3001` and Prometheus SHALL be reachable at `http://localhost:9090`. In production, Prometheus, Grafana, and the Kafka exporter SHALL NOT publish host ports or be routed through Traefik.
-
-#### Scenario: Developer starts the local Compose stack
-- **WHEN** a developer starts the default local Compose workflow
-- **THEN** Grafana is reachable at `http://localhost:3001`, Prometheus is reachable at `http://localhost:9090`, and both services can scrape the application services over the Compose network
-
-#### Scenario: Kafka is monitored locally
-- **WHEN** the local monitoring stack and Kafka broker are running
-- **THEN** Prometheus scrapes the internal Kafka exporter and the Kafka dashboard shows broker, topic, partition, and consumer-group metrics
-
-#### Scenario: Production Compose stack is running
-- **WHEN** the production Compose workflow is running
-- **THEN** Prometheus, Grafana, and the Kafka exporter are reachable to other services only over the internal Compose network and are not exposed through host ports or the public Traefik entry point
-
 ### Requirement: finanzBuddy reaches the homeBuddy identity service
 The UI container SHALL join the external `homebuddy` Docker network. The API Gateway SHALL NOT join `homebuddy`; it SHALL join the external, internal-only network `finanzbuddy-identity` defined by the root capability `homebuddy-deployment`, on which authBuddy is reachable as `auth`. The UI SHALL proxy `/api/auth/` to the identity service and all other `/api/` requests to the gateway over the stack's default network. The gateway SHALL be configured with the identity service's JWKS URI and issuer through environment variables and SHALL NOT require `JWT_SECRET`.
 
@@ -131,6 +116,28 @@ The UI container SHALL join the external `homebuddy` Docker network. The API Gat
 #### Scenario: Missing network
 - **WHEN** the `homebuddy` or `finanzbuddy-identity` network does not exist
 - **THEN** startup fails with a message naming the network, as documented in the README
+
+### Requirement: Metrics targets join the central monitoring network
+`api-gateway`, `parser-service`, and `kafka-exporter` SHALL join the external, internal-only network `finanzbuddy-metrics` defined by the root capability `homebuddy-monitoring`, so the central Prometheus can scrape them by container name. The stack SHALL NOT run its own Prometheus or Grafana, and SHALL NOT publish host ports for monitoring. The README SHALL list the `docker network create --internal finanzbuddy-metrics` command.
+
+#### Scenario: Central Prometheus scrapes the stack
+- **WHEN** the central Prometheus connects to `finanzbuddy-api-gateway:8080`, `finanzbuddy-parser-service:8080`, or `finanzbuddy-kafka-exporter:9308`
+- **THEN** the connection succeeds over `finanzbuddy-metrics`
+
+#### Scenario: No local monitoring services
+- **WHEN** the finanzBuddy stack is running
+- **THEN** no `finanzbuddy-prometheus` or `finanzbuddy-grafana` container exists
+
+#### Scenario: Missing metrics network
+- **WHEN** the stack starts on a host where `finanzbuddy-metrics` does not exist
+- **THEN** startup fails with a message naming the network
+
+### Requirement: The UI proxy does not serve metrics endpoints
+The UI SHALL NOT serve the gateway's `/actuator` paths through its `/api/` proxy, including variants that normalize to them such as `/api/auth/../actuator/prometheus`, as required by the root capability `homebuddy-monitoring`.
+
+#### Scenario: Metrics through the UI origin
+- **WHEN** a browser requests `/api/actuator/prometheus` or `/api/auth/../actuator/prometheus` on the finanzBuddy origin
+- **THEN** the response is 404 and no metrics are returned
 
 ## Related implementation and history
 

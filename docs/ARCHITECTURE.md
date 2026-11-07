@@ -45,8 +45,7 @@ UI (React SPA, served by Nginx) ── /api proxy ──► API Gateway (Spring 
                                                                             processed_documents
 
 Parser Service ── service-key authenticated status update ──► API Gateway
-Prometheus ◄── application metrics and Kafka exporter ── API Gateway / Parser / Kafka
-Grafana ── provisioned dashboards over Prometheus
+central homeBuddy Prometheus ◄── metrics over finanzbuddy-metrics ── API Gateway / Parser / Kafka exporter
 ```
 
 The API Gateway and parser service use the same PostgreSQL database and S3 bucket, but manage different tables and lifecycle responsibilities. Kafka carries document-upload events; transaction data is read by the gateway from the parser-owned tables for UI queries.
@@ -61,7 +60,7 @@ The API Gateway and parser service use the same PostgreSQL database and S3 bucke
 | PostgreSQL | Shared relational store; each service applies its own Liquibase changelog | `api-gateway/src/main/resources/db/changelog/`, `parser-service/src/main/resources/db/changelog/` |
 | SeaweedFS | S3-compatible storage for original documents; Compose keeps the service name `minio` and `MINIO_*` settings for client compatibility | `docker-compose.yml`, each service's storage configuration |
 | Kafka | Asynchronous document-upload event transport | Compose broker; topics `documents.csv`, `documents.pdf`, `documents.xml` |
-| Monitoring | Prometheus scraping, Kafka exporter, provisioned Grafana dashboards | `monitoring/`, `docker-compose.yml` |
+| Monitoring | Kafka exporter and the `finanzbuddy-metrics` network; Prometheus and Grafana run in the root homeBuddy stack | `docker-compose.yml`, root `monitoring/` |
 
 ## Data ownership and service boundaries
 
@@ -115,7 +114,7 @@ The UI sends API requests to `/api`. Vite and Nginx proxy `/api/auth/` to authBu
 | `GET/POST /transactions/rules`, `PUT/DELETE /transactions/rules/{id}` | User JWT | Manage owner-scoped tag rules with an atomic choice about existing transactions |
 | `PUT /transactions/{id}` | User JWT | Atomically save optional category change and the complete desired current tag set; returns tag-free transaction plus tags |
 | `PUT /internal/documents/{id}/status` | Internal API key | Parser-to-gateway status reporting |
-| `/actuator/health`, `/actuator/info`, `/actuator/prometheus` | Service endpoint configuration | Health checks and Prometheus scraping; parser also exposes `/actuator/metrics` |
+| `/actuator/health`, `/actuator/info`, `/actuator/prometheus` | Service endpoint configuration | Health checks and scraping by the central Prometheus; the UI proxy does not serve `/api/actuator`; parser also exposes `/actuator/metrics` |
 
 The gateway uses stateless Spring Security. It accepts only RS256 tokens from authBuddy's JWKS with issuer `homebuddy-auth` and audience `finanzbuddy`; it also requires the `exp`, `sub`, and `email` claims. It resolves the immutable `sub` account UUID to a local `users` row or creates a new row, and puts the local user id in the principal for ownership checks. Legacy rows are linked to their imported accounts only by the operator link step in the [migration runbook](HOMEBUDDY_IDENTITY_MIGRATION.md#link-legacy-users); a token whose email matches an unlinked row is rejected. A later email claim updates the same row; the stored email is not unique. The configured actuator endpoints are public; user routes require a valid token, and `/internal/**` requires the service-key filter. User document and transaction queries verify ownership before returning data. The internal status endpoint intentionally identifies a document by ID rather than user ownership; its trust boundary is the shared service API key, which must remain server-side and must never be sent to the browser. Original files are accessed through the gateway's owner-checked endpoints, not directly from the browser's S3 credentials.
 
@@ -137,9 +136,9 @@ The exact dependency versions and environment-variable defaults live in `ui/pack
 
 ## Local development and deployment
 
-For local development, create the external `homebuddy` network and the internal `finanzbuddy-identity` network (`docker network create --internal finanzbuddy-identity`), start authBuddy, create `.env` from `.env.example`, and run `docker compose up --build` from this repository root. The stack fails to start with a message naming the missing network if either is absent. `docker-compose.override.yml` is loaded automatically and publishes local ports for PostgreSQL (`5432`), Kafka (`29092`), SeaweedFS S3 (`9000`), the gateway (`8080`), UI (`3000`), Prometheus (`9090`), and Grafana (`3001`).
+For local development, create the external `homebuddy` network and the internal `finanzbuddy-identity` and `finanzbuddy-metrics` networks (`docker network create --internal finanzbuddy-identity` and `docker network create --internal finanzbuddy-metrics`), start authBuddy, create `.env` from `.env.example`, and run `docker compose up --build` from this repository root. The stack fails to start with a message naming the missing network if either is absent. `docker-compose.override.yml` is loaded automatically and publishes local ports for PostgreSQL (`5432`), Kafka (`29092`), SeaweedFS S3 (`9000`), the gateway (`8080`), UI (`3000`). Prometheus (`9090`) and Grafana (`3001`) belong to the root homeBuddy stack.
 
-For a shared host, the root homeBuddy stack provides the only Traefik on ports 80/443. The finanzBuddy UI has labels for `TRAEFIK_DOMAIN` and `traefik.docker.network=homebuddy`; it joins that network as `finanzbuddy-ui`. The gateway does not join `homebuddy`: it reaches authBuddy's JWKS as `auth` over the internal `finanzbuddy-identity` network, shared only with authBuddy, so no other stack can reach it, while product data services stay on the private Compose network. The service-local `production` Traefik profile is for standalone deployment only. Prometheus, Grafana, the exporter, and application services are not published as host ports in production.
+For a shared host, the root homeBuddy stack provides the only Traefik on ports 80/443. The finanzBuddy UI has labels for `TRAEFIK_DOMAIN` and `traefik.docker.network=homebuddy`; it joins that network as `finanzbuddy-ui`. The gateway does not join `homebuddy`: it reaches authBuddy's JWKS as `auth` over the internal `finanzbuddy-identity` network, shared only with authBuddy, so no other stack can reach it, while product data services stay on the private Compose network. The service-local `production` Traefik profile is for standalone deployment only. The exporter and application services are not published as host ports in production; the central Prometheus reaches the gateway, parser, and exporter over `finanzbuddy-metrics`.
 
 ## Repository map
 
@@ -148,7 +147,6 @@ For a shared host, the root homeBuddy stack provides the only Traefik on ports 8
 ├── api-gateway/       # Spring Boot gateway, Liquibase schema, and tests
 ├── parser-service/    # Spring Boot parser, Liquibase schema, and tests
 ├── ui/                # React SPA, Nginx runtime, tests, and design system
-├── monitoring/        # Prometheus configuration and provisioned Grafana dashboards
 ├── docs/              # Cross-cutting contributor documentation
 ├── openspec/
 │   ├── specs/         # Current capability requirements
