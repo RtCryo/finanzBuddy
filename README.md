@@ -26,7 +26,7 @@ users/documents/outbox and reads the parser-owned `transactions` table to serve 
 - **Kafka event bus** — successful uploads emit `documents.{type}` events via a transactional outbox.
 - **Shared homeBuddy account** — authBuddy handles registration and login; the gateway validates its tokens and keeps local document ownership.
 - **Containerized deployment** — Docker Compose stack with Postgres, Kafka, SeaweedFS (S3-compatible object storage), a Kafka Prometheus exporter, the API Gateway, the parser service, and the UI.
-- **Local monitoring** — Prometheus scrapes the application metrics and Grafana provides provisioned operational dashboards.
+- **Central monitoring** — the homeBuddy root stack runs the one Prometheus and Grafana that scrape these services and show the finanzBuddy dashboards.
 
 ## Repository structure
 
@@ -58,31 +58,28 @@ localhost ports. The UI is served on `http://localhost:3000` and the API Gateway
 
 ### Monitoring
 
-The local Compose override also publishes Prometheus at <http://localhost:9090> and Grafana at
-<http://localhost:3001>. Start them with the same `docker compose up --build` command above. On a
-fresh Grafana volume, sign in with the initial `admin` / `admin` credentials and open the
-**finanzBuddy Health Overview** dashboard in the **finanzBuddy** folder; Grafana will prompt to
-change the initial password. The health overview is Grafana's default home dashboard.
+finanzBuddy has no Prometheus or Grafana of its own. The root homeBuddy stack (`docker compose up -d`
+in the workspace root, see its README) runs the central Prometheus and Grafana, which scrape the
+API Gateway, the parser service, and the Kafka exporter over the internal `finanzbuddy-metrics`
+network. Create that network once per host before starting this stack:
 
-Dashboards are provisioned from `monitoring/grafana/`:
+```bash
+docker network create --internal finanzbuddy-metrics
+```
 
-- **finanzBuddy Health Overview** — API Gateway and parser availability/uptime, Kafka broker and
-  exporter status, consumer lag, outbox backlog, and HTTP error rate.
-- **finanzBuddy Application Operations** — combined detailed view of application HTTP traffic,
-  parser outcomes and timing, uploads, transaction volume, and outbox metrics.
-- **finanzBuddy API Gateway** — HTTP rate/latency/errors, upload outcomes by file type, and outbox
-  health.
-- **finanzBuddy Parser Service** — document outcomes, mean processing duration, and parsed
-  transaction volume by file type.
-- **finanzBuddy Kafka** — broker count, topic partitions, under-replicated partitions, consumer
-  group members, and lag. Consumer-group panels populate once a group has committed offsets.
+Open Grafana at <http://localhost:3001> and use the **finanzBuddy** folder. Its dashboards (Health
+Overview, Application Operations, API Gateway, Parser Service, and Kafka) are provisioned from the
+root repository's `monitoring/grafana/dashboards/finanzbuddy/`. Prometheus is at
+<http://localhost:9090>; the finanzBuddy targets are the jobs `finanzbuddy-api-gateway`,
+`finanzbuddy-parser-service`, and `finanzbuddy-kafka-exporter`.
 
 Application file-type labels use the bounded values `CSV`, `PDF`, `XML`, or `OTHER`; no user or
-document identifiers, filenames, or financial values are included. Panels show “No samples” until
-Prometheus has data. Prometheus retains local samples for 15 days in its named volume. The Kafka
-exporter is reachable only inside the Compose network. Monitoring host ports are provided only by
-`docker-compose.override.yml`; production starts with `docker compose -f docker-compose.yml
---profile production ...` and does not publish Prometheus, Grafana, or the exporter.
+document identifiers, filenames, or financial values are included. The Kafka exporter is reachable
+only inside the Compose networks. The UI proxy returns 404 for `/api/actuator`, so metrics are not
+served to browsers.
+
+If an earlier checkout ran its own Prometheus and Grafana, remove their old volumes once the central
+stack works: `docker volume rm finanzbuddy_prometheus-data finanzbuddy_grafana-data`.
 
 ## Production deployment (HTTPS via Traefik)
 

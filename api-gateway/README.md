@@ -201,7 +201,7 @@ do not reevaluate rules. The parser remains the sole writer of imported transact
 curl http://localhost:8080/actuator/health
 ```
 
-Prometheus metrics are exposed publicly at `/actuator/prometheus`:
+Prometheus metrics are exposed at `/actuator/prometheus` on the gateway port, for the central homeBuddy Prometheus (over `finanzbuddy-metrics`). The UI proxy does not serve them:
 
 ```bash
 curl http://localhost:8080/actuator/prometheus

@@ -159,7 +159,7 @@ Spring Boot Actuator is enabled. Exposed endpoints:
 - `/actuator/health` — liveness and readiness probes
 - `/actuator/info` — build information
 - `/actuator/metrics` — Micrometer metrics
-- `/actuator/prometheus` — Prometheus scrape endpoint
+- `/actuator/prometheus` — Prometheus scrape endpoint for the central homeBuddy Prometheus
 
 Custom metrics:
 
