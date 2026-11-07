@@ -416,6 +416,13 @@ public class DocumentService {
                 ruleService.applyImport(document.getUser().getId(), documentId);
             }
             document.setStatus(request.status());
+            // Counts belong to the PROCESSED outcome only; any other transition clears them.
+            if (request.status() == DocumentStatus.PROCESSED && request.hasDeduplicationCounts()) {
+                document.setDeduplicationCounts(
+                        request.savedTransactions(), request.skippedDuplicates());
+            } else {
+                document.setDeduplicationCounts(null, null);
+            }
             // Clear any stale failure reason on non-FAILED transitions (e.g. FAILED->PENDING
             // reprocess) so a later success never keeps showing an old error message.
             document.setErrorMessage(
@@ -525,12 +532,15 @@ public class DocumentService {
     }
 
     private DocumentResponse toResponse(Document document) {
+        boolean processed = document.getStatus() == DocumentStatus.PROCESSED;
         return new DocumentResponse(
                 document.getId(),
                 document.getOriginalFilename(),
                 document.getType(),
                 document.getStatus(),
                 document.getCreatedAt(),
-                document.getStatus() == DocumentStatus.FAILED ? document.getErrorMessage() : null);
+                document.getStatus() == DocumentStatus.FAILED ? document.getErrorMessage() : null,
+                processed ? document.getSavedTransactionCount() : null,
+                processed ? document.getSkippedDuplicateCount() : null);
     }
 }

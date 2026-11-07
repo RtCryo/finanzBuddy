@@ -2,6 +2,7 @@ package com.finanzbuddy.parser.service;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -24,6 +25,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 
@@ -54,7 +56,7 @@ class DocumentProcessorTest {
         processor.process(event);
 
         verify(minioStorageService, never()).download(any());
-        verify(transactionPersistenceService, never()).saveIfNotProcessed(any(), any());
+        verify(transactionPersistenceService, never()).saveIfNotProcessed(any(), any(), any());
     }
 
     @Test
@@ -65,7 +67,7 @@ class DocumentProcessorTest {
         when(parserRouter.route("CSV")).thenReturn(parser);
         when(parser.parse(any(InputStream.class), any(), any()))
                 .thenReturn(List.of(new Transaction()));
-        when(transactionPersistenceService.saveIfNotProcessed(any(), any()))
+        when(transactionPersistenceService.saveIfNotProcessed(any(), any(), any()))
                 .thenThrow(new DuplicateDocumentException(1L));
 
         processor.process(event);
@@ -77,7 +79,7 @@ class DocumentProcessorTest {
                                 .counter()
                                 .count())
                 .isEqualTo(1.0);
-        verify(gatewayStatusClient).reportStatus(1L, DocumentStatus.PROCESSED, null);
+        verify(gatewayStatusClient).reportProcessed(1L, null, null);
     }
 
     @Test
@@ -88,7 +90,7 @@ class DocumentProcessorTest {
         when(parserRouter.route("CSV")).thenReturn(parser);
         when(parser.parse(any(InputStream.class), any(), any()))
                 .thenReturn(List.of(new Transaction(), new Transaction()));
-        when(transactionPersistenceService.saveIfNotProcessed(any(), any())).thenReturn(true);
+        when(transactionPersistenceService.saveIfNotProcessed(any(), any(), any())).thenReturn(new PersistenceOutcome(2, 0));
 
         processor.process(event);
 
@@ -168,7 +170,7 @@ class DocumentProcessorTest {
         when(parserRouter.route("CSV")).thenReturn(parser);
         when(parser.parse(any(InputStream.class), any(), any()))
                 .thenReturn(List.of(new Transaction()));
-        when(transactionPersistenceService.saveIfNotProcessed(any(), any()))
+        when(transactionPersistenceService.saveIfNotProcessed(any(), any(), any()))
                 .thenThrow(new DataAccessResourceFailureException("database unavailable"));
 
         assertThatThrownBy(() -> processor.process(event))
@@ -198,7 +200,7 @@ class DocumentProcessorTest {
 
         verify(gatewayStatusClient).reportStatus(1L, DocumentStatus.PROCESSING, null);
         verify(gatewayStatusClient, never()).reportStatus(1L, DocumentStatus.FAILED, null);
-        verify(transactionPersistenceService, never()).saveIfNotProcessed(any(), any());
+        verify(transactionPersistenceService, never()).saveIfNotProcessed(any(), any(), any());
         org.assertj.core.api.Assertions.assertThat(
                         meterRegistry
                                 .get("parser.documents.failed")
@@ -265,7 +267,7 @@ class DocumentProcessorTest {
                 .hasCauseInstanceOf(RuntimeException.class);
 
         verify(minioStorageService, never()).download(any());
-        verify(transactionPersistenceService, never()).saveIfNotProcessed(any(), any());
+        verify(transactionPersistenceService, never()).saveIfNotProcessed(any(), any(), any());
     }
 
     @Test
@@ -275,8 +277,66 @@ class DocumentProcessorTest {
 
         processor.process(event);
 
-        verify(gatewayStatusClient).reportStatus(1L, DocumentStatus.PROCESSED, null);
+        verify(gatewayStatusClient).reportProcessed(1L, null, null);
         verify(minioStorageService, never()).download(any());
+    }
+
+    @Test
+    void reportsSavedAndSkippedCountsForPartialDuplicates() {
+        DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
+        stubParsed(List.of(new Transaction(), new Transaction(), new Transaction()));
+        when(transactionPersistenceService.saveIfNotProcessed(any(), any(), any()))
+                .thenReturn(new PersistenceOutcome(1, 2));
+
+        processor.process(event);
+
+        verify(transactionPersistenceService).saveIfNotProcessed(eq(1L), eq(2L), any());
+        verify(gatewayStatusClient).reportProcessed(1L, 1, 2);
+        assertCounter("parser.documents.processed", 1.0);
+        assertCounter("parser.transactions.parsed", 3.0);
+    }
+
+    @Test
+    void allDuplicateFileEndsProcessedWithZeroSaved() {
+        DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
+        stubParsed(List.of(new Transaction(), new Transaction()));
+        when(transactionPersistenceService.saveIfNotProcessed(any(), any(), any()))
+                .thenReturn(new PersistenceOutcome(0, 2));
+
+        processor.process(event);
+
+        verify(gatewayStatusClient).reportProcessed(1L, 0, 2);
+        verify(gatewayStatusClient, never())
+                .reportStatus(eq(1L), eq(DocumentStatus.FAILED), any());
+        assertCounter("parser.documents.processed", 1.0);
+        assertCounter("parser.documents.failed", 0.0);
+    }
+
+    @Test
+    void redeliveredEventReportsStoredCountsWithoutSaving() {
+        DocumentUploadedEvent event = new DocumentUploadedEvent(1L, 2L, "CSV", "csv/1");
+        when(transactionPersistenceService.isProcessed(1L)).thenReturn(true);
+        when(transactionPersistenceService.findOutcome(1L))
+                .thenReturn(Optional.of(new PersistenceOutcome(28, 300)));
+
+        processor.process(event);
+
+        verify(gatewayStatusClient).reportProcessed(1L, 28, 300);
+        verify(transactionPersistenceService, never()).saveIfNotProcessed(any(), any(), any());
+        assertCounter("parser.documents.duplicate", 1.0);
+    }
+
+    private void stubParsed(List<Transaction> parsed) {
+        when(minioStorageService.download("csv/1"))
+                .thenReturn(new ByteArrayInputStream("data".getBytes(StandardCharsets.UTF_8)));
+        when(parserRouter.route("CSV")).thenReturn(parser);
+        when(parser.parse(any(InputStream.class), any(), any())).thenReturn(parsed);
+    }
+
+    private void assertCounter(String name, double expected) {
+        org.assertj.core.api.Assertions.assertThat(
+                        meterRegistry.get(name).tag("type", "CSV").counter().count())
+                .isEqualTo(expected);
     }
 
     @Test

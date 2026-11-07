@@ -44,6 +44,12 @@ public class Document {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
+    @Column(name = "saved_transaction_count")
+    private Integer savedTransactionCount;
+
+    @Column(name = "skipped_duplicate_count")
+    private Integer skippedDuplicateCount;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -122,6 +128,19 @@ public class Document {
 
     public void setErrorMessage(String errorMessage) {
         this.errorMessage = errorMessage;
+    }
+
+    public Integer getSavedTransactionCount() {
+        return savedTransactionCount;
+    }
+
+    public Integer getSkippedDuplicateCount() {
+        return skippedDuplicateCount;
+    }
+
+    public void setDeduplicationCounts(Integer saved, Integer skipped) {
+        this.savedTransactionCount = saved;
+        this.skippedDuplicateCount = skipped;
     }
 
     public Instant getCreatedAt() {

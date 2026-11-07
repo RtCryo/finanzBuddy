@@ -51,6 +51,32 @@ describe('DocumentsPage', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it('shows saved and skipped counts only for processed documents that have them', async () => {
+    const base = { type: 'CSV', createdAt: '2026-09-28T12:00:00Z', errorMessage: null }
+    vi.mocked(getDocuments).mockResolvedValue({
+      ...emptyPage,
+      totalElements: 3,
+      content: [
+        { ...base, id: 1, originalFilename: 'partial.csv', status: 'PROCESSED' as const, savedTransactions: 28, skippedDuplicates: 300 },
+        { ...base, id: 2, originalFilename: 'historic.csv', status: 'PROCESSED' as const },
+        { ...base, id: 3, originalFilename: 'single.csv', status: 'PROCESSED' as const, savedTransactions: 0, skippedDuplicates: 1 },
+      ],
+    })
+
+    render(
+      <MemoryRouter>
+        <DocumentsPage />
+      </MemoryRouter>,
+    )
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(screen.getByText('28 saved, 300 duplicates skipped')).toBeInTheDocument()
+    expect(screen.getByText('0 saved, 1 duplicate skipped')).toBeInTheDocument()
+    expect(screen.getAllByText(/skipped/)).toHaveLength(2)
+  })
+
   it('keeps automatic polling and the Documents-page upload action without a manual refresh control', async () => {
     const processingDocument = {
       id: 7,

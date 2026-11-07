@@ -43,3 +43,14 @@ export function transactionAmountTone(amount: number | string | null) {
   if (!Number.isFinite(value) || value === 0) return 'amount-neutral'
   return value > 0 ? 'amount-positive' : 'amount-negative'
 }
+
+/** "N saved, M duplicates skipped" for a processed document, or null when the numbers are absent. */
+export function formatDeduplicationSummary(document: {
+  status: string
+  savedTransactions?: number | null
+  skippedDuplicates?: number | null
+}) {
+  const { savedTransactions: saved, skippedDuplicates: skipped } = document
+  if (document.status !== 'PROCESSED' || saved == null || skipped == null) return null
+  return `${saved} saved, ${skipped} ${skipped === 1 ? 'duplicate' : 'duplicates'} skipped`
+}

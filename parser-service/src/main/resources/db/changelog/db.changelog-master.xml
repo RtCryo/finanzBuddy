@@ -7,5 +7,6 @@
 
     <include file="classpath:/db/changelog/changes/001-create-transactions-table.xml"/>
     <include file="classpath:/db/changelog/changes/002-create-processed-documents-table.xml"/>
+    <include file="classpath:/db/changelog/changes/003-add-deduplication-outcome.xml"/>
 
 </databaseChangeLog>

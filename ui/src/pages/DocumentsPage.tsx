@@ -5,7 +5,7 @@ import { getErrorMessage } from '../api/errors'
 import { AppShell } from '../components/AppShell'
 import { DocumentStatusBadge } from '../components/DocumentStatusBadge'
 import { PageHeading } from '../components/PageHeading'
-import { formatInstant } from '../format'
+import { formatDeduplicationSummary, formatInstant } from '../format'
 import type { DocumentRecord, DocumentStatus } from '../types/document'
 
 const statusLabels: Record<DocumentStatus, string> = {
@@ -132,7 +132,7 @@ export function DocumentsPage() {
                 >
                   <span className="document-name" role="cell">
                     <span className="document-file-icon" aria-hidden="true">▤</span>
-                    <span><strong>{document.originalFilename}</strong><small>Document ID {document.id}</small></span>
+                    <span><strong>{document.originalFilename}</strong><small>Document ID {document.id}</small>{formatDeduplicationSummary(document) && <small>{formatDeduplicationSummary(document)}</small>}</span>
                   </span>
                   <span role="cell"><span className="type-chip">{document.type}</span></span>
                   <span className="document-date" role="cell">{formatInstant(document.createdAt)}</span>

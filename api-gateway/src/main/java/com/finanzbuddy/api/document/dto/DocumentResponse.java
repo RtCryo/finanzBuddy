@@ -9,4 +9,6 @@ public record DocumentResponse(
         String type,
         DocumentStatus status,
         Instant createdAt,
-        String errorMessage) {}
+        String errorMessage,
+        Integer savedTransactions,
+        Integer skippedDuplicates) {}

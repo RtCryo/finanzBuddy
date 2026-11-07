@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -1318,6 +1319,100 @@ class DocumentControllerIntegrationTest {
                 counterparty,
                 description,
                 category);
+    }
+
+    @Test
+    void processedDocumentExposesDeduplicationCounts() throws Exception {
+        String token = registerAndLogin("dedup-counts@example.com", "password123");
+        long documentId = uploadDocument(token, csvFile("dedup.csv"), "CSV");
+
+        // Not finished: no numbers, in the single document and the list.
+        mockMvc.perform(get("/documents/" + documentId).header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.savedTransactions").value((Object) null))
+                .andExpect(jsonPath("$.skippedDuplicates").value((Object) null));
+        transition(documentId, DocumentStatus.PROCESSING, null);
+        mockMvc.perform(get("/documents/" + documentId).header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.savedTransactions").value((Object) null));
+
+        sendStatus(documentId, "{\"status\":\"PROCESSED\",\"savedTransactions\":28,"
+                + "\"skippedDuplicates\":300}", 200);
+
+        mockMvc.perform(get("/documents/" + documentId).header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.savedTransactions").value(28))
+                .andExpect(jsonPath("$.skippedDuplicates").value(300));
+        mockMvc.perform(get("/documents").header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.content[0].savedTransactions").value(28))
+                .andExpect(jsonPath("$.content[0].skippedDuplicates").value(300));
+
+        // A repeated PROCESSED without numbers keeps the stored numbers.
+        sendStatus(documentId, "{\"status\":\"PROCESSED\"}", 200);
+        mockMvc.perform(get("/documents/" + documentId).header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.savedTransactions").value(28))
+                .andExpect(jsonPath("$.skippedDuplicates").value(300));
+    }
+
+    @Test
+    void failedAndHistoricDocumentsHaveNoDeduplicationCounts() throws Exception {
+        String token = registerAndLogin("dedup-failed@example.com", "password123");
+        long failed = uploadDocument(token, csvFile("failed.csv"), "CSV");
+        transition(failed, DocumentStatus.PROCESSING, null);
+        transition(failed, DocumentStatus.FAILED, "boom");
+        mockMvc.perform(get("/documents/" + failed).header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.savedTransactions").value((Object) null))
+                .andExpect(jsonPath("$.skippedDuplicates").value((Object) null));
+
+        // A document processed by a parser that sends no numbers reads as absent, not zero.
+        long historic = uploadDocument(token, csvFile("historic.csv"), "CSV");
+        transition(historic, DocumentStatus.PROCESSING, null);
+        transition(historic, DocumentStatus.PROCESSED, null);
+        mockMvc.perform(get("/documents/" + historic).header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.status").value("PROCESSED"))
+                .andExpect(jsonPath("$.savedTransactions").value((Object) null))
+                .andExpect(jsonPath("$.skippedDuplicates").value((Object) null));
+
+        // Reprocessing a failed document leaves no numbers behind.
+        transition(failed, DocumentStatus.PENDING, null);
+        mockMvc.perform(get("/documents/" + failed).header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.savedTransactions").value((Object) null));
+    }
+
+    @Test
+    void zeroSavedWithSkippedDuplicatesIsStored() throws Exception {
+        String token = registerAndLogin("dedup-zero@example.com", "password123");
+        long documentId = uploadDocument(token, csvFile("zero.csv"), "CSV");
+        transition(documentId, DocumentStatus.PROCESSING, null);
+        sendStatus(documentId, "{\"status\":\"PROCESSED\",\"savedTransactions\":0,"
+                + "\"skippedDuplicates\":328}", 200);
+
+        mockMvc.perform(get("/documents/" + documentId).header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.savedTransactions").value(0))
+                .andExpect(jsonPath("$.skippedDuplicates").value(328));
+    }
+
+    @Test
+    void invalidDeduplicationCountsAreRejected() throws Exception {
+        String token = registerAndLogin("dedup-invalid@example.com", "password123");
+        long documentId = uploadDocument(token, csvFile("invalid.csv"), "CSV");
+        transition(documentId, DocumentStatus.PROCESSING, null);
+
+        sendStatus(documentId, "{\"status\":\"PROCESSED\",\"savedTransactions\":-1,"
+                + "\"skippedDuplicates\":3}", 400);
+        sendStatus(documentId, "{\"status\":\"PROCESSED\",\"savedTransactions\":1,"
+                + "\"skippedDuplicates\":-3}", 400);
+        sendStatus(documentId, "{\"status\":\"PROCESSED\",\"savedTransactions\":5}", 400);
+        sendStatus(documentId, "{\"status\":\"PROCESSED\",\"skippedDuplicates\":5}", 400);
+
+        mockMvc.perform(get("/documents/" + documentId).header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.status").value("PROCESSING"));
+    }
+
+    private void sendStatus(long documentId, String json, int expectedStatus) throws Exception {
+        mockMvc.perform(
+                        put("/internal/documents/" + documentId + "/status")
+                                .header(InternalApiKeyAuthFilter.HEADER, API_KEY)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json))
+                .andExpect(status().is(expectedStatus));
     }
 
     private void transition(long documentId, DocumentStatus status, String message)

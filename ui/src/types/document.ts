@@ -7,4 +7,6 @@ export type DocumentRecord = {
   status: DocumentStatus
   createdAt: string
   errorMessage?: string | null
+  savedTransactions?: number | null
+  skippedDuplicates?: number | null
 }

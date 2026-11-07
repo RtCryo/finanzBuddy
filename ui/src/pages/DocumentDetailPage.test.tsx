@@ -134,6 +134,39 @@ describe('DocumentDetailPage', () => {
     vi.useRealTimers()
   })
 
+  it('shows saved and skipped counts for a processed document with partial duplicates', async () => {
+    vi.mocked(getDocument).mockResolvedValue({ ...processedDocument, savedTransactions: 28, skippedDuplicates: 300 })
+    vi.mocked(getDocumentTransactions).mockResolvedValue([transaction])
+
+    renderDetail()
+
+    expect(await screen.findByText('28 saved, 300 duplicates skipped')).toBeInTheDocument()
+    expect(screen.getByRole('table', { name: 'Document transactions' })).toBeInTheDocument()
+    expect(screen.queryByText(/already imported/)).not.toBeInTheDocument()
+  })
+
+  it('explains that everything was already imported when every line was a duplicate', async () => {
+    vi.mocked(getDocument).mockResolvedValue({ ...processedDocument, savedTransactions: 0, skippedDuplicates: 328 })
+    vi.mocked(getDocumentTransactions).mockResolvedValue([])
+
+    renderDetail()
+
+    expect(await screen.findByText(/All transactions in this file were already imported/)).toHaveTextContent('328 duplicates skipped')
+    expect(screen.getByText('0 saved, 328 duplicates skipped')).toBeInTheDocument()
+    expect(screen.queryByText('No transactions are available for this document yet.')).not.toBeInTheDocument()
+  })
+
+  it('shows no deduplication text for a historic processed document', async () => {
+    vi.mocked(getDocument).mockResolvedValue(processedDocument)
+    vi.mocked(getDocumentTransactions).mockResolvedValue([])
+
+    renderDetail()
+
+    expect(await screen.findByText('No transactions are available for this document yet.')).toBeInTheDocument()
+    expect(screen.queryByText(/duplicates? skipped/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Import result')).not.toBeInTheDocument()
+  })
+
   it('polls a processing document automatically without a manual refresh control', async () => {
     vi.useFakeTimers()
     vi.mocked(getDocument)

@@ -141,7 +141,7 @@ If a record cannot be deserialized or processed after three retries, it is publi
 The service reports the following statuses to `PUT /internal/documents/{id}/status` on the API Gateway:
 
 - `PROCESSING` — parsing has started
-- `PROCESSED` — all transactions persisted successfully
+- `PROCESSED` — parsing finished; sent with `savedTransactions` and `skippedDuplicates` (see Duplicate Handling)
 - `FAILED` — parsing failed with an error message
 
 All status calls include the `X-Internal-Api-Key` header when the key is configured.
@@ -151,6 +151,19 @@ On a `PROCESSED` report, the Gateway applies the owner's current tag rules to th
 transactions before it commits the document status. If rule application fails, that status call
 fails and the Gateway leaves the document in `PROCESSING`; a retry can complete it. Repeating a
 successful `PROCESSED` report does not apply rules again. The parser does not store or evaluate rules.
+
+## Duplicate Handling
+
+Two mechanisms keep data from being stored twice:
+
+- **By document id** — `processed_documents` has one row per document id, so a redelivered Kafka event saves nothing and reports the stored counts again.
+- **By transaction content** — the same bank transaction is stored once per user, even when a statement is uploaded again or exports overlap. Two transactions are identical when booking date, value date, amount (normalized to scale 4), currency, counterparty, and description are equal after trimming, with a missing value equal to an empty one. Category and tag edits do not affect identity, and users never match each other.
+
+Identical lines are compared by quantity: only the surplus over the number the owner already has is saved (first lines of the file first), so two equal coffees on one day are kept on first import but not saved again on re-upload. The parser reads the owner's stored key columns for the file's booking-date range (plus rows without a booking date; index `idx_transactions_user_booking_date`) and compares in memory.
+
+The compare-and-insert runs in one transaction behind a per-owner `pg_advisory_xact_lock`, so simultaneous uploads of one owner are processed one after the other and the second sees the first one's rows. Different owners do not block each other. The outcome is written to `processed_documents.saved_count` and `skipped_count` (null for documents processed earlier). A file in which every line is a duplicate ends `PROCESSED` with 0 saved; a file without parseable transactions still fails. Existing stored transactions are never changed.
+
+`ConcurrentUploadPostgresTest` proves the lock against a real PostgreSQL and runs only when `PARSER_TEST_POSTGRES_URL` is set (optionally `PARSER_TEST_POSTGRES_USER` and `PARSER_TEST_POSTGRES_PASSWORD`).
 
 ## Monitoring
 

@@ -78,7 +78,7 @@ public class DocumentProcessor {
         try {
             if (transactionPersistenceService.isProcessed(event.documentId())) {
                 logger.info("Duplicate event ignored for documentId={}", event.documentId());
-                reportStatus(event.documentId(), DocumentStatus.PROCESSED, null);
+                reportProcessedAgain(event.documentId());
                 documentCounter("parser.documents.duplicate", type).increment();
                 return;
             }
@@ -93,23 +93,29 @@ public class DocumentProcessor {
                             "No transactions found in document " + event.documentId());
                 }
 
-                transactionPersistenceService.saveIfNotProcessed(event.documentId(), transactions);
+                PersistenceOutcome outcome =
+                        transactionPersistenceService.saveIfNotProcessed(
+                                event.documentId(), event.userId(), transactions);
                 Counter.builder("parser.transactions.parsed")
                         .description(
                                 "Total number of transactions parsed from successful documents")
                         .tag("type", type)
                         .register(meterRegistry)
                         .increment(transactions.size());
-                reportStatus(event.documentId(), DocumentStatus.PROCESSED, null);
+                gatewayStatusClient.reportProcessed(
+                        event.documentId(), outcome.saved(), outcome.skipped());
                 documentCounter("parser.documents.processed", type).increment();
                 logger.info(
-                        "Document processed successfully: documentId={}, transactions={}",
+                        "Document processed successfully: documentId={}, parsed={}, saved={},"
+                                + " skippedDuplicates={}",
                         event.documentId(),
-                        transactions.size());
+                        transactions.size(),
+                        outcome.saved(),
+                        outcome.skipped());
             }
         } catch (DuplicateDocumentException e) {
             logger.info("Duplicate event ignored for documentId={}", event.documentId());
-            reportStatus(event.documentId(), DocumentStatus.PROCESSED, null);
+            reportProcessedAgain(event.documentId());
             documentCounter("parser.documents.duplicate", type).increment();
         } catch (IllegalArgumentException | UnsupportedOperationException e) {
             documentCounter("parser.documents.failed", type).increment();
@@ -145,6 +151,16 @@ public class DocumentProcessor {
         if (event.storagePath() == null || event.storagePath().isBlank()) {
             throw new IllegalArgumentException("Document event must contain a storage path");
         }
+    }
+
+    /** Reports PROCESSED again with the counts recorded earlier, if any. */
+    private void reportProcessedAgain(Long documentId) {
+        PersistenceOutcome outcome =
+                transactionPersistenceService.findOutcome(documentId).orElse(null);
+        gatewayStatusClient.reportProcessed(
+                documentId,
+                outcome == null ? null : outcome.saved(),
+                outcome == null ? null : outcome.skipped());
     }
 
     private void reportStatus(Long documentId, DocumentStatus status, String message) {
