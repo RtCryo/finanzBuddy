@@ -3,6 +3,7 @@ package com.finanzbuddy.parser.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.finanzbuddy.parser.entity.ProcessedDocument;
 import com.finanzbuddy.parser.entity.Transaction;
 import com.finanzbuddy.parser.repository.ProcessedDocumentRepository;
 import com.finanzbuddy.parser.repository.StoredTransactionKey;
@@ -209,6 +210,15 @@ class TransactionPersistenceServiceTest {
         service.markStatusConfirmed(1L);
 
         assertThat(service.findUnconfirmedDocuments(1L, 99L)).containsExactly(2L);
+    }
+
+    @Test
+    void recoveryLookupIncludesDocumentsAfterTwentyEarlierFailures() {
+        for (long documentId = 1; documentId <= 21; documentId++) {
+            processedDocumentRepository.save(new ProcessedDocument(documentId, 1L));
+        }
+
+        assertThat(service.findUnconfirmedDocuments(1L, 99L)).hasSize(21).contains(21L);
     }
 
     private static List<Transaction> copyOf(long documentId, List<Transaction> source) {

@@ -76,6 +76,14 @@ Because deduplication counts every stored transaction of the owner, a document w
 - **WHEN** retries for a saved document are exhausted and the parser reports its terminal status
 - **THEN** `PROCESSED` is sent with the saved and skipped numbers recorded for the document
 
+#### Scenario: Historic marker with a lost status report
+- **WHEN** a processed marker predates status confirmation, has stored transactions, and its `PROCESSED` report was lost
+- **THEN** migration recovers its owner from the transactions and queues a new status report without adding counts to the historic document
+
+#### Scenario: Earlier recovery attempts keep failing
+- **WHEN** more than twenty documents of one owner are unconfirmed and the earliest reports keep failing
+- **THEN** the parser still attempts to report the later unconfirmed documents
+
 ### Requirement: Existing stored data is not changed
 The system SHALL NOT delete, merge, or rewrite transactions stored before this behavior exists. Documents processed before this behavior exists SHALL report no saved and skipped numbers.
 

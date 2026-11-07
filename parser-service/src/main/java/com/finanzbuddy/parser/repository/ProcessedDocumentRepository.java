@@ -9,8 +9,13 @@ import org.springframework.data.repository.query.Param;
 
 public interface ProcessedDocumentRepository extends JpaRepository<ProcessedDocument, Long> {
 
-    List<ProcessedDocument> findTop20ByUserIdAndStatusConfirmedFalseOrderByProcessedAtAsc(
-            Long userId);
+    @Query(
+            """
+            select d.documentId from ProcessedDocument d
+            where d.userId = :userId and d.statusConfirmed = false
+            order by d.processedAt, d.documentId
+            """)
+    List<Long> findUnconfirmedIds(@Param("userId") Long userId);
 
     @Modifying
     @Query("update ProcessedDocument d set d.statusConfirmed = true where d.documentId = :id")

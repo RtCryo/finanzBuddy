@@ -60,9 +60,8 @@ public class TransactionPersistenceService {
     @Transactional(readOnly = true)
     public List<Long> findUnconfirmedDocuments(Long userId, Long excludingDocumentId) {
         return processedDocumentRepository
-                .findTop20ByUserIdAndStatusConfirmedFalseOrderByProcessedAtAsc(userId)
+                .findUnconfirmedIds(userId)
                 .stream()
-                .map(ProcessedDocument::getDocumentId)
                 .filter(id -> !id.equals(excludingDocumentId))
                 .toList();
     }

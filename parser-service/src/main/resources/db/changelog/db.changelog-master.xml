@@ -9,5 +9,6 @@
     <include file="classpath:/db/changelog/changes/002-create-processed-documents-table.xml"/>
     <include file="classpath:/db/changelog/changes/003-add-deduplication-outcome.xml"/>
     <include file="classpath:/db/changelog/changes/004-add-status-confirmation.xml"/>
+    <include file="classpath:/db/changelog/changes/005-backfill-status-confirmation.xml"/>
 
 </databaseChangeLog>

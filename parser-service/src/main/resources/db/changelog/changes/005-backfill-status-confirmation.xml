@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="005-backfill-status-confirmation" author="parser-service">
+        <!-- Existing markers predate the owner and confirmation fields. Every marker with
+             transactions needs a fresh status report: a prior report may have been lost. -->
+        <sql>
+            UPDATE processed_documents
+            SET user_id = (SELECT MIN(t.user_id) FROM transactions t
+                           WHERE t.document_id = processed_documents.document_id),
+                status_confirmed = FALSE
+            WHERE user_id IS NULL
+              AND EXISTS (SELECT 1 FROM transactions t
+                          WHERE t.document_id = processed_documents.document_id)
+        </sql>
+    </changeSet>
+</databaseChangeLog>
