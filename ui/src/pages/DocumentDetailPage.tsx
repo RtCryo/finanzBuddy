@@ -8,6 +8,7 @@ import { DocumentStatusBadge } from '../components/DocumentStatusBadge'
 import { TransactionDetailsDialog } from '../components/TransactionDetailsDialog'
 import {
   formatDateOnly,
+  formatDeduplicationSummary,
   formatInstant,
   formatTransactionCategory,
   formatTransactionText,
@@ -31,6 +32,8 @@ export function DocumentDetailPage() {
   const [isDownloading, setIsDownloading] = useState(false)
   const requestId = useRef(0)
   const isLoading = loadedId !== id
+  const deduplicationSummary = document ? formatDeduplicationSummary(document) : null
+  const allDuplicates = document?.status === 'PROCESSED' && document.savedTransactions === 0 && (document.skippedDuplicates ?? 0) > 0
   const isOpen = document?.status === 'PENDING' || document?.status === 'PROCESSING'
 
   const load = useCallback(async () => {
@@ -177,6 +180,7 @@ export function DocumentDetailPage() {
               <div><dt>File name</dt><dd>{document.originalFilename}</dd></div>
               <div><dt>Document type</dt><dd>{document.type}</dd></div>
               <div><dt>Uploaded</dt><dd>{formatInstant(document.createdAt)}</dd></div>
+              {deduplicationSummary && <div><dt>Import result</dt><dd>{deduplicationSummary}</dd></div>}
             </dl>
           </section>
           {document.status === 'PENDING' || document.status === 'PROCESSING' ? (
@@ -209,7 +213,13 @@ export function DocumentDetailPage() {
               {areTransactionsLoading ? (
                 <div className="detail-state" role="status">Loading transactions…</div>
               ) : transactions.length === 0 ? (
-                <div className="transactions-empty" role="status">No transactions are available for this document yet.</div>
+                allDuplicates ? (
+                  <div className="transactions-empty" role="status">
+                    All transactions in this file were already imported, so none were added. {document.skippedDuplicates} {document.skippedDuplicates === 1 ? 'duplicate' : 'duplicates'} skipped.
+                  </div>
+                ) : (
+                  <div className="transactions-empty" role="status">No transactions are available for this document yet.</div>
+                )
               ) : (
                 <div className="transaction-table-wrap">
                   <div className="transaction-table" role="table" aria-label="Document transactions">

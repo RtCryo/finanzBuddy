@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!--
+        Outcome of transaction deduplication reported by the parser with PROCESSED. Both columns
+        are null for documents that are not processed and for documents processed before the
+        parser reported these numbers.
+    -->
+    <changeSet id="014-add-document-deduplication-counts" author="api-gateway">
+        <addColumn tableName="documents">
+            <column name="saved_transaction_count" type="INTEGER">
+                <constraints nullable="true"/>
+            </column>
+            <column name="skipped_duplicate_count" type="INTEGER">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="documents" columnName="skipped_duplicate_count"/>
+            <dropColumn tableName="documents" columnName="saved_transaction_count"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

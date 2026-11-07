@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="004-add-status-confirmation" author="parser-service">
+        <addColumn tableName="processed_documents">
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="true"/>
+            </column>
+            <column name="status_confirmed" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+
+        <createIndex indexName="idx_processed_documents_user_unconfirmed" tableName="processed_documents">
+            <column name="user_id"/>
+            <column name="status_confirmed"/>
+        </createIndex>
+
+        <rollback>
+            <dropIndex indexName="idx_processed_documents_user_unconfirmed" tableName="processed_documents"/>
+            <dropColumn tableName="processed_documents" columnName="status_confirmed"/>
+            <dropColumn tableName="processed_documents" columnName="user_id"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

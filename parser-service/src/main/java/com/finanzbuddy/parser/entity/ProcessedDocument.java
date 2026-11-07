@@ -18,14 +18,54 @@ public class ProcessedDocument {
     @Column(name = "processed_at", nullable = false, updatable = false)
     private Instant processedAt;
 
+    @Column(name = "saved_count")
+    private Integer savedCount;
+
+    @Column(name = "skipped_count")
+    private Integer skippedCount;
+
+    @Column(name = "user_id")
+    private Long userId;
+
+    /** True once the gateway accepted the PROCESSED status; rows from before the flag are true. */
+    @Column(name = "status_confirmed", nullable = false)
+    private boolean statusConfirmed = true;
+
     protected ProcessedDocument() {}
 
-    public ProcessedDocument(Long documentId) {
+    public ProcessedDocument(Long documentId, Long userId) {
         this.documentId = documentId;
+        this.userId = userId;
+        this.statusConfirmed = false;
+    }
+
+    public Long getDocumentId() {
+        return documentId;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public boolean isStatusConfirmed() {
+        return statusConfirmed;
     }
 
     @PrePersist
     protected void onCreate() {
         processedAt = Instant.now();
+    }
+
+    public Integer getSavedCount() {
+        return savedCount;
+    }
+
+    public Integer getSkippedCount() {
+        return skippedCount;
+    }
+
+    public void recordOutcome(int saved, int skipped) {
+        this.savedCount = saved;
+        this.skippedCount = skipped;
     }
 }

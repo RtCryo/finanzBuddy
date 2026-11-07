@@ -1,5 +1,6 @@
 package com.finanzbuddy.parser.client;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.finanzbuddy.parser.document.DocumentStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +37,27 @@ public class GatewayStatusClient {
             maxAttempts = 3,
             backoff = @Backoff(delay = 500, multiplier = 2))
     public void reportStatus(Long documentId, DocumentStatus status, String message) {
+        send(documentId, new StatusUpdateRequest(status, message, null, null));
+    }
+
+    /** Reports PROCESSED; the counts are optional and omitted when null (historic documents). */
+    @Retryable(
+            retryFor = GatewayStatusException.class,
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 500, multiplier = 2))
+    public void reportProcessed(Long documentId, Integer saved, Integer skipped) {
+        boolean withCounts = saved != null && skipped != null;
+        send(
+                documentId,
+                new StatusUpdateRequest(
+                        DocumentStatus.PROCESSED,
+                        null,
+                        withCounts ? saved : null,
+                        withCounts ? skipped : null));
+    }
+
+    private void send(Long documentId, StatusUpdateRequest request) {
+        DocumentStatus status = request.status();
         String path = "/internal/documents/{documentId}/status";
         logger.info("Reporting document status: documentId={}, status={}", documentId, status);
         try {
@@ -49,7 +71,7 @@ public class GatewayStatusClient {
                                     headers.set(HEADER, internalApiKey);
                                 }
                             })
-                    .body(new StatusUpdateRequest(status, message))
+                    .body(request)
                     .retrieve()
                     .toBodilessEntity();
             logger.info("Updated document status: documentId={}, status={}", documentId, status);
@@ -60,5 +82,9 @@ public class GatewayStatusClient {
         }
     }
 
-    public record StatusUpdateRequest(DocumentStatus status, String message) {}
+    public record StatusUpdateRequest(
+            DocumentStatus status,
+            String message,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Integer savedTransactions,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Integer skippedDuplicates) {}
 }

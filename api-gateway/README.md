@@ -86,6 +86,12 @@ curl http://localhost:8080/documents/<id> \
 
 Returns `404 Not Found` if the document does not belong to the authenticated user.
 
+Every document representation (list and single document) contains `savedTransactions` and
+`skippedDuplicates`: how many parsed transactions were stored and how many were skipped because
+the same owner already had an identical one. Both are `null` while the document is `PENDING`,
+`PROCESSING`, or `FAILED`, and for documents processed before the parser reported them; `0` is a
+real value (for example every line was a duplicate).
+
 #### List document transactions
 
 ```bash
@@ -194,6 +200,18 @@ On the first `PROCESSING→PROCESSED` transition, the Gateway applies current ow
 committed imported rows and commits assignments with the status. An application failure rolls back
 the status and tags so a parser retry can complete the same report. Duplicate `PROCESSED` reports
 do not reevaluate rules. The parser remains the sole writer of imported transaction rows.
+
+`PROCESSED` may carry the optional `savedTransactions` and `skippedDuplicates` (both non-negative
+integers, given together or not at all; one alone or a negative value returns `400`):
+
+```json
+{"status":"PROCESSED","savedTransactions":28,"skippedDuplicates":300}
+```
+
+The Gateway stores them (`documents.saved_transaction_count`, `skipped_duplicate_count`) on the
+`PROCESSING→PROCESSED` transition and returns them in `DocumentResponse`. A repeated `PROCESSED`
+report keeps the stored numbers, with or without numbers in the request. Reports from a parser that
+sends none leave them `null`; any transition other than to `PROCESSED` stores none.
 
 ### Health & Metrics
 

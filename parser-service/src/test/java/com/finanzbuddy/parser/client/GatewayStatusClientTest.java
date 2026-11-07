@@ -46,6 +46,54 @@ class GatewayStatusClientTest {
     }
 
     @Test
+    void sendsCountsOnlyWithProcessed() {
+        GatewayStatusClient client =
+                new GatewayStatusClient(restClientBuilder, "http://localhost:9999", "test-key");
+        mockServer
+                .expect(requestTo("http://localhost:9999/internal/documents/1/status"))
+                .andExpect(jsonPath("$.status").value("PROCESSED"))
+                .andExpect(jsonPath("$.savedTransactions").value(28))
+                .andExpect(jsonPath("$.skippedDuplicates").value(300))
+                .andRespond(withSuccess());
+
+        client.reportProcessed(1L, 28, 300);
+
+        mockServer.verify();
+    }
+
+    @Test
+    void omitsCountsWhenNotKnown() {
+        GatewayStatusClient client =
+                new GatewayStatusClient(restClientBuilder, "http://localhost:9999", "test-key");
+        mockServer
+                .expect(requestTo("http://localhost:9999/internal/documents/1/status"))
+                .andExpect(jsonPath("$.status").value("PROCESSED"))
+                .andExpect(jsonPath("$.savedTransactions").doesNotExist())
+                .andExpect(jsonPath("$.skippedDuplicates").doesNotExist())
+                .andRespond(withSuccess());
+
+        client.reportProcessed(1L, null, null);
+
+        mockServer.verify();
+    }
+
+    @Test
+    void otherStatusesCarryNoCounts() {
+        GatewayStatusClient client =
+                new GatewayStatusClient(restClientBuilder, "http://localhost:9999", "test-key");
+        mockServer
+                .expect(requestTo("http://localhost:9999/internal/documents/1/status"))
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.savedTransactions").doesNotExist())
+                .andExpect(jsonPath("$.skippedDuplicates").doesNotExist())
+                .andRespond(withSuccess());
+
+        client.reportStatus(1L, DocumentStatus.FAILED, "boom");
+
+        mockServer.verify();
+    }
+
+    @Test
     void throwsGatewayStatusExceptionOnNon2xxResponse() {
         GatewayStatusClient client =
                 new GatewayStatusClient(restClientBuilder, "http://localhost:9999", "test-key");

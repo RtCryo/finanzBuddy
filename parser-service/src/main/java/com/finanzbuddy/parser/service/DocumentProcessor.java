@@ -39,6 +39,7 @@ public class DocumentProcessor {
     private final MinioStorageService minioStorageService;
     private final DocumentParserRouter parserRouter;
     private final GatewayStatusClient gatewayStatusClient;
+    private final ProcessedStatusReporter statusReporter;
     private final MeterRegistry meterRegistry;
     private final Locale defaultLocale;
 
@@ -47,8 +48,10 @@ public class DocumentProcessor {
             MinioStorageService minioStorageService,
             DocumentParserRouter parserRouter,
             GatewayStatusClient gatewayStatusClient,
+            ProcessedStatusReporter statusReporter,
             @Value("${parser.formats.csv-locale:de-DE}") Locale defaultLocale,
             MeterRegistry meterRegistry) {
+        this.statusReporter = statusReporter;
         this.transactionPersistenceService = transactionPersistenceService;
         this.minioStorageService = minioStorageService;
         this.parserRouter = parserRouter;
@@ -78,7 +81,8 @@ public class DocumentProcessor {
         try {
             if (transactionPersistenceService.isProcessed(event.documentId())) {
                 logger.info("Duplicate event ignored for documentId={}", event.documentId());
-                reportStatus(event.documentId(), DocumentStatus.PROCESSED, null);
+                statusReporter.reportStored(event.documentId());
+                statusReporter.retryUnconfirmed(event.userId(), event.documentId());
                 documentCounter("parser.documents.duplicate", type).increment();
                 return;
             }
@@ -93,23 +97,30 @@ public class DocumentProcessor {
                             "No transactions found in document " + event.documentId());
                 }
 
-                transactionPersistenceService.saveIfNotProcessed(event.documentId(), transactions);
+                PersistenceOutcome outcome =
+                        transactionPersistenceService.saveIfNotProcessed(
+                                event.documentId(), event.userId(), transactions);
                 Counter.builder("parser.transactions.parsed")
                         .description(
                                 "Total number of transactions parsed from successful documents")
                         .tag("type", type)
                         .register(meterRegistry)
                         .increment(transactions.size());
-                reportStatus(event.documentId(), DocumentStatus.PROCESSED, null);
+                statusReporter.report(event.documentId(), outcome.saved(), outcome.skipped());
+                statusReporter.retryUnconfirmed(event.userId(), event.documentId());
                 documentCounter("parser.documents.processed", type).increment();
                 logger.info(
-                        "Document processed successfully: documentId={}, transactions={}",
+                        "Document processed successfully: documentId={}, parsed={}, saved={},"
+                                + " skippedDuplicates={}",
                         event.documentId(),
-                        transactions.size());
+                        transactions.size(),
+                        outcome.saved(),
+                        outcome.skipped());
             }
         } catch (DuplicateDocumentException e) {
             logger.info("Duplicate event ignored for documentId={}", event.documentId());
-            reportStatus(event.documentId(), DocumentStatus.PROCESSED, null);
+            statusReporter.reportStored(event.documentId());
+            statusReporter.retryUnconfirmed(event.userId(), event.documentId());
             documentCounter("parser.documents.duplicate", type).increment();
         } catch (IllegalArgumentException | UnsupportedOperationException e) {
             documentCounter("parser.documents.failed", type).increment();

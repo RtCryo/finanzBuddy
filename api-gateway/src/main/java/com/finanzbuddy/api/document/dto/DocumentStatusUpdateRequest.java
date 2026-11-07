@@ -1,7 +1,10 @@
 package com.finanzbuddy.api.document.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.finanzbuddy.api.entity.DocumentStatus;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -13,6 +16,28 @@ import jakarta.validation.constraints.Size;
  * usage when the message is serialized back to JSON responses, and can be abused as a DoS vector by
  * repeatedly reporting failures with multi-megabyte payloads. A 4000-character cap is enough for
  * any reasonable parser error while keeping the table and API responses bounded.
+ *
+ * <p>{@code savedTransactions} and {@code skippedDuplicates} are optional, non-negative, and only
+ * meaningful with {@code PROCESSED}; they are given together or not at all. A parser that predates
+ * deduplication sends neither.
  */
 public record DocumentStatusUpdateRequest(
-        @NotNull DocumentStatus status, @Size(max = 4000) String message) {}
+        @NotNull DocumentStatus status,
+        @Size(max = 4000) String message,
+        @PositiveOrZero Integer savedTransactions,
+        @PositiveOrZero Integer skippedDuplicates) {
+
+    public DocumentStatusUpdateRequest(DocumentStatus status, String message) {
+        this(status, message, null, null);
+    }
+
+    @JsonIgnore
+    @AssertTrue(message = "savedTransactions and skippedDuplicates must be given together")
+    public boolean isDeduplicationCountsComplete() {
+        return (savedTransactions == null) == (skippedDuplicates == null);
+    }
+
+    public boolean hasDeduplicationCounts() {
+        return savedTransactions != null && skippedDuplicates != null;
+    }
+}

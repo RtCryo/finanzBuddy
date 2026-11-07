@@ -104,6 +104,52 @@ class LiquibaseMigrationTest {
     }
 
     @Test
+    void documentsDeduplicationCountsAreNullable() {
+        Map<String, String> columns = columnNullability("DOCUMENTS");
+        assertThat(columns.get("SAVED_TRANSACTION_COUNT")).isEqualTo("YES");
+        assertThat(columns.get("SKIPPED_DUPLICATE_COUNT")).isEqualTo("YES");
+    }
+
+    @Test
+    void deduplicationCountsMigrationRollsBackAndReapplies() throws Exception {
+        String url = "jdbc:h2:mem:rollbacktestdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1";
+        try (java.sql.Connection connection = java.sql.DriverManager.getConnection(url, "sa", "")) {
+            var database =
+                    liquibase.database.DatabaseFactory.getInstance()
+                            .findCorrectDatabaseImplementation(
+                                    new liquibase.database.jvm.JdbcConnection(connection));
+            try (var liquibaseRunner =
+                    new liquibase.Liquibase(
+                            "classpath:/db/changelog/db.changelog-master.xml",
+                            new liquibase.integration.spring.SpringResourceAccessor(
+                                    new org.springframework.core.io.DefaultResourceLoader()),
+                            database)) {
+                liquibaseRunner.update("");
+                assertThat(documentColumns(connection)).contains("SAVED_TRANSACTION_COUNT");
+
+                liquibaseRunner.rollback(1, "");
+                assertThat(documentColumns(connection))
+                        .doesNotContain("SAVED_TRANSACTION_COUNT", "SKIPPED_DUPLICATE_COUNT");
+
+                liquibaseRunner.update("");
+                assertThat(documentColumns(connection))
+                        .contains("SAVED_TRANSACTION_COUNT", "SKIPPED_DUPLICATE_COUNT");
+            }
+        }
+    }
+
+    private static List<String> documentColumns(java.sql.Connection connection)
+            throws java.sql.SQLException {
+        List<String> names = new java.util.ArrayList<>();
+        try (var rs = connection.getMetaData().getColumns(null, null, "DOCUMENTS", null)) {
+            while (rs.next()) {
+                names.add(rs.getString("COLUMN_NAME"));
+            }
+        }
+        return names;
+    }
+
+    @Test
     void usersEmailIsAnIndexedProjectionWithoutUniqueness() {
         List<String> constraints =
                 jdbcTemplate.queryForList(
