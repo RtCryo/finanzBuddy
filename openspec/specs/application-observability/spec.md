@@ -24,5 +24,5 @@ The application SHALL expose operational metrics for document upload outcomes, d
 ## Related implementation and history
 
 - Documentation: [monitoring map](../../../docs/README.md#subsystem-map), [architecture](../../../docs/ARCHITECTURE.md)
-- Implementation: [`monitoring/`](../../../monitoring/), [`docker-compose.yml`](../../../docker-compose.yml)
-- History: [Grafana and Prometheus monitoring](../../changes/archive/2026-10-10-grafana-prometheus-monitoring/)
+- Implementation: [`docker-compose.yml`](../../../docker-compose.yml); Prometheus and Grafana configuration live in the root homeBuddy `monitoring/` folder
+- History: [Grafana and Prometheus monitoring](../../changes/archive/2026-10-10-grafana-prometheus-monitoring/), [move monitoring to the central homeBuddy stack](../../changes/archive/2026-11-07-move-monitoring-to-homebuddy/)
