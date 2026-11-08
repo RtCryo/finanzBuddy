@@ -1,6 +1,6 @@
 # finanzBuddy
 
-[![API Gateway CI](https://github.com/RtCryo/finanzBuddy/actions/workflows/api-gateway.yml/badge.svg)](https://github.com/RtCryo/finanzBuddy/actions/workflows/api-gateway.yml)
+[![CI](https://github.com/RtCryo/finanzBuddy/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/RtCryo/finanzBuddy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/RtCryo/finanzBuddy/branch/main/graph/badge.svg)](https://codecov.io/gh/RtCryo/finanzBuddy)
 
 finanzBuddy is a personal finance document processing platform. Users upload bank statements through a web UI; the API Gateway stores them securely and publishes events over Kafka, and a parser service extracts and normalizes the transactions.
@@ -98,8 +98,16 @@ Prerequisites:
 For a standalone host, start the production stack from the repository root:
 
 ```bash
-docker compose -f docker-compose.yml --profile production up --build -d
+docker compose -f docker-compose.yml --profile production pull
+docker compose -f docker-compose.yml --profile production up -d
 ```
+
+Production runs the released images `ghcr.io/rtcryo/finanzbuddy-api-gateway`, `-parser-service`, and `-ui`,
+pinned by `FINANZBUDDY_VERSION` in `.env` (see `.env.example` for the latest release); the file does not build
+and fails naming the variable when it is missing. To roll back, set the previous version and run the same two
+commands; if the newer release added a Liquibase changeset, roll that changeset back first, because an older
+image does not know the newer schema. `docker compose up --build` builds all three components from the working
+tree and tags them `finanzbuddy-<component>:dev`.
 
 The explicit `-f docker-compose.yml` omits `docker-compose.override.yml`, so the local
 host ports are not published, and `--profile production` enables Traefik. The application

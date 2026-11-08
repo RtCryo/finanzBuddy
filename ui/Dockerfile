@@ -9,6 +9,9 @@ COPY . .
 RUN npm run build
 
 FROM nginx:alpine AS runtime
+ARG VERSION=dev
+ARG REVISION=unknown
+LABEL org.opencontainers.image.version="${VERSION}" org.opencontainers.image.revision="${REVISION}"
 
 RUN apk add --no-cache wget
 
