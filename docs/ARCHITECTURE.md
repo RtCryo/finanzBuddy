@@ -140,6 +140,10 @@ For local development, create the external `homebuddy` network and the internal 
 
 For a shared host, the root homeBuddy stack provides the only Traefik on ports 80/443. The finanzBuddy UI has labels for `TRAEFIK_DOMAIN` and `traefik.docker.network=homebuddy`; it joins that network as `finanzbuddy-ui`. The gateway does not join `homebuddy`: it reaches authBuddy's JWKS as `auth` over the internal `finanzbuddy-identity` network, shared only with authBuddy, so no other stack can reach it, while product data services stay on the private Compose network. The service-local `production` Traefik profile is for standalone deployment only. The exporter and application services are not published as host ports in production; the central Prometheus reaches the gateway, parser, and exporter over `finanzbuddy-metrics`.
 
+## Delivery and releases
+
+finanzBuddy follows the root capability `homebuddy-delivery`: one `ci` check on pull requests to `main` (including the documentation integrity check and the SeaweedFS smoke test), Conventional Commits pull-request titles, and release-please releases. Merging the release pull request tags `vX.Y.Z` and publishes `ghcr.io/rtcryo/finanzbuddy-api-gateway`, `finanzbuddy-parser-service`, and `finanzbuddy-ui` with the tags `X.Y.Z` and `X.Y`, provenance attestations, and the digests in the release notes. The production Compose file runs those images pinned by `FINANZBUDDY_VERSION`; the override file builds them from source for local development.
+
 ## Repository map
 
 ```text

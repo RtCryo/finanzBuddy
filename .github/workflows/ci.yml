@@ -1,0 +1,344 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      api-gateway: ${{ steps.filter.outputs.api-gateway }}
+      parser-service: ${{ steps.filter.outputs.parser-service }}
+      ui: ${{ steps.filter.outputs.ui }}
+      compose: ${{ steps.filter.outputs.compose }}
+      openspec: ${{ steps.filter.outputs.openspec }}
+      documentation: ${{ steps.filter.outputs.documentation }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # On push to main every job runs, so main is always fully verified.
+      - name: Detect changed areas
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            api-gateway:
+              - 'api-gateway/**'
+              - '.github/workflows/ci.yml'
+              - 'release-please-config.json'
+            parser-service:
+              - 'parser-service/**'
+              - '.github/workflows/ci.yml'
+              - 'release-please-config.json'
+            ui:
+              - 'ui/**'
+              - '.github/workflows/ci.yml'
+              - 'release-please-config.json'
+            compose:
+              - 'docker-compose*.yml'
+              - '.env.example'
+              - '.github/workflows/ci.yml'
+              - 'release-please-config.json'
+            openspec:
+              - 'openspec/**'
+              - '.github/workflows/ci.yml'
+              - 'release-please-config.json'
+            documentation:
+              - '**/*.md'
+              - 'openspec/**'
+              - 'scripts/check_documentation_map.py'
+              - '.github/workflows/ci.yml'
+              - 'release-please-config.json'
+
+  api-gateway:
+    name: api-gateway
+    needs: changes
+    if: needs.changes.outputs.api-gateway == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api-gateway
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Check code style
+        run: ./mvnw -B spotless:check
+
+      # Docker is preinstalled on ubuntu-latest, which Testcontainers needs.
+      - name: Verify
+        run: ./mvnw -B verify
+
+      - name: Upload JaCoCo report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: jacoco-report-api-gateway-${{ github.run_id }}
+          path: api-gateway/target/site/jacoco/
+          if-no-files-found: ignore
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: api-gateway/target/site/jacoco/jacoco.xml
+          flags: api-gateway
+          name: api-gateway-coverage
+          fail_ci_if_error: false
+
+  parser-service:
+    name: parser-service
+    needs: changes
+    if: needs.changes.outputs.parser-service == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: parser-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Check code style
+        run: ./mvnw -B spotless:check
+
+      # Docker is preinstalled on ubuntu-latest, which Testcontainers needs.
+      - name: Verify
+        run: ./mvnw -B verify
+
+      - name: Upload JaCoCo report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: jacoco-report-parser-service-${{ github.run_id }}
+          path: parser-service/target/site/jacoco/
+          if-no-files-found: ignore
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: parser-service/target/site/jacoco/jacoco.xml
+          flags: parser-service
+          name: parser-service-coverage
+          fail_ci_if_error: false
+
+  ui:
+    name: ui
+    needs: changes
+    if: needs.changes.outputs.ui == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  image:
+    name: Image ${{ matrix.component }}
+    needs: changes
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [api-gateway, parser-service, ui]
+    steps:
+      - name: Skip when the component did not change
+        id: gate
+        env:
+          CHANGED: ${{ needs.changes.outputs[matrix.component] }}
+        run: |
+          if [ "$CHANGED" = "true" ] || [ "${{ github.event_name }}" = "push" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        if: steps.gate.outputs.run == 'true'
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build the image without pushing it
+        if: steps.gate.outputs.run == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.component }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+
+  compose:
+    name: Compose configuration
+    needs: changes
+    if: needs.changes.outputs.compose == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    # CI-only values for every variable the Compose files require.
+    env:
+      COMPOSE_PROJECT_NAME: finanzbuddy
+      DB_NAME: finanzbuddy
+      DB_USER: finanzbuddy
+      DB_PASSWORD: finanzbuddy
+      JWT_SECRET: ci-jwt-secret
+      INTERNAL_API_KEY: ci-internal-api-key
+      MINIO_ROOT_USER: ci-minio-user
+      MINIO_ROOT_PASSWORD: ci-minio-password
+      TRAEFIK_DOMAIN: app.example.com
+      TRAEFIK_ACME_EMAIL: ci@example.com
+      FINANZBUDDY_VERSION: 0.0.0-ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate the production stack
+        run: docker compose -f docker-compose.yml config --quiet
+
+      - name: Validate the development stack
+        run: docker compose config --quiet
+
+  openspec:
+    name: OpenSpec
+    needs: changes
+    if: needs.changes.outputs.openspec == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+
+      - name: Validate OpenSpec changes and specs
+        run: npx --yes @fission-ai/openspec@1.13.2 validate --all --strict --no-interactive
+
+  compose-smoke-test:
+    name: Compose smoke test
+    needs: changes
+    if: needs.changes.outputs.compose == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_PROJECT_NAME: finanzbuddy
+      DB_NAME: finanzbuddy
+      DB_USER: finanzbuddy
+      DB_PASSWORD: finanzbuddy
+      JWT_SECRET: ci-jwt-secret
+      INTERNAL_API_KEY: ci-internal-api-key
+      MINIO_ROOT_USER: ci-minio-user
+      MINIO_ROOT_PASSWORD: ci-minio-password
+      TRAEFIK_DOMAIN: app.example.com
+      TRAEFIK_ACME_EMAIL: ci@example.com
+      FINANZBUDDY_VERSION: 0.0.0-ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Seed a legacy SeaweedFS data volume
+        run: |
+          docker volume create finanzbuddy_minio-data
+          docker run --rm             --entrypoint /bin/sh             --volume finanzbuddy_minio-data:/data             chrislusf/seaweedfs:3.99             -ec 'mkdir -p /data/legacy-volume-check && printf legacy > /data/legacy-volume-check/marker'
+
+      - name: Start SeaweedFS and wait for healthcheck
+        run: docker compose up --detach --wait --wait-timeout 120 minio
+
+      - name: Verify upgraded data volume permissions
+        run: |
+          docker compose exec --no-TTY minio sh -ec '
+            test "$(stat -c %u /data)" = "$(id -u seaweed)"
+            test "$(cat /data/legacy-volume-check/marker)" = legacy
+          '
+
+      - name: Show SeaweedFS logs on failure
+        if: failure()
+        run: docker compose logs minio
+
+      - name: Stop services and remove test volumes
+        if: always()
+        run: docker compose down --volumes --remove-orphans
+
+  documentation:
+    name: Documentation integrity
+    needs: changes
+    if: needs.changes.outputs.documentation == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.15'
+
+      - name: Validate Markdown links and OpenSpec map coverage
+        run: python scripts/check_documentation_map.py
+
+  # The single status check that branch protection requires. It reports on every
+  # pull request and push; skipped jobs count as passed.
+  ci:
+    name: ci
+    if: always()
+    needs: [changes, api-gateway, parser-service, ui, image, compose, openspec, compose-smoke-test, documentation]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the results of the needed jobs
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          echo "$RESULTS"
+          if echo "$RESULTS" | grep -q -E '"(failure|cancelled)"'; then
+            echo "At least one job failed or was cancelled." >&2
+            exit 1
+          fi
