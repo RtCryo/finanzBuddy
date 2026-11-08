@@ -26,7 +26,6 @@ jobs:
       ui: ${{ steps.filter.outputs.ui }}
       compose: ${{ steps.filter.outputs.compose }}
       openspec: ${{ steps.filter.outputs.openspec }}
-      documentation: ${{ steps.filter.outputs.documentation }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -56,12 +55,6 @@ jobs:
               - 'release-please-config.json'
             openspec:
               - 'openspec/**'
-              - '.github/workflows/ci.yml'
-              - 'release-please-config.json'
-            documentation:
-              - '**/*.md'
-              - 'openspec/**'
-              - 'scripts/check_documentation_map.py'
               - '.github/workflows/ci.yml'
               - 'release-please-config.json'
 
@@ -288,7 +281,7 @@ jobs:
       - name: Seed a legacy SeaweedFS data volume
         run: |
           docker volume create finanzbuddy_minio-data
-          docker run --rm             --entrypoint /bin/sh             --volume finanzbuddy_minio-data:/data             chrislusf/seaweedfs:3.99             -ec 'mkdir -p /data/legacy-volume-check && printf legacy > /data/legacy-volume-check/marker'
+          docker run --rm \n            --entrypoint /bin/sh \n            --volume finanzbuddy_minio-data:/data \n            chrislusf/seaweedfs:3.99 \n            -ec 'mkdir -p /data/legacy-volume-check && printf legacy > /data/legacy-volume-check/marker'
 
       - name: Start SeaweedFS and wait for healthcheck
         run: docker compose up --detach --wait --wait-timeout 120 minio
@@ -310,8 +303,6 @@ jobs:
 
   documentation:
     name: Documentation integrity
-    needs: changes
-    if: needs.changes.outputs.documentation == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

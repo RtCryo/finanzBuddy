@@ -2,7 +2,7 @@
 
 ## Why
 
-The root change [`add-homebuddy-ci-and-releases`](../../../../openspec/changes/add-homebuddy-ci-and-releases/proposal.md) defines the root capability `homebuddy-delivery`: one CI workflow with a required `ci` gate, Conventional Commits, release-please releases, and production Compose files that run released images. finanzBuddy runs five path-filtered workflows (some still triggered by the long-gone branches `01-api-gateway`, `02-parser-service`, and `03-ui`), builds no Docker image in CI, validates only the development Compose file, never validates OpenSpec, and has no release, so production builds three images from whatever source is checked out.
+The root change [`add-homebuddy-ci-and-releases`](https://github.com/RtCryo/homeBuddy/blob/main/openspec/changes/add-homebuddy-ci-and-releases/proposal.md) defines the root capability `homebuddy-delivery`: one CI workflow with a required `ci` gate, Conventional Commits, release-please releases, and production Compose files that run released images. finanzBuddy runs five path-filtered workflows (some still triggered by the long-gone branches `01-api-gateway`, `02-parser-service`, and `03-ui`), builds no Docker image in CI, validates only the development Compose file, never validates OpenSpec, and has no release, so production builds three images from whatever source is checked out.
 
 ## What Changes
 

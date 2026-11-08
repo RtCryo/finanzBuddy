@@ -1,6 +1,6 @@
 # finanzBuddy
 
-[![API Gateway CI](https://github.com/RtCryo/finanzBuddy/actions/workflows/api-gateway.yml/badge.svg)](https://github.com/RtCryo/finanzBuddy/actions/workflows/api-gateway.yml)
+[![CI](https://github.com/RtCryo/finanzBuddy/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/RtCryo/finanzBuddy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/RtCryo/finanzBuddy/branch/main/graph/badge.svg)](https://codecov.io/gh/RtCryo/finanzBuddy)
 
 finanzBuddy is a personal finance document processing platform. Users upload bank statements through a web UI; the API Gateway stores them securely and publishes events over Kafka, and a parser service extracts and normalizes the transactions.
