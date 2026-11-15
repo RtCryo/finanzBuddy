@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { TagDraft, TransactionTag } from '../types/transaction'
 
 export function TagSelection({ choices, selected, onChange, allowCreate = false, disabled = false, label = 'Tags' }: {
@@ -14,6 +14,22 @@ export function TagSelection({ choices, selected, onChange, allowCreate = false,
   const [query, setQuery] = useState('')
   const [announcement, setAnnouncement] = useState('')
   const [isOpen, setIsOpen] = useState(false)
+  const closeTimeout = useRef<number | undefined>(undefined)
+  function cancelPendingClose() {
+    if (closeTimeout.current !== undefined) {
+      window.clearTimeout(closeTimeout.current)
+      closeTimeout.current = undefined
+    }
+  }
+  function scheduleClose() {
+    cancelPendingClose()
+    closeTimeout.current = window.setTimeout(() => {
+      closeTimeout.current = undefined
+      setIsOpen(false)
+    }, 120)
+  }
+  // A blur shortly before unmount must not leave a timer that outlives the component.
+  useEffect(() => cancelPendingClose, [])
   const normalize = (name: string) => name.trim().toLowerCase()
   const matching = choices.filter(tag => !selected.some(item => normalize(item.name) === normalize(tag.name))
     && normalize(tag.name).includes(normalize(query)))
@@ -55,7 +71,7 @@ export function TagSelection({ choices, selected, onChange, allowCreate = false,
       <input id={`${id}-search`} ref={input} value={query} disabled={disabled} maxLength={255}
         aria-expanded={isOpen} aria-controls={`${id}-choices`} autoComplete="off"
         placeholder={allowCreate ? 'Search or create a tag' : 'Search your tags'}
-        onFocus={() => setIsOpen(true)} onBlur={() => window.setTimeout(() => setIsOpen(false), 120)}
+        onFocus={() => { cancelPendingClose(); setIsOpen(true) }} onBlur={scheduleClose}
         onClick={() => setIsOpen(true)}
         onChange={event => { setQuery(event.target.value); setIsOpen(true) }} onKeyDown={event => {
           if (event.key === 'Enter') { event.preventDefault(); addName() }
