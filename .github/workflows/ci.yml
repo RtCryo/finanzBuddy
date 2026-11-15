@@ -285,7 +285,7 @@ jobs:
             --entrypoint /bin/sh \
             --volume finanzbuddy_minio-data:/data \
             chrislusf/seaweedfs:3.99 \
-            -ec'mkdir -p /data/legacy-volume-check && printf legacy > /data/legacy-volume-check/marker'
+            -ec 'mkdir -p /data/legacy-volume-check && printf legacy > /data/legacy-volume-check/marker'
 
       - name: Start SeaweedFS and wait for healthcheck
         run: docker compose up --detach --wait --wait-timeout 120 minio
