@@ -1,0 +1,19 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "5093b9f10f0a0f75f7b19e7c24055d127c90ecb2",
+  "include-component-in-tag": false,
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "release-as": "1.0.0",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [".env.example"],
+      "changelog-sections": [
+        { "type": "feat", "section": "Features" },
+        { "type": "fix", "section": "Bug fixes" },
+        { "type": "perf", "section": "Performance" },
+        { "type": "revert", "section": "Reverts" }
+      ]
+    }
+  }
+}

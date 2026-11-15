@@ -109,9 +109,7 @@ services:
       start_period: 20s
 
   api-gateway:
-    build:
-      context: ./api-gateway
-      dockerfile: Dockerfile
+    image: ghcr.io/rtcryo/finanzbuddy-api-gateway:${FINANZBUDDY_VERSION:?Set FINANZBUDDY_VERSION to a released version (see .env.example)}
     container_name: finanzbuddy-api-gateway
     depends_on:
       postgres:
@@ -141,9 +139,7 @@ services:
       - finanzbuddy-metrics
 
   parser-service:
-    build:
-      context: ./parser-service
-      dockerfile: Dockerfile
+    image: ghcr.io/rtcryo/finanzbuddy-parser-service:${FINANZBUDDY_VERSION:?Set FINANZBUDDY_VERSION to a released version (see .env.example)}
     container_name: finanzbuddy-parser-service
     depends_on:
       postgres:
@@ -176,9 +172,7 @@ services:
       - finanzbuddy-metrics
 
   ui:
-    build:
-      context: ./ui
-      dockerfile: Dockerfile
+    image: ghcr.io/rtcryo/finanzbuddy-ui:${FINANZBUDDY_VERSION:?Set FINANZBUDDY_VERSION to a released version (see .env.example)}
     container_name: finanzbuddy-ui
     depends_on:
       api-gateway:

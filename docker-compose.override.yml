@@ -1,4 +1,6 @@
 # Local-development overrides, loaded automatically by `docker compose`.
+# Builds the application components from the working tree and tags them
+# finanzbuddy-<component>:dev, so a local build never shadows a released image.
 # Restores direct localhost host ports for the application and infrastructure
 # services so they can be reached from the host during development. The
 # production deployment intentionally omits this file (see README), so those
@@ -18,9 +20,23 @@ services:
       - "9000:9000"
 
   api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    image: finanzbuddy-api-gateway:dev
     ports:
       - "8080:8080"
 
   ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    image: finanzbuddy-ui:dev
     ports:
       - "3000:80"
+
+  parser-service:
+    build:
+      context: ./parser-service
+      dockerfile: Dockerfile
+    image: finanzbuddy-parser-service:dev
