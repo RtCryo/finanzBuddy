@@ -281,7 +281,11 @@ jobs:
       - name: Seed a legacy SeaweedFS data volume
         run: |
           docker volume create finanzbuddy_minio-data
-          docker run --rm \n            --entrypoint /bin/sh \n            --volume finanzbuddy_minio-data:/data \n            chrislusf/seaweedfs:3.99 \n            -ec 'mkdir -p /data/legacy-volume-check && printf legacy > /data/legacy-volume-check/marker'
+          docker run --rm \
+            --entrypoint /bin/sh \
+            --volume finanzbuddy_minio-data:/data \
+            chrislusf/seaweedfs:3.99 \
+            -ec'mkdir -p /data/legacy-volume-check && printf legacy > /data/legacy-volume-check/marker'
 
       - name: Start SeaweedFS and wait for healthcheck
         run: docker compose up --detach --wait --wait-timeout 120 minio
