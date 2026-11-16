@@ -13,6 +13,20 @@ import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import com.sun.net.httpserver.HttpServer;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationHandler;
+import io.micrometer.observation.ObservationRegistry;
+import io.micrometer.tracing.Tracer;
+import io.micrometer.tracing.handler.DefaultTracingObservationHandler;
+import io.micrometer.tracing.handler.PropagatingSenderTracingObservationHandler;
+import io.micrometer.tracing.handler.TracingObservationHandler;
+import io.micrometer.tracing.otel.bridge.OtelCurrentTraceContext;
+import io.micrometer.tracing.otel.bridge.OtelPropagator;
+import io.micrometer.tracing.otel.bridge.OtelTracer;
+import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
+import io.opentelemetry.context.propagation.ContextPropagators;
+import io.opentelemetry.sdk.OpenTelemetrySdk;
+import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -83,15 +97,107 @@ class HomeBuddyJwtDecoderTest {
         }
     }
 
+    @Test
+    @org.junit.jupiter.api.Timeout(
+            value = 20,
+            threadMode = org.junit.jupiter.api.Timeout.ThreadMode.SEPARATE_THREAD)
+    void jwksFetchGivesUpWhenAuthBuddyStopsAnswering() throws Exception {
+        try (java.net.ServerSocket silent =
+                new java.net.ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress())) {
+            // Accepts the connection (backlog) but never sends a response.
+            JwtDecoder decoder =
+                    SecurityConfig.homeBuddyDecoder(
+                            "http://127.0.0.1:" + silent.getLocalPort() + "/jwks",
+                            "homebuddy-auth",
+                            ObservationRegistry.NOOP,
+                            java.time.Duration.ofMillis(500));
+            String token = token(key("silent"), "homebuddy-auth", "finanzbuddy");
+
+            long started = System.nanoTime();
+            assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(Exception.class);
+            assertThat(java.time.Duration.ofNanos(System.nanoTime() - started))
+                    .isLessThan(java.time.Duration.ofSeconds(10));
+        }
+    }
+
+    @Test
+    void jwksClientKeepsAFiniteTimeout() {
+        assertThat(SecurityConfig.JWKS_TIMEOUT).isEqualTo(java.time.Duration.ofSeconds(30));
+    }
+
     private RSAKey key(String kid) throws Exception {
         return new RSAKeyGenerator(2048).keyID(kid).generate();
     }
 
     private JwtDecoder decoder(HttpServer server) {
-        return new SecurityConfig()
-                .jwtDecoder(
-                        "http://127.0.0.1:" + server.getAddress().getPort() + "/jwks",
-                        "homebuddy-auth");
+        return SecurityConfig.homeBuddyDecoder(
+                "http://127.0.0.1:" + server.getAddress().getPort() + "/jwks",
+                "homebuddy-auth",
+                ObservationRegistry.NOOP);
+    }
+
+    @Test
+    void jwksFetchCarriesTheTraceOfTheValidatingRequest() throws Exception {
+        RSAKey key = key("traced");
+        AtomicReference<String> traceparent = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext(
+                "/jwks",
+                exchange -> {
+                    traceparent.set(exchange.getRequestHeaders().getFirst("traceparent"));
+                    byte[] body =
+                            new JWKSet(key.toPublicJWK())
+                                    .toString()
+                                    .getBytes(StandardCharsets.UTF_8);
+                    exchange.getResponseHeaders().set("Content-Type", "application/json");
+                    exchange.sendResponseHeaders(200, body.length);
+                    try (var output = exchange.getResponseBody()) {
+                        output.write(body);
+                    }
+                });
+        server.start();
+        SdkTracerProvider provider = SdkTracerProvider.builder().build();
+        try {
+            OpenTelemetrySdk openTelemetry =
+                    OpenTelemetrySdk.builder()
+                            .setTracerProvider(provider)
+                            .setPropagators(
+                                    ContextPropagators.create(
+                                            W3CTraceContextPropagator.getInstance()))
+                            .build();
+            io.opentelemetry.api.trace.Tracer otelTracer = openTelemetry.getTracer("test");
+            Tracer tracer = new OtelTracer(otelTracer, new OtelCurrentTraceContext(), event -> {});
+            ObservationRegistry registry = ObservationRegistry.create();
+            registry.observationConfig()
+                    .observationHandler(
+                            new ObservationHandler.FirstMatchingCompositeObservationHandler(
+                                    new PropagatingSenderTracingObservationHandler<>(
+                                            tracer,
+                                            new OtelPropagator(
+                                                    openTelemetry.getPropagators(), otelTracer)),
+                                    new DefaultTracingObservationHandler(tracer)));
+            JwtDecoder decoder =
+                    SecurityConfig.homeBuddyDecoder(
+                            "http://127.0.0.1:" + server.getAddress().getPort() + "/jwks",
+                            "homebuddy-auth",
+                            registry);
+
+            Observation request = Observation.start("request", registry);
+            try (Observation.Scope ignored = request.openScope()) {
+                decoder.decode(token(key, "homebuddy-auth", "finanzbuddy"));
+            } finally {
+                request.stop();
+            }
+
+            TracingObservationHandler.TracingContext tracing =
+                    request.getContext()
+                            .getRequired(TracingObservationHandler.TracingContext.class);
+            String traceId = tracing.getSpan().context().traceId();
+            assertThat(traceparent.get()).startsWith("00-" + traceId + "-");
+        } finally {
+            server.stop(0);
+            provider.close();
+        }
     }
 
     private HttpServer server(AtomicReference<JWKSet> published) throws Exception {

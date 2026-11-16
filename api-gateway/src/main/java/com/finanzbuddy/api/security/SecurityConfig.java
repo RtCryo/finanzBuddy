@@ -2,14 +2,17 @@ package com.finanzbuddy.api.security;
 
 import com.finanzbuddy.api.entity.User;
 import com.finanzbuddy.api.security.apikey.InternalApiKeyAuthFilter;
+import io.micrometer.observation.ObservationRegistry;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -31,6 +34,7 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.client.RestTemplate;
 
 @Configuration
 @EnableWebSecurity
@@ -75,10 +79,41 @@ public class SecurityConfig {
     @Bean
     JwtDecoder jwtDecoder(
             @Value("${app.auth.jwks-uri}") String jwksUri,
-            @Value("${app.auth.issuer}") String issuer) {
+            @Value("${app.auth.issuer}") String issuer,
+            ObjectProvider<ObservationRegistry> observationRegistry) {
+        return homeBuddyDecoder(
+                jwksUri,
+                issuer,
+                observationRegistry.getIfAvailable(() -> ObservationRegistry.NOOP));
+    }
+
+    /**
+     * Connect and read timeout of the JWKS client: the 30 seconds Nimbus' own client used, so a
+     * hanging authBuddy cannot hold a request thread forever.
+     */
+    static final Duration JWKS_TIMEOUT = Duration.ofSeconds(30);
+
+    static JwtDecoder homeBuddyDecoder(
+            String jwksUri, String issuer, ObservationRegistry observationRegistry) {
+        return homeBuddyDecoder(jwksUri, issuer, observationRegistry, JWKS_TIMEOUT);
+    }
+
+    static JwtDecoder homeBuddyDecoder(
+            String jwksUri,
+            String issuer,
+            ObservationRegistry observationRegistry,
+            Duration timeout) {
+        // An observed client makes the JWKS fetch a client span of the request that triggered it
+        // and sends the trace context to authBuddy (homebuddy-tracing).
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(timeout);
+        requestFactory.setReadTimeout(timeout);
+        RestTemplate jwksClient = new RestTemplate(requestFactory);
+        jwksClient.setObservationRegistry(observationRegistry);
         NimbusJwtDecoder decoder =
                 NimbusJwtDecoder.withJwkSetUri(jwksUri)
                         .jwsAlgorithm(SignatureAlgorithm.RS256)
+                        .restOperations(jwksClient)
                         .build();
         decoder.setJwtValidator(
                 new DelegatingOAuth2TokenValidator<>(

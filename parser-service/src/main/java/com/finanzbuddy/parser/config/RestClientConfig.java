@@ -1,7 +1,9 @@
 package com.finanzbuddy.parser.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.observation.ObservationRegistry;
 import java.time.Duration;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -18,13 +20,23 @@ public class RestClientConfig {
         return new ObjectMapper().findAndRegisterModules();
     }
 
+    /**
+     * Spring Boot 4 auto-configures a {@code RestClient.Builder} only with its REST client module,
+     * which this service does not use, so the builder is defined here. It carries the observation
+     * registry, so every status callback is a client span of the current trace and sends the {@code
+     * traceparent} header to the API Gateway (homebuddy-tracing).
+     */
     @Bean
     public RestClient.Builder restClientBuilder(
             @Value("${parser.gateway.connect-timeout:5s}") Duration connectTimeout,
-            @Value("${parser.gateway.read-timeout:30s}") Duration readTimeout) {
+            @Value("${parser.gateway.read-timeout:30s}") Duration readTimeout,
+            ObjectProvider<ObservationRegistry> observationRegistry) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(connectTimeout);
         factory.setReadTimeout(readTimeout);
-        return RestClient.builder().requestFactory(factory);
+        return RestClient.builder()
+                .requestFactory(factory)
+                .observationRegistry(
+                        observationRegistry.getIfAvailable(() -> ObservationRegistry.NOOP));
     }
 }

@@ -32,6 +32,8 @@ Configuration is read from `application.yml` and can be overridden with environm
 | `INTERNAL_API_KEY` | Shared internal API key | (empty) |
 | `GATEWAY_CONNECT_TIMEOUT` | HTTP connect timeout | `5s` |
 | `GATEWAY_READ_TIMEOUT` | HTTP read timeout | `30s` |
+| `MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT` | OTLP/HTTP endpoint for traces; unset exports nothing (see [tracing](../docs/ARCHITECTURE.md#tracing)) | unset; Compose sets `http://homebuddy-alloy:4318/v1/traces` |
+| `MANAGEMENT_TRACING_SAMPLING_PROBABILITY` | Share of traces the parser starts itself; consumed records follow the gateway's decision. Compose reads `PARSER_SERVICE_TRACING_SAMPLING_PROBABILITY` | `1.0` |
 | `PARSER_FORMAT_CSV` | Enable CSV consumer | `true` |
 | `PARSER_FORMAT_PDF` | Enable PDF consumer | `false` |
 | `PARSER_FORMAT_XML` | Enable XML consumer | `false` |

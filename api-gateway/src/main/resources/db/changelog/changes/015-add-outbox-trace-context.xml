@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!--
+        W3C traceparent of the upload request that wrote the event (55 characters), so the relay
+        publishes the event in the upload's trace (homebuddy-tracing). Null for events written
+        outside a trace and before this change; those are published in a new trace.
+    -->
+    <changeSet id="015-add-outbox-trace-context" author="api-gateway">
+        <addColumn tableName="outbox_events">
+            <column name="trace_parent" type="VARCHAR(55)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="outbox_events" columnName="trace_parent"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

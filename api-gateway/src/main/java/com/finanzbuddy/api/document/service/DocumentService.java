@@ -12,6 +12,7 @@ import com.finanzbuddy.api.document.dto.RelatedExpensePageResponse;
 import com.finanzbuddy.api.document.dto.TransactionHistoryResponse;
 import com.finanzbuddy.api.document.dto.TransactionResponse;
 import com.finanzbuddy.api.document.metrics.DocumentUploadMetrics;
+import com.finanzbuddy.api.document.outbox.OutboxTraceContext;
 import com.finanzbuddy.api.entity.Document;
 import com.finanzbuddy.api.entity.DocumentStatus;
 import com.finanzbuddy.api.entity.OutboxEvent;
@@ -73,6 +74,7 @@ public class DocumentService {
     private final String bucket;
     private final String topicPrefix;
     private final Set<DocumentType> acceptedTypes;
+    private final OutboxTraceContext outboxTraceContext;
 
     public DocumentService(
             MinioClient minioClient,
@@ -87,7 +89,8 @@ public class DocumentService {
             PlatformTransactionManager txManager,
             @Value("${app.minio.bucket}") String bucket,
             @Value("${app.kafka.document-topic-prefix}") String topicPrefix,
-            @Value("${app.upload.accepted-types:CSV}") Set<DocumentType> acceptedTypes) {
+            @Value("${app.upload.accepted-types:CSV}") Set<DocumentType> acceptedTypes,
+            OutboxTraceContext outboxTraceContext) {
         this.minioClient = minioClient;
         this.documentRepository = documentRepository;
         this.userRepository = userRepository;
@@ -101,6 +104,7 @@ public class DocumentService {
         this.bucket = bucket;
         this.topicPrefix = topicPrefix;
         this.acceptedTypes = acceptedTypes;
+        this.outboxTraceContext = outboxTraceContext;
     }
 
     public DocumentResponse uploadDocument(long userId, MultipartFile file, String type) {
@@ -458,7 +462,11 @@ public class DocumentService {
                     "Failed to serialize DocumentUploadedEvent for document " + document.getId(),
                     e);
         }
-        outboxEventRepository.save(new OutboxEvent(document.getId(), topic, payload));
+        // The relay publishes later, outside this request; the stored context keeps the publish
+        // in the upload's trace.
+        outboxEventRepository.save(
+                new OutboxEvent(
+                        document.getId(), topic, payload, outboxTraceContext.currentTraceParent()));
     }
 
     private void removeStoredObject(String storagePath) {

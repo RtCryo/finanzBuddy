@@ -80,7 +80,11 @@ public class KafkaConfig {
     @ConditionalOnMissingBean(KafkaTemplate.class)
     public KafkaTemplate<String, Object> kafkaTemplate(
             ProducerFactory<String, Object> producerFactory) {
-        return new KafkaTemplate<>(producerFactory);
+        KafkaTemplate<String, Object> template = new KafkaTemplate<>(producerFactory);
+        // This template is built here, so spring.kafka.template.observation-enabled does not reach
+        // it. Observed, it carries the trace context into dead-letter records (homebuddy-tracing).
+        template.setObservationEnabled(true);
+        return template;
     }
 
     @Bean
@@ -130,6 +134,10 @@ public class KafkaConfig {
         ConcurrentKafkaListenerContainerFactory<String, DocumentUploadedEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory);
+        // The listener continues the trace from the record's traceparent header, so upload,
+        // parsing, and status callback form one trace (homebuddy-tracing). This factory is built
+        // here, so spring.kafka.listener.observation-enabled does not reach it.
+        factory.getContainerProperties().setObservationEnabled(true);
         DefaultErrorHandler errorHandler =
                 new DefaultErrorHandler(
                         deadLetterPublishingRecoverer,

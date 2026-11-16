@@ -2,6 +2,8 @@ package com.finanzbuddy.api.document.outbox;
 
 import com.finanzbuddy.api.entity.OutboxEvent;
 import com.finanzbuddy.api.repository.OutboxEventRepository;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -33,6 +35,7 @@ public class OutboxRelay {
     private final KafkaTemplate<Object, Object> kafkaTemplate;
     private final TransactionTemplate txTemplate;
     private final OutboxMetrics outboxMetrics;
+    private final OutboxTraceContext traceContext;
     private final int batchSize;
     private final long sendTimeoutMs;
     private final int maxAttempts;
@@ -44,6 +47,7 @@ public class OutboxRelay {
             KafkaTemplate<Object, Object> kafkaTemplate,
             PlatformTransactionManager txManager,
             OutboxMetrics outboxMetrics,
+            OutboxTraceContext traceContext,
             @Value("${app.outbox.batch-size:100}") int batchSize,
             @Value("${app.outbox.send-timeout-ms:3000}") long sendTimeoutMs,
             @Value("${app.outbox.max-attempts:10}") int maxAttempts,
@@ -53,6 +57,7 @@ public class OutboxRelay {
         this.kafkaTemplate = kafkaTemplate;
         this.txTemplate = new TransactionTemplate(txManager);
         this.outboxMetrics = outboxMetrics;
+        this.traceContext = traceContext;
         this.batchSize = batchSize;
         this.sendTimeoutMs = sendTimeoutMs;
         this.maxAttempts = maxAttempts;
@@ -78,29 +83,37 @@ public class OutboxRelay {
     }
 
     private void publishOne(OutboxEvent event) {
-        // Send the durably stored JSON payload verbatim (StringSerializer) so the bytes on the wire
-        // are exactly the bytes committed to the outbox — no re-serialization and no Java-class
-        // type
-        // headers that would couple consumers to this module's package. The aggregate id is the
-        // partition key so all events for one document keep their relative order.
-        try {
-            kafkaTemplate
-                    .send(
-                            event.getTopic(),
-                            String.valueOf(event.getAggregateId()),
-                            event.getPayload())
-                    .get(sendTimeoutMs, TimeUnit.MILLISECONDS);
-        } catch (Exception e) {
-            recordFailure(event, e);
-            return;
-        }
+        // Each event is published in the trace of the upload that wrote it (homebuddy-tracing);
+        // the observed KafkaTemplate adds a producer span and the traceparent record header.
+        Span span = traceContext.startPublishSpan(event);
+        try (Tracer.SpanInScope ignored = traceContext.withSpan(span)) {
+            // Send the durably stored JSON payload verbatim (StringSerializer) so the bytes on the
+            // wire are exactly the bytes committed to the outbox — no re-serialization and no
+            // Java-class type headers that would couple consumers to this module's package. The
+            // aggregate id is the partition key so all events for one document keep their
+            // relative order.
+            try {
+                kafkaTemplate
+                        .send(
+                                event.getTopic(),
+                                String.valueOf(event.getAggregateId()),
+                                event.getPayload())
+                        .get(sendTimeoutMs, TimeUnit.MILLISECONDS);
+            } catch (Exception e) {
+                span.error(e);
+                recordFailure(event, e);
+                return;
+            }
 
-        markPublished(event.getId());
-        log.info(
-                "Published outbox event {} to topic {} for document {}",
-                event.getId(),
-                event.getTopic(),
-                event.getAggregateId());
+            markPublished(event.getId());
+            log.info(
+                    "Published outbox event {} to topic {} for document {}",
+                    event.getId(),
+                    event.getTopic(),
+                    event.getAggregateId());
+        } finally {
+            span.end();
+        }
     }
 
     private void recordFailure(OutboxEvent event, Exception cause) {

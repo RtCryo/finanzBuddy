@@ -93,6 +93,30 @@ Gateway migration 011 adds owner-scoped rules, ordered conditions, and per-rule 
 5. The parser reports `PROCESSING`, `PROCESSED`, or `FAILED` to `PUT /internal/documents/{id}/status` using `X-Internal-Api-Key`; `PROCESSED` carries the optional `savedTransactions` and `skippedDuplicates` counts. On the first `PROCESSING` to `PROCESSED` report, the gateway locks the owner and document, evaluates that owner's current rules against the committed imported rows, and commits contributions, effective assignments, and status together. If application fails, the status remains `PROCESSING` and the parser's status retry can repeat the call. Duplicate `PROCESSED` reports do not rerun rules. The gateway retains failure detail only for `FAILED` and can enqueue another upload event when a failed document is reset to `PENDING`.
 6. The UI polls document/dashboard data while relevant screens are open and queries processed transactions through the gateway. User-facing reads are scoped to the authenticated owner.
 
+Every upload forms one trace across these steps (see [Tracing](#tracing)).
+
+## Tracing
+
+Both application components record traces with Spring Boot's OpenTelemetry starter and send them with OTLP over HTTP to the central collector `homebuddy-alloy:4318` over `finanzbuddy-metrics` (root capability [`homebuddy-tracing`](https://github.com/RtCryo/homeBuddy/blob/main/openspec/specs/homebuddy-tracing/spec.md)). Resource attributes: `service.name` = `finanzbuddy-api-gateway` or `finanzbuddy-parser-service`, `service.namespace = finanzbuddy`.
+
+```
+upload request (api-gateway, server span)
+  ├─ JWKS fetch to authBuddy (client span, first validation only)
+  └─ outbox row with the request's W3C traceparent (column outbox_events.trace_parent)
+outbox publish (api-gateway, child of the stored context; scheduled relay)
+  └─ Kafka send documents.{type} (producer span, traceparent record header)
+       └─ Kafka receive (parser-service, consumer span)
+            └─ PUT /internal/documents/{id}/status (client span) ─► api-gateway server span
+```
+
+- **Outbox.** `DocumentService` stores the current `traceparent` with the event (`OutboxTraceContext`); `OutboxRelay` publishes each event in an `outbox publish` span whose parent is that context, or in a new trace when it is empty (events written before migration 015 or outside a trace). The event payload is unchanged.
+- **Kafka.** The gateway's auto-configured `KafkaTemplate` is observed through `spring.kafka.template.observation-enabled`; the parser's own listener container factory and dead-letter template enable observation in `KafkaConfig`. Records carry the trace context in their headers, and the parser follows the gateway's sampling decision.
+- **HTTP clients.** The gateway's JWKS `RestTemplate` (30 s connect and read timeout) and the parser's `RestClient.Builder` (`RestClientConfig`, used by `GatewayStatusClient`) carry the observation registry, so both calls are client spans that send `traceparent`.
+- **Filtered spans.** `TracingConfiguration` in each component keeps `/actuator/**` out of the traces; the gateway also drops the spans of `@Scheduled` runs (outbox poll, reconciler, retention, metrics refresh) and Spring Security's spans inside actuator requests. Observations still run, so HTTP and task metrics are unchanged.
+- **Configuration.** `application.yml` sets sampling to 1.0, the resource attributes, and switches off the starter's OTLP metrics and log export. The export endpoint is set only in `docker-compose.yml`, so tests and host runs export nothing. `API_GATEWAY_TRACING_SAMPLING_PROBABILITY` and `PARSER_SERVICE_TRACING_SAMPLING_PROBABILITY` in `.env` lower sampling.
+- **Logs and privacy.** The default console pattern carries `[<traceId>-<spanId>]` inside a trace. Spans hold routes, topics, partitions, and the record key (document id); never tokens, the internal API key, file names or contents, transaction fields, or amounts. Exception messages can quote document content (a parser error names the CSV value it could not read), so `SanitizingSpanExporter` in each component wraps every span exporter: exported spans lose their status description, and exception events keep only `exception.type`. The full error stays in the log, which links to the trace.
+- **Outages.** Spans that cannot be exported are dropped with a log message; uploads, parsing, and status updates are unaffected.
+
 ## HTTP interface
 
 Rule create and update requests accept an existing owned tag ID or a new tag name. The Gateway resolves a new name and saves the rule within one transaction, so failures roll back both.
@@ -138,7 +162,7 @@ The exact dependency versions and environment-variable defaults live in `ui/pack
 
 For local development, create the external `homebuddy` network and the internal `finanzbuddy-identity` and `finanzbuddy-metrics` networks (`docker network create --internal finanzbuddy-identity` and `docker network create --internal finanzbuddy-metrics`), start authBuddy, create `.env` from `.env.example`, and run `docker compose up --build` from this repository root. The stack fails to start with a message naming the missing network if either is absent. `docker-compose.override.yml` is loaded automatically and publishes local ports for PostgreSQL (`5432`), Kafka (`29092`), SeaweedFS S3 (`9000`), the gateway (`8080`), UI (`3000`). Prometheus (`9090`) and Grafana (`3001`) belong to the root homeBuddy stack.
 
-For a shared host, the root homeBuddy stack provides the only Traefik on ports 80/443. The finanzBuddy UI has labels for `TRAEFIK_DOMAIN` and `traefik.docker.network=homebuddy`; it joins that network as `finanzbuddy-ui`. The gateway does not join `homebuddy`: it reaches authBuddy's JWKS as `auth` over the internal `finanzbuddy-identity` network, shared only with authBuddy, so no other stack can reach it, while product data services stay on the private Compose network. The service-local `production` Traefik profile is for standalone deployment only. The exporter and application services are not published as host ports in production; the central Prometheus reaches the gateway, parser, and exporter over `finanzbuddy-metrics`.
+For a shared host, the root homeBuddy stack provides the only Traefik on ports 80/443. The finanzBuddy UI has labels for `TRAEFIK_DOMAIN` and `traefik.docker.network=homebuddy`; it joins that network as `finanzbuddy-ui`. The gateway does not join `homebuddy`: it reaches authBuddy's JWKS as `auth` over the internal `finanzbuddy-identity` network, shared only with authBuddy, so no other stack can reach it, while product data services stay on the private Compose network. The service-local `production` Traefik profile is for standalone deployment only. The exporter and application services are not published as host ports in production; the central Prometheus reaches the gateway, parser, and exporter over `finanzbuddy-metrics`, and the gateway and parser send traces to the central collector over the same network.
 
 ## Delivery and releases
 

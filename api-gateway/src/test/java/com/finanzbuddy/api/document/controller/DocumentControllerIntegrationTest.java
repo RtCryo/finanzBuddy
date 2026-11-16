@@ -3,6 +3,7 @@ package com.finanzbuddy.api.document.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
@@ -29,6 +30,9 @@ import com.finanzbuddy.api.security.HomeBuddyAccountResolver;
 import com.finanzbuddy.api.security.apikey.InternalApiKeyAuthFilter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.TraceContext;
+import io.micrometer.tracing.Tracer;
 import io.minio.GetObjectArgs;
 import io.minio.GetObjectResponse;
 import io.minio.MinioClient;
@@ -40,6 +44,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import okhttp3.Headers;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
@@ -82,6 +87,8 @@ class DocumentControllerIntegrationTest {
     @MockitoBean private JwtDecoder jwtDecoder;
 
     @Autowired private MeterRegistry meterRegistry;
+
+    @Autowired private Tracer tracer;
 
     private MockMvc mockMvc;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -175,6 +182,54 @@ class DocumentControllerIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{\"removeExisting\":true}"))
                 .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void uploadStoresItsTraceContextAndTheRelayPublishesInThatTrace() throws Exception {
+        String token = registerAndLogin("traced-upload@example.com", "password123");
+        MockMultipartFile file =
+                new MockMultipartFile(
+                        "file", "traced.csv", "text/csv", "name,amount\nTest,100".getBytes());
+
+        // MockMvc runs the request on this thread, so this span is the upload request's span.
+        Span upload = tracer.nextSpan().name("upload request").start();
+        MvcResult result;
+        try (Tracer.SpanInScope ignored = tracer.withSpan(upload)) {
+            result =
+                    mockMvc.perform(
+                                    multipart("/documents")
+                                            .file(file)
+                                            .param("type", "CSV")
+                                            .header("Authorization", "Bearer " + token))
+                            .andExpect(status().isCreated())
+                            .andReturn();
+        } finally {
+            upload.end();
+        }
+        long documentId =
+                objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asLong();
+
+        // The stored context is a span of the upload's trace (the innermost span at the time the
+        // service ran, such as Spring Security's), sampled.
+        String traceParent = findOutboxEvent(documentId).getTraceParent();
+        assertThat(traceParent).matches("00-" + upload.context().traceId() + "-[0-9a-f]{16}-0[13]");
+        String storedSpanId = traceParent.split("-")[2];
+
+        AtomicReference<TraceContext> sendContext = new AtomicReference<>();
+        doAnswer(
+                        invocation -> {
+                            sendContext.set(tracer.currentTraceContext().context());
+                            return CompletableFuture.completedFuture(null);
+                        })
+                .when(kafkaTemplate)
+                .send(any(), any(), any());
+        outboxRelay.publishPending();
+
+        // The send runs in the outbox publish span, a child of the upload request's span.
+        assertThat(sendContext.get()).isNotNull();
+        assertThat(sendContext.get().traceId()).isEqualTo(upload.context().traceId());
+        assertThat(sendContext.get().parentId()).isEqualTo(storedSpanId);
+        assertThat(findOutboxEvent(documentId).getPublishedAt()).isNotNull();
     }
 
     @Test
