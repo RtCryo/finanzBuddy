@@ -10,10 +10,10 @@ The root change [`add-homebuddy-tracing`](https://github.com/RtCryo/homeBuddy/bl
 - Resource attributes: `service.name = finanzbuddy-api-gateway` and `finanzbuddy-parser-service`, `service.namespace = finanzbuddy`.
 - Traced calls:
   - incoming HTTP requests of both components (except `/actuator/**`);
-  - `api-gateway`'s JWKS fetch from authBuddy, through a `RestTemplate` from Spring Boot's observed builder;
+  - `api-gateway`'s JWKS fetch from authBuddy, through a `RestTemplate` that uses the application's observation registry;
   - the outbox: the upload request stores its W3C `traceparent` in a new nullable column `trace_parent` of `outbox_events`, and `OutboxRelay` publishes each event inside an `outbox publish` span whose parent is that context, so the publish belongs to the upload's trace;
   - Kafka: `api-gateway`'s producer and `parser-service`'s listener and dead-letter producer are observed and carry trace context in record headers;
-  - the status callback: `parser-service`'s `RestClientConfig` stops building its own `RestClient.Builder` from `RestClient.builder()` and only customizes Spring Boot's injected, observed builder, so `GatewayStatusClient` calls are client spans in the trace.
+  - the status callback: `parser-service`'s `RestClientConfig` gives the `RestClient.Builder` that `GatewayStatusClient` is injected with the application's observation registry (Spring Boot 4 auto-configures an observed builder only with its separate REST client module), so status callbacks are client spans in the trace.
 - Scheduled jobs do not create a trace per poll: spans of `@Scheduled` executions are not exported, and only the per-event outbox spans are.
 - Every log line written inside a trace keeps Spring Boot's default console pattern and carries `[<traceId>-<spanId>]`; neither component sets its own console pattern.
 - Sampling probability 1.0 by default; operators lower it per component with `API_GATEWAY_TRACING_SAMPLING_PROBABILITY` and `PARSER_SERVICE_TRACING_SAMPLING_PROBABILITY`.
@@ -36,7 +36,7 @@ The root change [`add-homebuddy-tracing`](https://github.com/RtCryo/homeBuddy/bl
 
 ## Impact
 
-- `api-gateway`: `pom.xml`, `application.yml`, `SecurityConfig` (JWKS client), `OutboxEvent`, `DocumentService`, `OutboxRelay`, Liquibase changeset `015-add-outbox-trace-context.xml` with rollback, span export filter, tests.
+- `api-gateway`: `pom.xml`, `application.yml`, `SecurityConfig` (JWKS client), `OutboxEvent`, `OutboxTraceContext`, `DocumentService`, `OutboxRelay`, Liquibase changeset `015-add-outbox-trace-context.xml` with rollback, span export filters, tests.
 - `parser-service`: `pom.xml`, `application.yml`, `RestClientConfig`, `KafkaConfig` (observation on the listener container factory and template), span export filter, tests.
 - `docker-compose.yml`, `.env.example`, `docs/ARCHITECTURE.md`, `docs/README.md`, module READMEs where they describe configuration.
 - No new network, port, or secret.

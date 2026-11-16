@@ -20,4 +20,5 @@
     <include file="classpath:/db/changelog/changes/012-link-homebuddy-accounts.xml"/>
     <include file="classpath:/db/changelog/changes/013-drop-users-email-uniqueness.xml"/>
     <include file="classpath:/db/changelog/changes/014-add-document-deduplication-counts.xml"/>
+    <include file="classpath:/db/changelog/changes/015-add-outbox-trace-context.xml"/>
 </databaseChangeLog>

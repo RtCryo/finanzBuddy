@@ -2,9 +2,11 @@ package com.finanzbuddy.api.security;
 
 import com.finanzbuddy.api.entity.User;
 import com.finanzbuddy.api.security.apikey.InternalApiKeyAuthFilter;
+import io.micrometer.observation.ObservationRegistry;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,6 +33,7 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.client.RestTemplate;
 
 @Configuration
 @EnableWebSecurity
@@ -75,10 +78,24 @@ public class SecurityConfig {
     @Bean
     JwtDecoder jwtDecoder(
             @Value("${app.auth.jwks-uri}") String jwksUri,
-            @Value("${app.auth.issuer}") String issuer) {
+            @Value("${app.auth.issuer}") String issuer,
+            ObjectProvider<ObservationRegistry> observationRegistry) {
+        return homeBuddyDecoder(
+                jwksUri,
+                issuer,
+                observationRegistry.getIfAvailable(() -> ObservationRegistry.NOOP));
+    }
+
+    static JwtDecoder homeBuddyDecoder(
+            String jwksUri, String issuer, ObservationRegistry observationRegistry) {
+        // An observed client makes the JWKS fetch a client span of the request that triggered it
+        // and sends the trace context to authBuddy (homebuddy-tracing).
+        RestTemplate jwksClient = new RestTemplate();
+        jwksClient.setObservationRegistry(observationRegistry);
         NimbusJwtDecoder decoder =
                 NimbusJwtDecoder.withJwkSetUri(jwksUri)
                         .jwsAlgorithm(SignatureAlgorithm.RS256)
+                        .restOperations(jwksClient)
                         .build();
         decoder.setJwtValidator(
                 new DelegatingOAuth2TokenValidator<>(

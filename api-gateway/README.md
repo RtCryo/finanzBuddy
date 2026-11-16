@@ -46,6 +46,8 @@ This starts PostgreSQL, Kafka, SeaweedFS (S3-compatible object storage), and the
 | `INTERNAL_API_KEY` | Shared key for internal service endpoints (`/internal/**`) | **required, no default** — `/internal/**` is locked until set |
 | `OUTBOX_POLL_INTERVAL_MS` | Interval the outbox relay polls for undelivered events | `5000` |
 | `UPLOAD_ACCEPTED_TYPES` | Comma-separated document types accepted for upload | `CSV` |
+| `MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT` | OTLP/HTTP endpoint for traces; unset exports nothing (see [tracing](../docs/ARCHITECTURE.md#tracing)) | unset; Compose sets `http://homebuddy-alloy:4318/v1/traces` |
+| `MANAGEMENT_TRACING_SAMPLING_PROBABILITY` | Share of requests traced; Compose reads `API_GATEWAY_TRACING_SAMPLING_PROBABILITY` | `1.0` |
 
 ## API Endpoints
 

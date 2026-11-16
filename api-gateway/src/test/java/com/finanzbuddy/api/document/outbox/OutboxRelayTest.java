@@ -36,6 +36,7 @@ class OutboxRelayTest {
                 kafkaTemplate,
                 txManager,
                 outboxMetrics,
+                OutboxTraceContext.noop(),
                 100,
                 1000L,
                 maxAttempts,

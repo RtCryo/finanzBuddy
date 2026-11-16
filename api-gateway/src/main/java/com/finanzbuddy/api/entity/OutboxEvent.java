@@ -41,12 +41,21 @@ public class OutboxEvent {
     @Column(nullable = false)
     private int attempts;
 
+    /** W3C traceparent of the request that wrote the event, or null outside a trace. */
+    @Column(name = "trace_parent", length = 55)
+    private String traceParent;
+
     protected OutboxEvent() {}
 
     public OutboxEvent(Long aggregateId, String topic, String payload) {
+        this(aggregateId, topic, payload, null);
+    }
+
+    public OutboxEvent(Long aggregateId, String topic, String payload, String traceParent) {
         this.aggregateId = aggregateId;
         this.topic = topic;
         this.payload = payload;
+        this.traceParent = traceParent;
     }
 
     @PrePersist
@@ -74,6 +83,10 @@ public class OutboxEvent {
 
     public Long getId() {
         return id;
+    }
+
+    public String getTraceParent() {
+        return traceParent;
     }
 
     public Long getAggregateId() {

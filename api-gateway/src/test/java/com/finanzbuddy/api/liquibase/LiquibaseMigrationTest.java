@@ -127,7 +127,8 @@ class LiquibaseMigrationTest {
                 liquibaseRunner.update("");
                 assertThat(documentColumns(connection)).contains("SAVED_TRANSACTION_COUNT");
 
-                liquibaseRunner.rollback(1, "");
+                // 015 (outbox trace context) and 014.
+                liquibaseRunner.rollback(2, "");
                 assertThat(documentColumns(connection))
                         .doesNotContain("SAVED_TRANSACTION_COUNT", "SKIPPED_DUPLICATE_COUNT");
 
@@ -138,10 +139,41 @@ class LiquibaseMigrationTest {
         }
     }
 
+    @Test
+    void outboxTraceContextMigrationRollsBackAndReapplies() throws Exception {
+        String url = "jdbc:h2:mem:tracerollbacktestdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1";
+        try (java.sql.Connection connection = java.sql.DriverManager.getConnection(url, "sa", "")) {
+            var database =
+                    liquibase.database.DatabaseFactory.getInstance()
+                            .findCorrectDatabaseImplementation(
+                                    new liquibase.database.jvm.JdbcConnection(connection));
+            try (var liquibaseRunner =
+                    new liquibase.Liquibase(
+                            "classpath:/db/changelog/db.changelog-master.xml",
+                            new liquibase.integration.spring.SpringResourceAccessor(
+                                    new org.springframework.core.io.DefaultResourceLoader()),
+                            database)) {
+                liquibaseRunner.update("");
+                assertThat(columns(connection, "OUTBOX_EVENTS")).contains("TRACE_PARENT");
+
+                liquibaseRunner.rollback(1, "");
+                assertThat(columns(connection, "OUTBOX_EVENTS")).doesNotContain("TRACE_PARENT");
+
+                liquibaseRunner.update("");
+                assertThat(columns(connection, "OUTBOX_EVENTS")).contains("TRACE_PARENT");
+            }
+        }
+    }
+
     private static List<String> documentColumns(java.sql.Connection connection)
             throws java.sql.SQLException {
+        return columns(connection, "DOCUMENTS");
+    }
+
+    private static List<String> columns(java.sql.Connection connection, String table)
+            throws java.sql.SQLException {
         List<String> names = new java.util.ArrayList<>();
-        try (var rs = connection.getMetaData().getColumns(null, null, "DOCUMENTS", null)) {
+        try (var rs = connection.getMetaData().getColumns(null, null, table, null)) {
             while (rs.next()) {
                 names.add(rs.getString("COLUMN_NAME"));
             }

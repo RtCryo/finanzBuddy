@@ -19,7 +19,7 @@ Defines how finanzBuddy's `api-gateway` and `parser-service` take part in homeBu
 
 #### Scenario: Health checks, scrapes, and scheduled polls
 - **WHEN** the health check or the central Prometheus calls `/actuator/**`, or a scheduled job polls without publishing an event
-- **THEN** no trace is exported for it
+- **THEN** no span is exported for it, including spans of filters that run inside an actuator request
 
 #### Scenario: Collector unavailable
 - **WHEN** the collector cannot be reached

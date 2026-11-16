@@ -133,6 +133,10 @@ services:
       AUTH_JWKS_URI: ${AUTH_JWKS_URI:-http://auth:8080/.well-known/jwks.json}
       AUTH_ISSUER: ${AUTH_ISSUER:-homebuddy-auth}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      # Traces go with OTLP/HTTP to the central collector over finanzbuddy-metrics
+      # (root capability homebuddy-tracing).
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://homebuddy-alloy:4318/v1/traces
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: ${API_GATEWAY_TRACING_SAMPLING_PROBABILITY:-1.0}
     networks:
       - default
       - finanzbuddy-identity
@@ -167,6 +171,10 @@ services:
       PARSER_FORMAT_CSV: "true"
       PARSER_FORMAT_PDF: "false"
       PARSER_FORMAT_XML: "false"
+      # Traces go with OTLP/HTTP to the central collector over finanzbuddy-metrics
+      # (root capability homebuddy-tracing).
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://homebuddy-alloy:4318/v1/traces
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: ${PARSER_SERVICE_TRACING_SAMPLING_PROBABILITY:-1.0}
     networks:
       - default
       - finanzbuddy-metrics
