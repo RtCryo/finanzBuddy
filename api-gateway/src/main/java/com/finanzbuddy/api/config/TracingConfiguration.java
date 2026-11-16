@@ -5,7 +5,9 @@ import io.micrometer.observation.ObservationPredicate;
 import io.micrometer.observation.ObservationView;
 import io.micrometer.tracing.exporter.FinishedSpan;
 import io.micrometer.tracing.exporter.SpanExportingPredicate;
+import io.opentelemetry.sdk.trace.export.SpanExporter;
 import java.util.Map;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.server.observation.ServerRequestObservationContext;
@@ -28,6 +30,23 @@ class TracingConfiguration {
     @Bean
     SpanExportingPredicate skipActuatorAndScheduledTaskSpans() {
         return span -> !isActuatorRequest(span) && !isScheduledTaskRun(span);
+    }
+
+    /**
+     * Wraps every span exporter, so no exception message or stack trace leaves this component (see
+     * {@link SanitizingSpanExporter}). Static, because it post-processes other beans.
+     */
+    @Bean
+    static BeanPostProcessor sanitizeExportedSpans() {
+        return new BeanPostProcessor() {
+            @Override
+            public Object postProcessAfterInitialization(Object bean, String beanName) {
+                return bean instanceof SpanExporter exporter
+                                && !(bean instanceof SanitizingSpanExporter)
+                        ? new SanitizingSpanExporter(exporter)
+                        : bean;
+            }
+        };
     }
 
     @Bean

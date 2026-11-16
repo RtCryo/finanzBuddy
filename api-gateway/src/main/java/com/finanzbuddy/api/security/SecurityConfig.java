@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -86,11 +87,28 @@ public class SecurityConfig {
                 observationRegistry.getIfAvailable(() -> ObservationRegistry.NOOP));
     }
 
+    /**
+     * Connect and read timeout of the JWKS client: the 30 seconds Nimbus' own client used, so a
+     * hanging authBuddy cannot hold a request thread forever.
+     */
+    static final Duration JWKS_TIMEOUT = Duration.ofSeconds(30);
+
     static JwtDecoder homeBuddyDecoder(
             String jwksUri, String issuer, ObservationRegistry observationRegistry) {
+        return homeBuddyDecoder(jwksUri, issuer, observationRegistry, JWKS_TIMEOUT);
+    }
+
+    static JwtDecoder homeBuddyDecoder(
+            String jwksUri,
+            String issuer,
+            ObservationRegistry observationRegistry,
+            Duration timeout) {
         // An observed client makes the JWKS fetch a client span of the request that triggered it
         // and sends the trace context to authBuddy (homebuddy-tracing).
-        RestTemplate jwksClient = new RestTemplate();
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(timeout);
+        requestFactory.setReadTimeout(timeout);
+        RestTemplate jwksClient = new RestTemplate(requestFactory);
         jwksClient.setObservationRegistry(observationRegistry);
         NimbusJwtDecoder decoder =
                 NimbusJwtDecoder.withJwkSetUri(jwksUri)

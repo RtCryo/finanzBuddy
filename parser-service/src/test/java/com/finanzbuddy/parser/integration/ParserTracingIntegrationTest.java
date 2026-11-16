@@ -18,11 +18,20 @@ import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.registry.otlp.OtlpMeterRegistry;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.exporter.otlp.http.trace.OtlpHttpSpanExporter;
+import io.opentelemetry.sdk.common.CompletableResultCode;
+import io.opentelemetry.sdk.trace.data.EventData;
+import io.opentelemetry.sdk.trace.data.SpanData;
+import io.opentelemetry.sdk.trace.export.SpanExporter;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Collection;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
@@ -43,6 +52,7 @@ import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.client.ExpectedCount;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
@@ -56,7 +66,8 @@ import org.springframework.web.client.RestClient;
         properties = {
             "management.tracing.sampling.probability=1.0",
             "management.otlp.metrics.export.enabled=false",
-            "management.logging.export.otlp.enabled=false"
+            "management.logging.export.otlp.enabled=false",
+            "management.opentelemetry.tracing.export.schedule-delay=10ms"
         })
 @EmbeddedKafka(
         partitions = 1,
@@ -116,10 +127,108 @@ class ParserTracingIntegrationTest {
                                 + "[0-9a-f]{16}\\].*Received CSV document event: documentId=77");
     }
 
+    @Test
+    void failedStatementLeavesNoDocumentContentInSpans() throws Exception {
+        MockRestServiceServer server = TracingTestConfig.mockServer;
+        server.reset();
+        server.expect(
+                        ExpectedCount.manyTimes(),
+                        requestTo("http://localhost:9999/internal/documents/78/status"))
+                .andRespond(withSuccess());
+        Span upload = tracer.nextSpan().name("upload").start();
+        String traceId = upload.context().traceId();
+
+        try (Tracer.SpanInScope ignored = tracer.withSpan(upload)) {
+            kafkaTemplate
+                    .send(
+                            "documents.csv",
+                            new DocumentUploadedEvent(78L, 7L, "CSV", TracingTestConfig.BAD_PATH))
+                    .get(5, TimeUnit.SECONDS);
+        } finally {
+            upload.end();
+        }
+
+        // The parser fails on the amount, and its consumer span is exported with an error status.
+        await().atMost(20, TimeUnit.SECONDS)
+                .until(
+                        () ->
+                                TracingTestConfig.SPANS.stream()
+                                        .anyMatch(
+                                                s ->
+                                                        s.getTraceId().equals(traceId)
+                                                                && s.getStatus().getStatusCode()
+                                                                        == StatusCode.ERROR));
+        List<SpanData> spans =
+                TracingTestConfig.SPANS.stream()
+                        .filter(s -> s.getTraceId().equals(traceId))
+                        .toList();
+        assertThat(spans)
+                .anySatisfy(
+                        span ->
+                                assertThat(span.getEvents())
+                                        .anySatisfy(
+                                                event ->
+                                                        assertThat(
+                                                                        event.getAttributes()
+                                                                                .get(
+                                                                                        AttributeKey
+                                                                                                .stringKey(
+                                                                                                        "exception.type")))
+                                                                .isNotBlank()));
+        for (SpanData span : spans) {
+            assertThat(span.getStatus().getDescription()).isEmpty();
+            assertThat(span.getAttributes().toString()).doesNotContain(TracingTestConfig.SECRET);
+            for (EventData event : span.getEvents()) {
+                assertThat(event.getAttributes().toString())
+                        .doesNotContain(TracingTestConfig.SECRET);
+                assertThat(event.getAttributes().get(AttributeKey.stringKey("exception.message")))
+                        .isNull();
+                assertThat(
+                                event.getAttributes()
+                                        .get(AttributeKey.stringKey("exception.stacktrace")))
+                        .isNull();
+            }
+        }
+    }
+
     @TestConfiguration
     static class TracingTestConfig {
 
         static MockRestServiceServer mockServer;
+
+        /** A marker that only appears in the bad statement's amount column. */
+        static final String SECRET = "SECRET-AMOUNT-4711";
+
+        static final String BAD_PATH = "csv/bad-78";
+        static final String BAD_CSV =
+                "BookingDate;ValueDate;Amount;Currency;Counterparty;Description;Category\n"
+                        + "10.01.24;10.01.24;"
+                        + SECRET
+                        + ";EUR;Coffee Shop;Morning coffee;Food";
+
+        /** Spans as they leave the parser, after SanitizingSpanExporter. */
+        static final List<SpanData> SPANS = new CopyOnWriteArrayList<>();
+
+        @Bean
+        SpanExporter collectingSpanExporter() {
+            return new SpanExporter() {
+                @Override
+                public CompletableResultCode export(Collection<SpanData> batch) {
+                    SPANS.addAll(batch);
+                    return CompletableResultCode.ofSuccess();
+                }
+
+                @Override
+                public CompletableResultCode flush() {
+                    return CompletableResultCode.ofSuccess();
+                }
+
+                @Override
+                public CompletableResultCode shutdown() {
+                    return CompletableResultCode.ofSuccess();
+                }
+            };
+        }
 
         /** The production builder from RestClientConfig, bound to a mock gateway. */
         @Bean
@@ -145,8 +254,11 @@ class ParserTracingIntegrationTest {
                     if (storagePath == null || !storagePath.startsWith("csv/")) {
                         throw new StorageException("Unexpected storage path: " + storagePath, null);
                     }
-                    return new ByteArrayInputStream(
-                            IntegrationTestConfig.SAMPLE_CSV.getBytes(StandardCharsets.UTF_8));
+                    String csv =
+                            BAD_PATH.equals(storagePath)
+                                    ? BAD_CSV
+                                    : IntegrationTestConfig.SAMPLE_CSV;
+                    return new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8));
                 }
             };
         }

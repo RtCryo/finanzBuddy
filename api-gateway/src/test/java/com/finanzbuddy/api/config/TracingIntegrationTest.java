@@ -43,7 +43,14 @@ class TracingIntegrationTest {
 
     @Autowired ApplicationContext context;
     @Autowired Tracer tracer;
-    @Autowired CollectingSpanExporter exported;
+    // Registered as a SpanExporter bean, so it is wrapped by SanitizingSpanExporter.
+    @Autowired SanitizingSpanExporter sanitizing;
+    CollectingSpanExporter exported;
+
+    @org.junit.jupiter.api.BeforeEach
+    void collector() {
+        exported = (CollectingSpanExporter) sanitizing.delegate();
+    }
 
     @Test
     void nothingIsExportedOverOtlpWithoutAnEndpoint() {

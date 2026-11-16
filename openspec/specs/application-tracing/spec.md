@@ -43,7 +43,11 @@ Each finanzBuddy component SHALL sample every trace it starts by default, SHALL 
 - **THEN** `parser-service` records no trace for that event
 
 ### Requirement: finanzBuddy spans hold no credentials or financial data
-Spans of finanzBuddy components SHALL NOT contain tokens, internal API keys, `Authorization` or cookie headers, request, response, or record bodies, e-mail addresses, file names, file contents, transaction fields, or amounts.
+Spans of finanzBuddy components SHALL NOT contain tokens, internal API keys, `Authorization` or cookie headers, request, response, or record bodies, e-mail addresses, file names, file contents, transaction fields, or amounts. Because exception messages can quote document content, exported spans SHALL carry no status description, exception message, or stack trace (including nested causes); an exception event SHALL keep only the exception type.
+
+#### Scenario: A statement fails to parse
+- **WHEN** `parser-service` rejects a statement because of an invalid value in one of its rows
+- **THEN** its consumer span is exported with an error status and the exception type only, and no stored span contains the invalid value
 
 #### Scenario: Search traces after an upload
 - **WHEN** an operator uploads a statement with a known file name and amount and searches the stored spans for them, the token, an `eyJ` prefix, and the internal API key
