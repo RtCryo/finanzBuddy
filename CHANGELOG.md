@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/RtCryo/finanzBuddy/compare/v1.0.0...v1.1.0) (2026-11-16)
+
+
+### Features
+
+* **tracing:** trace uploads through the outbox, Kafka, and parser ([#125](https://github.com/RtCryo/finanzBuddy/issues/125)) ([7d9c5b6](https://github.com/RtCryo/finanzBuddy/commit/7d9c5b6efc2dcd961ac7a4aefce471e302b0ddd6))
+
 ## 1.0.0 (2026-11-15)
 
 
