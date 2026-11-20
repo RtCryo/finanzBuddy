@@ -28,7 +28,7 @@ services:
       - homebuddy
 
   postgres:
-    image: postgres:18-alpine
+    image: postgres:19-alpine
     container_name: finanzbuddy-postgres
     environment:
       POSTGRES_DB: ${DB_NAME}
